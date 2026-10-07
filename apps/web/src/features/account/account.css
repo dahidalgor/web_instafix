@@ -1,0 +1,200 @@
+/* account: estilos, estados y ajustes adaptables. */
+
+.account-panel {
+  max-width: 1200px;
+  margin: 60px auto;
+  min-height: 50vh;
+}
+.account-panel.wide {
+  max-width: 1200px;
+}
+.account-panel h1 {
+  font-size: 36px;
+}
+.account-login {
+  max-width: none;
+  min-height: calc(100vh - 210px);
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 20px;
+  padding: 42px 20px 60px;
+}
+.account-login-card {
+  width: min(100%, 430px);
+  padding: 36px 40px 38px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 18px 50px rgb(31 18 48 / 8%);
+  text-align: left;
+}
+.account-login-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 22px;
+  border-radius: 12px;
+  background: var(--brand-gradient);
+  color: #fff;
+  font-family: Manrope, sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+}
+.account-login-card .eyebrow,
+.account-login-card h1,
+.account-login-intro {
+  text-align: center;
+}
+.account-login-card h1 {
+  margin: 10px 0 8px;
+  font-size: clamp(30px, 5vw, 38px);
+}
+.account-login-intro {
+  max-width: 310px;
+  margin: 0 auto 28px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.account-login-card form {
+  margin: 0;
+}
+.account-login-card .phone-fields {
+  grid-template-columns: 1fr 1.35fr;
+  gap: 10px;
+}
+.account-login-card .small {
+  margin: -6px 0 20px;
+}
+.account-login-card .button {
+  width: 100%;
+  margin-top: 6px;
+}
+.account-login-switch {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.account-login-switch .text-button {
+  padding: 0;
+  font-size: inherit;
+  justify-content: center;
+}
+.history-card {
+  background: white;
+  border: 1px solid #ddd4e4;
+  border-radius: 15px;
+  padding: 25px;
+  margin: 22px 0;
+}
+.account-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.account-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin: 25px 0;
+}
+.account-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-soft);
+  padding: 22px;
+  border-radius: 14px;
+}
+.account-summary strong {
+  font-size: 32px;
+}
+.account-summary span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.account-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+.account-tabs button {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.account-tabs button[aria-pressed='true'] {
+  background: var(--surface-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.refresh-account {
+  margin-left: auto;
+}
+.empty-account {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 30px;
+  margin: 25px 0;
+}
+.empty-account h2 {
+  font-size: 25px;
+}
+.appointment-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.appointment-details dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.appointment-details dd {
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.history-card h2 {
+  font-size: 26px;
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  .account-panel {
+    margin: 35px auto;
+  }
+  .account-summary {
+    gap: 8px;
+  }
+  .account-summary > div {
+    padding: 14px;
+  }
+  .account-summary strong {
+    font-size: 25px;
+  }
+  .appointment-details {
+    grid-template-columns: 1fr;
+  }
+  .account-heading {
+    align-items: flex-start;
+  }
+  .refresh-account {
+    margin-left: 0;
+  }
+  .account-login {
+    min-height: calc(100vh - 170px);
+    padding: 24px 0 48px;
+  }
+  .account-login-card {
+    padding: 30px 22px 28px;
+    border-radius: 14px;
+    box-shadow: 0 12px 30px rgb(31 18 48 / 7%);
+  }
+}

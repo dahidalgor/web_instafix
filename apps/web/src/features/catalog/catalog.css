@@ -1,0 +1,164 @@
+/* catalog: estilos, estados y ajustes adaptables. */
+body.service-dialog-open {
+  overflow: hidden;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.card.selected {
+  border-color: #a00d68;
+  box-shadow: 0 0 0 1px #a00d68;
+}
+.card-icon {
+  background: #f5e8f1;
+  height: 110px;
+  border-radius: 9px;
+  margin-bottom: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  font-size: 55px;
+  color: #a00d68;
+}
+.card-icon span {
+  font-size: 22px;
+  align-self: start;
+}
+.icon-1 {
+  background: #edebf6;
+  color: #554077;
+}
+.icon-2 {
+  background: #e9edf8;
+  color: #303960;
+}
+.card > p:not(.eyebrow) {
+  font-size: 12px;
+  color: #71697d;
+}
+.price {
+  border-top: 1px solid #eee9f2;
+  margin-top: 22px;
+  padding-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.price strong {
+  font-size: 23px;
+}
+.price span {
+  font-size: 11px;
+  color: #922064;
+}
+.card {
+  text-align: left;
+  padding: 22px;
+  border: 1px solid #e2dce9;
+  border-radius: 15px;
+  background: white;
+  color: inherit;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.card:hover {
+  border-color: #ba75a4;
+  box-shadow: 0 8px 24px #5220470c;
+}
+.service-cover {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+.service-dialog::backdrop {
+  background: #111630a6;
+  backdrop-filter: blur(4px);
+}
+.service-media {
+  display: grid;
+  gap: 14px;
+  margin: 20px 0;
+}
+.service-media img {
+  width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #14152f;
+}
+.service-media video {
+  width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #14152f;
+}
+.service-price {
+  font-size: 30px;
+}
+.service-dialog[open] {
+  animation: detail-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.service-dialog[open]::backdrop {
+  animation: backdrop-in 220ms ease;
+}
+.service-dialog {
+  border: 0;
+  border-radius: 20px;
+  width: min(720px, 94vw);
+  max-height: 90vh;
+  padding: 35px;
+  background: var(--surface);
+  color: var(--text);
+}
+.dialog-close {
+  float: right;
+  border: 0;
+  background: #f0ebf5;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 25px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  color: var(--text);
+}
+/* Animaciones */
+@keyframes detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .card-icon {
+    height: 90px;
+  }
+  .service-dialog {
+    padding: 22px;
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "web-instafix",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @instafix/web --filter @instafix/api dev",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter @instafix/api test",
+    "format": "prettier --write apps packages scripts docs deploy/README.md README.md '*.{json,yaml}'",
+    "format:check": "prettier --check apps packages scripts docs deploy/README.md README.md '*.{json,yaml}'",
+    "imports:organize": "node scripts/organize-imports.cjs",
+    "db:generate": "pnpm --filter @instafix/api db:generate",
+    "db:migrate": "pnpm --filter @instafix/api db:migrate"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9",
+    "prisma": "6.19.0"
+  }
+}

@@ -1,0 +1,29 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AccountController } from './account/account.controller';
+import { AppointmentsController } from './appointments/appointments.controller';
+import { AuthController } from './auth/auth.controller';
+import { CatalogController } from './catalog/catalog.controller';
+import { HealthController } from './health/health.controller';
+import { JobsController } from './jobs/jobs.controller';
+import { MediaController } from './media/media.controller';
+import { RequestsController } from './requests/requests.controller';
+import { WarrantiesController } from './warranties/warranties.controller';
+
+@Module({
+  imports: [ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])],
+  controllers: [
+    AuthController,
+    AccountController,
+    CatalogController,
+    AppointmentsController,
+    JobsController,
+    WarrantiesController,
+    RequestsController,
+    MediaController,
+    HealthController,
+  ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+})
+export class AppModule {}

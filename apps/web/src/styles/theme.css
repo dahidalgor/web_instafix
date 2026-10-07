@@ -1,0 +1,135 @@
+/* theme: estilos, estados y ajustes adaptables. */ /* Ajustes adaptables y preferencias del sistema */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --surface: #1c1b30;
+    --surface-soft: #292139;
+    --text: #f3eef8;
+    --muted: #c1b6ce;
+    --border: #463b53;
+    --accent: #f398d0;
+    background: #111222;
+    color: var(--text);
+  }
+  body {
+    background: #111222;
+  }
+  .brand .brand-name {
+    color: var(--text);
+  }
+  .brand-name b,
+  em,
+  .eyebrow,
+  .text-button,
+  .price span,
+  .about-jump {
+    color: var(--accent);
+  }
+  .intro,
+  .small,
+  .section-head > p,
+  .card > p:not(.eyebrow),
+  .booking p,
+  .about-intro-bottom p,
+  .about-purpose p,
+  .about-values p,
+  .footer-policy,
+  footer > span,
+  footer small {
+    color: var(--muted);
+  }
+  .card,
+  .editor,
+  .admin-item,
+  .history-card,
+  .receipt,
+  .calendar-retry button,
+  .account-tabs button {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .booking,
+  .about-cta,
+  .admin-message {
+    background: var(--surface-soft);
+  }
+  input,
+  select,
+  textarea {
+    background: #131322;
+    color: var(--text);
+    border-color: var(--border);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #a69ab6;
+  }
+  .filters button {
+    color: var(--muted);
+    border-color: var(--border);
+  }
+  .filters .active {
+    background: #693357;
+    color: white;
+  }
+  .card.selected,
+  .card:hover {
+    border-color: var(--accent);
+  }
+  .card-icon,
+  .icon-1,
+  .icon-2 {
+    background: #302540;
+    color: #e9b1d4;
+  }
+  .price,
+  footer,
+  .steps,
+  .about-values article {
+    border-color: var(--border);
+  }
+  .badge {
+    background: #403251;
+    color: #efd9fc;
+  }
+  .badge.AVAILABLE {
+    background: #193f35;
+    color: #a7e9cb;
+  }
+  .badge.UNAVAILABLE {
+    background: #482d37;
+    color: #ffc4d0;
+  }
+  .badge.COMING_SOON {
+    background: #3e2b54;
+    color: #e0b6ff;
+  }
+  .calendar-container {
+    background: #111222;
+    border-color: var(--border);
+  }
+  .calendar-retry {
+    color: var(--muted);
+  }
+  .dialog-close {
+    background: var(--surface-soft);
+  }
+  .error {
+    color: #ffacb9 !important;
+  }
+  .button {
+    color: #fff;
+  }
+  .receipt button {
+    background: #8e205f;
+  }
+  .about-purpose .eyebrow {
+    color: var(--accent);
+  }
+  .calendar-notice {
+    background: var(--surface-soft);
+    color: var(--muted);
+  }
+}

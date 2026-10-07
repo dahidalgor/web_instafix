@@ -1,0 +1,81 @@
+/* media: estilos, estados y ajustes adaptables. */
+
+.media-gallery {
+  margin: 24px -35px;
+}
+.media-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px 12px;
+  gap: 12px;
+  font-size: 13px;
+}
+.media-viewport {
+  overflow: hidden;
+  width: 100%;
+  background: #111630;
+}
+.media-track {
+  display: flex;
+  width: max-content;
+  animation: media-stream 35s linear infinite;
+}
+.media-group {
+  display: flex;
+  flex: none;
+  min-width: 720px;
+}
+.media-group figure {
+  margin: 0;
+  flex: 1 0 280px;
+  width: 280px;
+  height: 250px;
+  overflow: hidden;
+}
+.media-group img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+}
+.media-group video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+}
+.media-gallery > .small {
+  padding: 0 20px;
+}
+.is-reduced .media-track {
+  animation: none;
+}
+.is-reduced .media-copy {
+  display: none;
+}
+/* Animaciones */
+@keyframes media-stream {
+  to {
+    transform: translateX(-50%);
+  }
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  .media-gallery {
+    margin-left: -22px;
+    margin-right: -22px;
+  }
+  .media-group {
+    min-width: 520px;
+  }
+  .media-group figure {
+    width: 260px;
+    flex-basis: 260px;
+    height: 220px;
+  }
+}

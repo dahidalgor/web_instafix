@@ -1,0 +1,15 @@
+{$PUBLIC_HOST}, {$ADMIN_HOST} {
+  encode zstd gzip
+  header X-Content-Type-Options nosniff
+  handle /api/* {
+    request_body {
+      max_size 101MB
+    }
+    reverse_proxy api:3001
+  }
+  handle {
+    root * /srv
+    try_files {path} /index.html
+    file_server
+  }
+}

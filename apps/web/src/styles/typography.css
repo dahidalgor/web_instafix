@@ -1,0 +1,131 @@
+/* typography: estilos, estados y ajustes adaptables. */
+
+em {
+  font-style: normal;
+  color: #a00d68;
+}
+.intro {
+  max-width: 410px;
+  color: #686377;
+  line-height: 1.8;
+  font-size: 17px;
+}
+.small {
+  font-size: 12px;
+  color: #71697d;
+  line-height: 1.6;
+}
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-top: 70px;
+}
+h2 {
+  font-family: Manrope, sans-serif;
+  font-size: 36px;
+  line-height: 1.2;
+  letter-spacing: -1.5px;
+  margin: 15px 0;
+}
+.section-head > p {
+  color: #71697d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+h3 {
+  font-size: 19px;
+  letter-spacing: -0.4px;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  color: #922064;
+}
+.service-description {
+  white-space: pre-wrap;
+  line-height: 1.8;
+}
+.page-content .hero h1 {
+  font-family: Manrope, sans-serif;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1.14;
+  letter-spacing: -2.7px;
+  font-weight: 700;
+  margin: 22px 0 28px;
+  overflow-wrap: break-word;
+}
+.page-content .about-intro h1 {
+  font-family: Manrope, sans-serif;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1.14;
+  letter-spacing: -2.7px;
+  font-weight: 700;
+  margin: 22px 0 28px;
+  overflow-wrap: break-word;
+}
+.page-content .section-head h2 {
+  font-family: Manrope, sans-serif;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1.14;
+  letter-spacing: -2.7px;
+  font-weight: 700;
+  margin: 22px 0 28px;
+  overflow-wrap: break-word;
+}
+.page-content .how-page h1 {
+  font-family: Manrope, sans-serif;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1.14;
+  letter-spacing: -2.7px;
+  font-weight: 700;
+  margin: 22px 0 28px;
+  overflow-wrap: break-word;
+}
+.page-content .account-panel h1 {
+  font-family: Manrope, sans-serif;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1.14;
+  letter-spacing: -2.7px;
+  font-weight: 700;
+  margin: 22px 0 28px;
+  overflow-wrap: break-word;
+}
+.page-content .booking > div > h2 {
+  font-family: Manrope, sans-serif;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1.14;
+  letter-spacing: -2.7px;
+  font-weight: 700;
+  margin: 22px 0 28px;
+  overflow-wrap: break-word;
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  .section-head {
+    display: block;
+    margin-top: 45px;
+  }
+  h2 {
+    font-size: 30px;
+  }
+  .page-content .hero h1 {
+    letter-spacing: -1.6px;
+  }
+  .page-content .about-intro h1 {
+    letter-spacing: -1.6px;
+  }
+  .page-content .section-head h2 {
+    letter-spacing: -1.6px;
+  }
+  .page-content .how-page h1 {
+    letter-spacing: -1.6px;
+  }
+  .page-content .account-panel h1 {
+    letter-spacing: -1.6px;
+  }
+  .page-content .booking > div > h2 {
+    letter-spacing: -1.6px;
+  }
+}

@@ -1,0 +1,54 @@
+/* admin: estilos, estados y ajustes adaptables. */
+
+.admin-page {
+  padding-bottom: 60px;
+}
+.admin-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 35px;
+}
+.admin-item {
+  display: block;
+  text-align: left;
+  width: 100%;
+  padding: 18px;
+  margin: 12px 0;
+  border: 1px solid #ddd4e4;
+  border-radius: 10px;
+  background: white;
+  color: #29203f;
+}
+.admin-item span {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.editor {
+  background: white;
+  border: 1px solid #ddd4e4;
+  border-radius: 16px;
+  padding: 25px;
+  max-width: 800px;
+}
+.editor fieldset {
+  border: 1px solid #ddd4e4;
+  border-radius: 12px;
+  margin: 15px 0;
+  padding: 18px;
+}
+.editor > .button {
+  display: block;
+}
+.admin-message {
+  background: #eee8f3;
+  padding: 18px;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+}

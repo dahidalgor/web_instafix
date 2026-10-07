@@ -1,0 +1,77 @@
+/* ui: estilos, estados y ajustes adaptables. */
+
+.button:disabled {
+  opacity: 0.5;
+}
+.filters button {
+  padding: 9px 19px;
+  border: 1px solid #e2dce9;
+  background: transparent;
+  border-radius: 24px;
+  color: #686377;
+}
+.filters .active {
+  color: white;
+  background: #29203f;
+  border-color: #29203f;
+}
+.button {
+  border: 0;
+  padding: 17px 23px;
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 40px;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  margin: 16px 0;
+  background: linear-gradient(110deg, #762257, #a00d68);
+  color: #fff;
+  box-shadow: 0 5px 16px #a00d6818;
+  transition:
+    filter 0.2s,
+    transform 0.2s;
+}
+.button:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+.filters {
+  display: flex;
+  gap: 10px;
+  margin: 27px 0;
+  flex-wrap: wrap;
+}
+.badge {
+  display: inline-block;
+  padding: 6px 11px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #eee8f3;
+  color: #554065;
+}
+.badge.AVAILABLE {
+  background: #e6f4ef;
+  color: #205d46;
+}
+.badge.UNAVAILABLE {
+  background: #f3e9e9;
+  color: #803737;
+}
+.badge.COMING_SOON {
+  background: #eee6fa;
+  color: #6a3495;
+}
+.text-button {
+  border: 0;
+  background: none;
+  color: #922064;
+  padding: 8px 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

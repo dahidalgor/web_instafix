@@ -1,0 +1,332 @@
+/* about: estilos, estados y ajustes adaptables. */
+.about-page {
+  padding-top: 50px;
+}
+.about-intro h1 {
+  font-family: Manrope, sans-serif;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1.14;
+  letter-spacing: -2.7px;
+  margin: 22px 0 28px;
+  max-width: 950px;
+}
+.about-intro-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  margin-bottom: 46px;
+}
+.about-intro-bottom p {
+  max-width: 610px;
+  line-height: 1.8;
+  color: #686377;
+  font-size: 16px;
+}
+.about-jump {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  border-bottom: 1px solid #c7afc2;
+  padding: 12px 0;
+}
+.about-jump span {
+  margin-left: 20px;
+}
+.work-showcase {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: #17152e;
+  color: #fff;
+  border-radius: 24px;
+  overflow: hidden;
+  scroll-margin-top: 30px;
+}
+.work-visual {
+  position: relative;
+  min-height: 440px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at 70% 40%, #b01a7955, transparent 60%),
+    linear-gradient(135deg, #111630, #522047 65%, #a00d68);
+  overflow: hidden;
+}
+.work-visual-1 {
+  background:
+    radial-gradient(ellipse at 30% 60%, #8473b655, transparent 70%),
+    linear-gradient(135deg, #111630, #493267);
+}
+.work-visual-2 {
+  background:
+    radial-gradient(ellipse at 50% 40%, #d3348355, transparent 60%),
+    linear-gradient(135deg, #311b43, #901661);
+}
+.work-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(#ffffff0a 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff0a 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+.work-orbit {
+  width: 270px;
+  height: 270px;
+  border: 1px solid #ffffff35;
+  border-radius: 50%;
+  position: absolute;
+  box-shadow:
+    0 0 0 35px #ffffff04,
+    0 0 0 70px #ffffff03;
+}
+.work-symbol {
+  font-size: 145px;
+  line-height: 1;
+  z-index: 1;
+  text-shadow: 0 15px 35px #0005;
+  transform: rotate(-12deg);
+}
+.work-overline {
+  position: absolute;
+  left: 28px;
+  top: 28px;
+  letter-spacing: 2px;
+  font-size: 10px;
+}
+.work-detail {
+  position: absolute;
+  left: 28px;
+  bottom: 65px;
+  font-size: 15px;
+}
+.work-placeholder {
+  position: absolute;
+  bottom: 25px;
+  left: 28px;
+  right: 20px;
+  font-size: 11px;
+  color: #f2dcea;
+}
+.work-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+}
+.work-story {
+  padding: 38px;
+  display: flex;
+  flex-direction: column;
+}
+.work-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+}
+.work-heading .eyebrow {
+  color: #ecacd5;
+}
+.work-count {
+  font-size: 12px;
+  color: #b6afc6;
+}
+.work-copy {
+  flex: 1;
+  min-height: 250px;
+  padding-top: 30px;
+}
+.work-category {
+  font-size: 10px !important;
+  letter-spacing: 2px;
+  color: #c9b5d1 !important;
+}
+.work-copy h2 {
+  font-size: 36px;
+  max-width: 360px;
+}
+.work-copy p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #c9c3d5;
+}
+.work-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+.work-dots {
+  display: flex;
+  gap: 4px;
+}
+.work-dots button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  position: relative;
+}
+.work-dots button::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 11px;
+  width: 8px;
+  height: 8px;
+  border-radius: 8px;
+  background: #756c86;
+}
+.work-dots .selected::after {
+  background: #f49cda;
+  width: 20px;
+  left: 4px;
+}
+.work-arrows {
+  display: flex;
+  gap: 10px;
+}
+.work-arrows button {
+  height: 42px;
+  width: 42px;
+  border-radius: 50%;
+  border: 1px solid #ffffff40;
+  background: transparent;
+  color: white;
+  font-size: 19px;
+}
+.work-arrows button:hover {
+  background: #ffffff15;
+}
+.work-play {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  color: #d6c8df;
+  font-size: 12px;
+  padding: 14px 0 0;
+}
+.about-purpose {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 65px;
+  padding: 65px 0 35px;
+}
+.about-purpose p {
+  font-size: 15px;
+  color: #686377;
+  line-height: 1.85;
+}
+.about-purpose .eyebrow {
+  color: #922064;
+  font-size: 11px;
+}
+.about-values {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+  margin-bottom: 60px;
+}
+.about-values article {
+  border-top: 1px solid #ded5e6;
+  padding: 24px 0;
+}
+.about-values article > span {
+  color: #a00d68;
+  font-size: 12px;
+}
+.about-values h3 {
+  font-size: 22px;
+}
+.about-values p {
+  color: #686377;
+  line-height: 1.85;
+  font-size: 14px;
+}
+.about-cta {
+  padding: 35px 40px;
+  background: #f0e9f4;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 65px;
+}
+.about-cta h2 {
+  font-size: 30px;
+}
+.about-cta .button {
+  flex-shrink: 0;
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 900px) {
+  .work-story {
+    padding: 25px;
+  }
+  .work-copy h2 {
+    font-size: 30px;
+  }
+  .about-intro-bottom {
+    gap: 20px;
+  }
+  .about-cta {
+    padding: 28px;
+  }
+  .about-purpose {
+    gap: 30px;
+  }
+}
+@media (max-width: 760px) {
+  .about-page {
+    padding-top: 24px;
+  }
+  .about-intro h1 {
+    letter-spacing: -1.6px;
+  }
+  .about-intro-bottom {
+    display: block;
+  }
+  .about-jump {
+    display: inline-block;
+  }
+  .work-showcase {
+    grid-template-columns: 1fr;
+  }
+  .work-visual {
+    min-height: 310px;
+  }
+  .work-orbit {
+    width: 190px;
+    height: 190px;
+  }
+  .work-symbol {
+    font-size: 110px;
+  }
+  .work-copy {
+    min-height: 220px;
+  }
+  .about-purpose {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding-top: 40px;
+  }
+  .about-values {
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin-bottom: 25px;
+  }
+  .about-values article {
+    padding: 20px 0;
+  }
+  .about-cta {
+    display: block;
+  }
+  .about-cta .button {
+    font-size: 14px;
+  }
+  .about-intro-bottom p {
+    font-size: 15px;
+  }
+}

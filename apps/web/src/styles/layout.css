@@ -1,0 +1,239 @@
+/* layout: estilos, estados y ajustes adaptables. */
+
+nav a[aria-current='page'] {
+  color: #a00d68;
+  font-weight: 700;
+}
+.brand span {
+  color: #a00d68;
+  margin-left: 4px;
+}
+nav {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  font-size: 14px;
+}
+.nav-cta {
+  border: 1px solid #dbd5e3;
+  padding: 12px 18px;
+  border-radius: 30px;
+}
+main {
+  max-width: 1200px;
+  margin: auto;
+  padding: 0 32px;
+}
+footer {
+  max-width: 1200px;
+  margin: auto;
+  padding: 30px 32px 45px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e2dce9;
+}
+footer span {
+  font-size: 12px;
+  color: #71697d;
+}
+footer small {
+  font-size: 12px;
+  color: #71697d;
+}
+.brand {
+  font-family: Manrope, sans-serif;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 26px;
+  letter-spacing: -1px;
+}
+.brand img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: contain;
+}
+.brand .brand-name {
+  color: var(--brand-night);
+  font-size: inherit;
+  font-weight: 800;
+  letter-spacing: inherit;
+  margin: 0;
+}
+.brand-name b {
+  color: var(--brand-magenta);
+}
+.nav-cta:hover {
+  border-color: var(--brand-magenta);
+  color: var(--brand-magenta);
+}
+.footer-policy {
+  font-size: 12px;
+  color: #71697d;
+  text-decoration: underline;
+}
+.mobile-booking {
+  display: none;
+}
+header {
+  max-width: 1200px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: auto;
+  min-height: 100px;
+  gap: 22px;
+  flex-wrap: wrap;
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+header nav {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  z-index: 100;
+  background: var(--surface);
+  padding: 14px;
+}
+.skip-link:focus {
+  top: 10px;
+}
+.page-content {
+  min-height: 65vh;
+  padding-bottom: 50px;
+  outline: none;
+  animation: page-arrive 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+header nav a {
+  padding: 10px 12px;
+  border-radius: 8px;
+  white-space: nowrap;
+  position: relative;
+  transition:
+    background-color 220ms,
+    color 220ms,
+    box-shadow 220ms,
+    transform 180ms;
+}
+header nav a:hover {
+  transform: translateY(-2px);
+}
+header nav a:active {
+  transform: scale(0.96);
+}
+header nav a[aria-current='page'] {
+  color: var(--accent);
+  background: var(--surface-soft);
+  box-shadow: inset 0 -3px var(--accent);
+  font-weight: 700;
+  animation: tab-arrive 280ms ease-out;
+}
+/* Animaciones */
+@keyframes page-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes tab-arrive {
+  0% {
+    transform: scale(0.96);
+  }
+  60% {
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  header nav .nav-cta {
+    white-space: nowrap;
+    padding: 7px 10px;
+  }
+  footer {
+    gap: 20px;
+    flex-wrap: wrap;
+    /* Reserva espacio para el acceso fijo y el indicador de inicio de iOS. */
+    padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+  footer > span {
+    display: none;
+  }
+  main {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  header {
+    flex-wrap: wrap;
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  .brand {
+    gap: 7px;
+    font-size: 22px;
+  }
+  .brand img {
+    width: 40px;
+    height: 40px;
+  }
+  nav {
+    gap: 14px;
+  }
+  header nav {
+    gap: 20px;
+    padding: 3px 0 7px;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  header nav > a:not(.nav-cta) {
+    white-space: nowrap;
+    font-size: 12px;
+    display: block;
+  }
+  header nav a {
+    font-size: 12px;
+    padding: 10px;
+  }
+  .mobile-booking {
+    position: fixed;
+    right: max(18px, env(safe-area-inset-right, 0px));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 54px;
+    padding: 14px 20px;
+    border: 1px solid rgb(255 255 255 / 25%);
+    border-radius: 999px;
+    background: var(--brand-gradient);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: 0 6px 24px rgb(35 15 48 / 25%);
+  }
+  .mobile-booking svg {
+    width: 23px;
+    height: 23px;
+    flex-shrink: 0;
+  }
+  .mobile-booking:focus-visible {
+    outline: 3px solid var(--accent);
+  }
+}

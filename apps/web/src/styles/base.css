@@ -1,0 +1,41 @@
+/* base: estilos, estados y ajustes adaptables. */
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+  outline-offset: 5px;
+}
+button {
+  font: inherit;
+  outline-offset: 5px;
+  cursor: pointer;
+}
+:root {
+  font-family: 'DM Sans', sans-serif;
+  color: #14152f;
+  background: #faf9fc;
+  font-synthesis: none;
+  scroll-behavior: smooth;
+  --brand-night: #111630;
+  --brand-violet: #522047;
+  --brand-magenta: #a00d68;
+  --brand-gradient: linear-gradient(
+    115deg,
+    var(--brand-night),
+    var(--brand-violet) 55%,
+    var(--brand-magenta)
+  );
+  color-scheme: light;
+  --surface: #fff;
+  --surface-soft: #f0ebf5;
+  --text: #14152f;
+  --muted: #686377;
+  --border: #ddd4e4;
+  --accent: #a00d68;
+}

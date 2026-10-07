@@ -1,0 +1,41 @@
+/* help: estilos, estados y ajustes adaptables. */
+
+.booking {
+  margin: 75px 0;
+  background: #f0ebf5;
+  border-radius: 20px;
+  padding: 42px;
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 60px;
+}
+.booking p {
+  color: #686377;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.booking .button {
+  width: 100%;
+  margin: 0;
+}
+.receipt {
+  overflow-wrap: anywhere;
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+}
+.receipt button {
+  border: 0;
+  border-radius: 7px;
+  padding: 12px;
+  background: #a00d68;
+  color: white;
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  .booking {
+    grid-template-columns: 1fr;
+    padding: 25px;
+    gap: 20px;
+  }
+}

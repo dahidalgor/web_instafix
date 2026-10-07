@@ -1,0 +1,49 @@
+/* editor: estilos, estados y ajustes adaptables. */
+.media-upload {
+  padding: 20px;
+  border: 2px dashed var(--accent, #a31572);
+  border-radius: 14px;
+}
+.media-upload input {
+  max-width: 100%;
+}
+.media-editor progress {
+  width: 100%;
+  margin-top: 16px;
+  accent-color: #a31572;
+}
+.media-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.media-editor-grid fieldset {
+  min-width: 0;
+  border: 1px solid #8a7b9566;
+  border-radius: 12px;
+  padding: 12px;
+}
+.media-editor-grid img {
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  background: #121326;
+  border-radius: 8px;
+}
+.media-editor-grid video {
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  background: #121326;
+  border-radius: 8px;
+}
+.media-editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.media-editor-actions button {
+  padding: 8px 12px;
+}

@@ -1,0 +1,64 @@
+/* booking: estilos, estados y ajustes adaptables. */
+.calendar-embed {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.calendar-section {
+  margin: 65px 0;
+  scroll-margin-top: 24px;
+}
+.calendar-section .section-head {
+  margin-top: 0;
+}
+.calendar-notice {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #686377;
+  background: #f0ebf5;
+  border-left: 3px solid #a00d68;
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 22px 0;
+}
+.calendar-section .small a {
+  color: #922064;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.calendar-container {
+  width: 100%;
+  border: 1px solid #e2dce9;
+  border-radius: 18px;
+  background: white;
+  height: auto;
+  overflow: auto;
+}
+.calendar-retry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #686377;
+  padding: 15px;
+}
+.calendar-retry button {
+  border: 1px solid #dcd4e5;
+  border-radius: 8px;
+  background: white;
+  color: #922064;
+  padding: 10px 14px;
+}
+/* Ajustes adaptables y preferencias del sistema */
+@media (max-width: 760px) {
+  .calendar-section {
+    margin: 45px 0;
+  }
+}
+@media (max-width: 520px) {
+  .calendar-retry {
+    flex-direction: column;
+  }
+}

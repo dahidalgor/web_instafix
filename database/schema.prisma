@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum RequestStatus {
+  PENDIENTE_UBICACION
+  EXPIRADA
+  CANCELADA
+}
+model Customer {
+  id String @id @default(uuid())
+  name String
+  phone String
+  phoneVerifiedAt DateTime?
+  createdAt DateTime @default(now())
+  requests ServiceRequest[]
+  @@index([phone])
+}
+model Offering {
+  id String @id
+  category String
+  device String
+  title String
+  priceMinor Int
+  currency String @default("USD")
+  durationMinutes Int
+  active Boolean @default(true)
+  requests ServiceRequest[]
+  description String @default("")
+  availability Availability @default(AVAILABLE)
+  media Json @default("[]")
+  warrantyDays Int @default(0)
+  equipmentId String?
+  equipment Equipment? @relation(fields: [equipmentId], references: [id])
+}
+model ServiceRequest {
+  id String @id @default(uuid())
+  reference String @unique
+  customerId String
+  customer Customer @relation(fields: [customerId], references: [id])
+  offeringId String
+  offering Offering @relation(fields: [offeringId], references: [id])
+  problem String
+  phoneSnapshot String
+  priceMinor Int
+  currency String
+  status RequestStatus @default(PENDIENTE_UBICACION)
+  consentAt DateTime
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([status, expiresAt])
+}
+
+model HelpRequest {
+  id String @id @default(uuid())
+  reference String @unique
+  name String
+  phone String
+  device String
+  problem String
+  status String @default("PENDIENTE_ASESORIA")
+  consentAt DateTime
+  createdAt DateTime @default(now())
+  @@index([status, createdAt])
+}
+
+enum Availability {
+  AVAILABLE
+  UNAVAILABLE
+  COMING_SOON
+}
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+model Equipment {
+  id String @id @default(uuid())
+  name String @unique
+  category String
+  offerings Offering[]
+}
+model User {
+  id String @id @default(uuid())
+  name String
+  phone String @unique
+  passwordHash String
+  role Role @default(CUSTOMER)
+  phoneVerifiedAt DateTime?
+  createdAt DateTime @default(now())
+  sessions Session[]
+  jobs CompletedJob[]
+  appointments Appointment[]
+}
+model Session {
+  tokenHash String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model CompletedJob {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  title String
+  device String
+  completedAt DateTime
+  warrantyEndsAt DateTime?
+  warrantyTerms String
+  priceMinor Int
+  currency String @default("USD")
+  createdAt DateTime @default(now())
+  @@index([userId, completedAt])
+}
+model SitePolicy {
+  id String @id @default("warranty")
+  text String
+  updatedAt DateTime @updatedAt
+}
+
+enum AppointmentStatus {
+  PENDING_LOCATION
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+model Appointment {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  title String
+  device String
+  startsAt DateTime
+  endsAt DateTime
+  timeZone String @default("America/Guayaquil")
+  address String
+  technician String
+  status AppointmentStatus @default(PENDING_LOCATION)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, startsAt])
+}
