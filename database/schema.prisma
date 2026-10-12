@@ -86,6 +86,8 @@ model User {
   id String @id @default(uuid())
   name String
   phone String @unique
+  email String? @unique
+  emailVerifiedAt DateTime?
   passwordHash String
   role Role @default(CUSTOMER)
   phoneVerifiedAt DateTime?
@@ -93,6 +95,22 @@ model User {
   sessions Session[]
   jobs CompletedJob[]
   appointments Appointment[]
+}
+// Desafíos aislados por finalidad. Nunca se guarda el código en texto plano.
+model EmailChallenge {
+  id String @id @default(uuid())
+  email String
+  purpose String
+  codeHash String
+  attempts Int @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  consumedAt DateTime?
+  name String?
+  phone String?
+  passwordHash String?
+  userId String?
+  @@index([email, purpose, createdAt])
 }
 model Session {
   tokenHash String @id

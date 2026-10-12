@@ -13,6 +13,7 @@ test('registration cannot self grant admin role', () =>
   assert.equal(
     registrationSchema.safeParse({
       name: 'Cliente',
+      email: 'cliente@example.com',
       phone: '+593991234567',
       password: 'un-password-seguro',
       role: 'ADMIN',

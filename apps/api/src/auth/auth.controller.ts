@@ -1,4 +1,10 @@
-import { loginSchema, registrationSchema } from '@instafix/contracts';
+import {
+  loginSchema,
+  registrationSchema,
+  emailRequestSchema,
+  verifyEmailSchema,
+  resetPasswordSchema,
+} from '@instafix/contracts';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import {
   BadRequestException,
@@ -8,7 +14,6 @@ import {
   Post,
   Req,
   Res,
-  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -22,34 +27,128 @@ import {
   sessionToken,
 } from '../auth/session';
 import { db } from '../database/client';
+import { createChallenge, consumeChallenge } from './email-challenges';
+import { assertMailConfigured } from './email';
 
 @Controller('api/v1')
 export class AuthController {
-  @Post('auth/register') async register(
+  @Post('auth/resend-code') async resend(@Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const parsed = verifyEmailSchema.pick({ challengeId: true }).safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Solicitud inválida');
+    const c = await db.emailChallenge.findUnique({ where: { id: parsed.data.challengeId } });
+    if (!c || c.consumedAt || c.createdAt.getTime() < Date.now() - 86400000)
+      throw new BadRequestException('Inicia una nueva solicitud');
+    return createChallenge(
+      {
+        email: c.email,
+        purpose: c.purpose as 'REGISTER' | 'RESET',
+        name: c.name ?? undefined,
+        phone: c.phone ?? undefined,
+        passwordHash: c.passwordHash ?? undefined,
+        userId: c.userId ?? undefined,
+      },
+      c.purpose === 'REGISTER' || Boolean(c.userId),
+    );
+  }
+  @Post('auth/register') async register(@Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const data = registrationSchema.safeParse(body);
+    if (!data.success || !normalizePhone(data.success ? data.data.phone : '', 'EC'))
+      throw new BadRequestException(
+        'Revisa nombre, correo, teléfono y contraseña (mínimo 12 caracteres)',
+      );
+    const existing = await db.user.findFirst({
+      where: { OR: [{ phone: data.data.phone }, { email: data.data.email }] },
+    });
+    if (existing)
+      throw new BadRequestException(
+        'No se pudo crear la cuenta con estos datos. Prueba iniciar sesión.',
+      );
+    return createChallenge({
+      purpose: 'REGISTER',
+      name: data.data.name,
+      phone: data.data.phone,
+      email: data.data.email,
+      passwordHash: await hashPassword(data.data.password),
+    });
+  }
+
+  @Post('auth/verify-email') async verifyEmail(
     @Body() body: unknown,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     checkOrigin(req);
-    const data = registrationSchema.safeParse(body);
-    if (!data.success || !normalizePhone(data.success ? data.data.phone : '', 'EC'))
-      throw new BadRequestException('Revisa nombre, teléfono y contraseña (mínimo 12 caracteres)');
-    const passwordHash = await hashPassword(data.data.password);
+    const parsed = verifyEmailSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Revisa el código');
     let user;
     try {
-      user = await db.user.create({
-        data: { name: data.data.name, phone: data.data.phone, passwordHash },
-        select: safeUser,
-      });
+      user = await consumeChallenge(
+        parsed.data.challengeId,
+        parsed.data.code,
+        'REGISTER',
+        async (tx, c) => {
+          if (!c.name || !c.phone || !c.passwordHash)
+            throw new BadRequestException('Solicitud inválida');
+          return tx.user.create({
+            data: {
+              name: c.name,
+              phone: c.phone,
+              email: c.email,
+              passwordHash: c.passwordHash,
+              emailVerifiedAt: new Date(),
+            },
+            select: safeUser,
+          });
+        },
+      );
     } catch (e: any) {
       if (e.code === 'P2002')
         throw new BadRequestException(
-          'No se pudo crear la cuenta con estos datos. Prueba iniciar sesión.',
+          'Estos datos ya están asociados a una cuenta. Inicia sesión.',
         );
-      throw new ServiceUnavailableException('No se pudo crear la cuenta');
+      throw e;
     }
     await issueSession(user.id, res);
     return user;
+  }
+
+  @Post('auth/forgot-password') async forgot(@Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const parsed = emailRequestSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Escribe un correo válido');
+    assertMailConfigured();
+    const user = await db.user.findUnique({ where: { email: parsed.data.email } });
+    // La respuesta no revela si el correo pertenece a una cuenta.
+    return createChallenge(
+      {
+        email: parsed.data.email,
+        purpose: 'RESET',
+        userId: user?.emailVerifiedAt ? user.id : undefined,
+      },
+      Boolean(user?.emailVerifiedAt),
+    );
+  }
+
+  @Post('auth/reset-password') async reset(@Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const parsed = resetPasswordSchema.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException(
+        'Revisa el código y usa una contraseña de al menos 12 caracteres',
+      );
+    const passwordHash = await hashPassword(parsed.data.password);
+    await consumeChallenge(parsed.data.challengeId, parsed.data.code, 'RESET', async (tx, c) => {
+      if (!c.userId) throw new BadRequestException('Solicitud inválida');
+      await tx.user.update({ where: { id: c.userId }, data: { passwordHash } });
+      await tx.session.deleteMany({ where: { userId: c.userId } });
+      await tx.emailChallenge.updateMany({
+        where: { userId: c.userId, purpose: 'RESET', consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+    });
+    return { ok: true };
   }
 
   @Post('auth/login') async login(

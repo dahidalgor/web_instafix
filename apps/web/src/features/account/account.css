@@ -48,9 +48,12 @@
 .account-login-intro {
   text-align: center;
 }
+.page-content .account-login.account-panel h1,
 .account-login-card h1 {
   margin: 10px 0 8px;
-  font-size: clamp(30px, 5vw, 38px);
+  font-size: 45px;
+  line-height: 1.2;
+  letter-spacing: -1px;
 }
 .account-login-intro {
   max-width: 310px;
@@ -70,8 +73,85 @@
   margin: -6px 0 20px;
 }
 .account-login-card .button {
-  width: 100%;
+  width: auto;
+  min-width: 130px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 12px 24px;
+  font-size: 14px;
+  border-radius: 9px;
   margin-top: 6px;
+}
+.auth-actions {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0 8px;
+}
+.auth-link {
+  background: none;
+  border: 0;
+  padding: 8px 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-link:hover {
+  text-decoration: underline;
+}
+.auth-phone-field {
+  margin-bottom: 18px;
+}
+.auth-phone-field > label {
+  margin-bottom: 8px;
+}
+.auth-phone-control {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.auth-country {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+  font-size: 14px;
+}
+.auth-country select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.auth-country:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.auth-country-chevron {
+  margin-left: 4px;
+  color: var(--muted);
+}
+.auth-phone-control input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  margin: 0;
+  background: transparent;
+  font-size: 16px;
+}
+.account-login-card input {
+  font-size: 16px;
+}
+.auth-code {
+  text-align: center;
+  letter-spacing: 0.35em;
 }
 .account-login-switch {
   margin: 0;
