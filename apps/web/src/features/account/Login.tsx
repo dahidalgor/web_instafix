@@ -49,7 +49,9 @@ export function Login({
         const payload = {
           phone,
           password: data.get('password'),
-          ...(mode === 'register' ? { name: data.get('name'), email } : {}),
+          ...(mode === 'register'
+            ? { firstName: data.get('firstName'), lastName: data.get('lastName'), email }
+            : {}),
         };
         if (mode === 'login')
           onLogin(
@@ -151,10 +153,28 @@ export function Login({
         </p>
         <form key={mode} onSubmit={submit}>
           {mode === 'register' && (
-            <label>
-              Nombre
-              <input name="name" autoComplete="name" required minLength={2} maxLength={100} />
-            </label>
+            <div className="form-row">
+              <label>
+                Nombre
+                <input
+                  name="firstName"
+                  autoComplete="given-name"
+                  required
+                  minLength={2}
+                  maxLength={50}
+                />
+              </label>
+              <label>
+                Apellido
+                <input
+                  name="lastName"
+                  autoComplete="family-name"
+                  required
+                  minLength={2}
+                  maxLength={50}
+                />
+              </label>
+            </div>
           )}
           {(mode === 'register' || mode === 'forgot') && (
             <label>

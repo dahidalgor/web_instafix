@@ -9,6 +9,8 @@ type ChallengeInput = {
   email: string;
   purpose: 'REGISTER' | 'RESET';
   name?: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
   passwordHash?: string;
   userId?: string;

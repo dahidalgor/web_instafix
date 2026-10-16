@@ -8,9 +8,13 @@ La web presenta datos y llama a la API. El servidor valida y persiste. PostgreSQ
 
 El catálogo relaciona `Offering` con `Equipment`. Cada servicio conserva también categoría y equipo descriptivos. Las cuentas usan `User` y `Session`; las citas internas usan `Appointment`, y los trabajos finalizados y sus garantías, `CompletedJob`. Los medios optimizados se guardan en disco o R2 y sus referencias permanecen en el catálogo.
 
-## Confirmación futura
+## Confirmación y mensajería
 
-Solicitud → selección de técnico y horario → PENDIENTE_UBICACION → ubicación recibida por WhatsApp → cobertura y disponibilidad válidas → crear cita en Cal.com → registrar confirmación → notificar.
+`WhatsAppModule` reúne el transporte único: lógica de negocio → `WhatsAppService` → `WasapFlowClient` → WasapFlow Bridge. La conexión se realiza con Embedded Signup alojado y exige Coexistence. `WhatsAppConnection` conserva la WABA verificada; `BridgeWebhook` es la bandeja durable; `WhatsAppMessage` y `WhatsAppContact` sincronizan mensajes/contactos sin mezclar su identidad con la de cuentas web.
+
+Reserva pendiente en Cal.com → webhook firmado → `Appointment` pendiente de ubicación → ubicación nativa del cliente por WhatsApp → confirmar reserva mediante API Cal.com → registrar confirmación → notificar y programar recordatorios. La cobertura y asignación de técnico no se validan automáticamente en esta versión.
+
+`AutomationJob` conserva la cola y una clave única por cita, revisión y tipo de mensaje. `IntegrationEvent` deduplica eventos y conserva recibos de entrega. Bloqueos de PostgreSQL serializan cambios por cita y evitan procesar dos veces el mismo mensaje. Cancelar o reprogramar invalida la revisión anterior. Los detalles operativos están en [WhatsApp y Cal.com](whatsapp-setup.md).
 
 La confirmación requiere éxito verificable del proveedor. Un timeout necesita conciliación, no repetir ciegamente la creación. Webhooks deben verificarse sobre el cuerpo original, persistirse y deduplicarse. Eventos fuera de orden no pueden revertir estados. La referencia vincula la solicitud y el remitente debe coincidir o completar una verificación adicional.
 
@@ -22,4 +26,4 @@ Reservar no exige una cuenta ni correo. El teléfono se almacena en formato inte
 
 ## Lo que falta antes de producción
 
-La autenticación, los permisos y las pruebas de integración locales están implementados. Siguen pendientes la sincronización automática Cal.com/WhatsApp, verificación de teléfono y recuperación de acceso, credenciales y despliegue remoto, copias externas programadas y su restauración, retención de archivos huérfanos, observabilidad y protección distribuida contra abuso. Las citas internas se gestionan actualmente desde administración.
+La autenticación, recuperación por correo, permisos e integración Cal.com/WhatsApp están implementados y tienen pruebas locales. Siguen pendientes la activación real de SMTP y mensajería, verificación de teléfono, credenciales y despliegue remoto, copias externas programadas y su restauración, retención de archivos huérfanos, observabilidad y protección distribuida contra abuso.

@@ -6,6 +6,9 @@ import { newToken, tokenHash } from './security';
 export const safeUser = {
   id: true,
   name: true,
+  firstName: true,
+  lastName: true,
+  email: true,
   phone: true,
   role: true,
   phoneVerifiedAt: true,

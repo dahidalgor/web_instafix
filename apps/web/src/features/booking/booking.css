@@ -62,3 +62,11 @@
     flex-direction: column;
   }
 }
+
+.calendar-account-note {
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 14px;
+}

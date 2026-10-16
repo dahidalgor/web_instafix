@@ -15,7 +15,10 @@ export const appointmentLabels = {
 };
 export const appointmentSchema = z
   .object({
-    userId: z.string().uuid(),
+    userId: z.string().uuid().nullable(),
+    contactName: z.string().trim().max(100).optional(),
+    contactPhone: z.string().trim().max(30).optional(),
+    whatsappConsent: z.boolean().optional(),
     title: z.string().trim().min(3).max(150),
     device: z.string().trim().min(2).max(100),
     startsAt: z.string().datetime({ offset: true }),
@@ -40,4 +43,7 @@ export const appointmentSchema = z
     (value) => new Date(value.endsAt) > new Date(value.startsAt),
     'El fin debe ser posterior al inicio',
   );
-export type Appointment = z.infer<typeof appointmentSchema> & { id: string };
+export type Appointment = z.infer<typeof appointmentSchema> & {
+  id: string;
+  assignedService?: { title: string; device: string } | null;
+};

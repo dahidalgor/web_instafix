@@ -133,8 +133,8 @@ export function Services() {
               <p>Este servicio no admite solicitudes en este momento.</p>
             )}
             <p className="small">
-              El calendario general permite coordinar la cita; confirma el servicio elegido durante
-              la reserva.
+              Cuéntanos qué necesita tu equipo al reservar. El técnico definirá contigo el servicio
+              adecuado.
             </p>
           </article>
         )}

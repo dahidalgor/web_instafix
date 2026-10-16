@@ -2,6 +2,10 @@
 
 Consulta la [guía de organización del código](docs/code-organization.md) para localizar componentes, estilos, controladores y contratos. Usa `pnpm format` para mantener el formato uniforme y `pnpm format:check` para comprobarlo.
 
+## WhatsApp y Cal.com (14 de octubre de 2026)
+
+Implementados los webhooks firmados, reservas de invitados, confirmación tras recibir ubicación, cola persistente de mensajes y recordatorios a las 08:00 de Ecuador continental. Administración → WhatsApp muestra configuración y resultados. La única integración de mensajería es WasapFlow Bridge con Coexistence. Su activación requiere Embedded Signup desde administración, plantillas aprobadas, credenciales de WasapFlow/Cal.com y despliegue HTTPS en `instafix.ec`: consulta [la guía de activación](docs/whatsapp-setup.md). Los envíos permanecen desactivados por defecto.
+
 ## Subida de archivos y despliegue (6 de octubre de 2026)
 
 Administración → Servicios permite subir fotos y videos desde el dispositivo, previsualizar, ordenar y quitar contenido. Guarda el servicio para publicar los cambios. Almacenamiento local por defecto y adaptador R2 configurable; fotos WebP responsivas y videos MP4 optimizados con portada. Consulta [configuración y despliegue](deploy/README.md) para los límites, R2, Lightsail, migración y backups.
@@ -14,7 +18,7 @@ La web tiene páginas independientes con navegación por hash: Inicio, Servicios
 
 Las fichas abren un diálogo animado con galería continua de imágenes y videos HTTPS configurados en cada servicio. Los videos comienzan sin sonido; el movimiento puede pausarse y se detiene al interactuar. Sin medios cargados, no se inventan fotos ni aparece un carrusel vacío.
 
-Mi cuenta muestra citas próximas e históricas, servicios realizados y garantías con fecha de vencimiento. Se consultan por el usuario autenticado, nunca por un teléfono enviado por el navegador. Administración → Citas permite registrar y editar citas asociadas a cuentas existentes. La migración `202610040001_appointments` añade esta tabla sin alterar trabajos previos. La sincronización automática con Cal.com/WhatsApp todavía no está conectada: estas citas se registran en Instafix desde administración, después de comprobar la identidad del cliente.
+Mi cuenta muestra citas próximas e históricas, servicios realizados y garantías con fecha de vencimiento. Se consultan por el usuario autenticado, nunca por un teléfono enviado por el navegador. Administración → Citas permite registrar visitas de cuentas existentes o invitados. Las reservas de invitados no se vinculan por teléfono. Las realizadas con sesión iniciada usan una referencia opaca y el webhook firmado para vincularlas a la cuenta, comprobando correo y teléfono.
 
 Pruebas de permisos de citas contra una API local en ejecución (crea y elimina exclusivamente sus propias cuentas y citas de prueba):
 
@@ -63,7 +67,7 @@ pnpm build
 
 ## Límites de esta entrega
 
-No es una plataforma lista para producción. No incluye selección de técnico/horario, autenticación, garantías, confirmación, Cal.com, WhatsApp ni pagos. No se envían mensajes ni se crean citas. Los precios son datos de demostración, no tarifas aprobadas. El frontend muestra el catálogo de demostración compartido; conectar su lectura al catálogo de la API es parte de la próxima fase.
+El catálogo, cuentas, garantías y agenda están implementados. Para producción faltan las credenciales y activación de los proveedores, el despliegue remoto y las comprobaciones reales. No incluye pagos, asignación automática de técnicos ni comprobación geográfica de cobertura.
 
 El vencimiento está guardado; todavía no hay un proceso que cambie automáticamente el estado a EXPIRADA. No existe retención de horarios. Una repetición manual del envío puede crear otra solicitud; la idempotencia se incorporará antes de conectar proveedores.
 
@@ -71,18 +75,21 @@ Los clientes provisionales no se fusionan por teléfono no verificado. La futura
 
 ## Próxima entrega
 
-1. Catálogo relacional de categorías/dispositivos y técnicos verificados.
-2. Integración Cal.com para selección de horarios sin confirmación prematura.
-3. Recepción autenticada de ubicación por WhatsApp, validación de cobertura y disponibilidad.
-4. Creación idempotente de cita y notificaciones con reintentos.
+1. Activar y probar los proveedores externos en el dominio definitivo.
+2. Verificación de propiedad del teléfono para vincular historiales de invitados.
+3. Cobertura geográfica y asignación de técnicos.
 
 Consultar `docs/architecture.md` para las reglas del flujo.
+
+## Contacto, presentaciones y estadísticas
+
+La web incluye Contacto en el footer y menú móvil desplegable. Administración permite editar las diapositivas, asignar servicios a citas, registrar trabajos y consultar visitas/tiempo visible por página. El cliente sigue describiendo su necesidad al reservar; el técnico elige el servicio después. Consulta [la guía de funcionamiento y configuración SMTP](docs/site-experience.md). El envío real de correo queda pendiente de elegir y configurar un proveedor.
 
 ## Agenda Cal.com integrada
 
 La sección `#agenda` muestra el evento real `instafix/agenda-tu-cita-con-instafix` mediante su vista incrustada en un iframe. Conserva `overlayCalendar=true` y omite la fecha fija del enlace original. No se cambian los ajustes de la cuenta de Cal.com.
 
-Esta integración visual permite actuar sobre la agenda real según sus reglas actuales. Aún no sincroniza reservas con PostgreSQL ni condiciona la confirmación a recibir ubicación por WhatsApp. No hacer reservas ficticias para probarla.
+La sincronización con PostgreSQL y la confirmación por ubicación requieren activar los webhooks y configurar el evento como pendiente de confirmación según [la guía de WhatsApp](docs/whatsapp-setup.md). No hacer reservas ficticias en la agenda real para probarla.
 
 ## Catálogo, cuentas y administración (octubre 2026)
 
@@ -115,6 +122,6 @@ El comando de administrador pide teléfono y contraseña de forma interactiva; l
 
 El acceso administrativo se verifica por rol en cada endpoint, independientemente del hostname. El subdominio no es una medida de autorización. Para producción hay que configurar DNS/TLS y `VITE_ADMIN_HOST`, los orígenes permitidos y NODE_ENV=production. Las cookies son de host, HttpOnly, SameSite=Strict y Secure en producción; las sesiones caducan en 24 horas y se revocan al salir. Contraseñas con scrypt y sal aleatoria. No se guarda el token de sesión en texto claro.
 
-Las cuentas se registran con teléfono y contraseña, sin correo obligatorio. La verificación de propiedad del teléfono y recuperación de contraseña aún requieren conectar un proveedor. Por eso no se reclaman trabajos de invitados automáticamente por coincidencia de teléfono. Administración puede registrar trabajos completados vinculados explícitamente a una cuenta, después de comprobar la identidad. Cada trabajo conserva condiciones y fechas de garantía propias, independientes de cambios en la política pública.
+Las cuentas se registran con teléfono, correo y contraseña. La verificación de correo y recuperación de contraseña requieren configurar SMTP. La propiedad del teléfono todavía no se verifica al registrarse; por eso no se reclaman trabajos de invitados automáticamente por coincidencia de teléfono. Administración puede registrar trabajos completados vinculados explícitamente a una cuenta, después de comprobar la identidad. Cada trabajo conserva condiciones y fechas de garantía propias, independientes de cambios en la política pública.
 
-Las fotos y videos se suben desde el dispositivo en administración; los enlaces HTTPS existentes también se conservan. El almacenamiento local y R2 están descritos en deploy/README.md. El calendario general de Cal.com sigue separado del catálogo: no sincroniza automáticamente el precio ni el servicio elegido, y su confirmación sigue requiriendo la integración con WhatsApp prevista.
+Las fotos y videos se suben desde el dispositivo en administración; los enlaces HTTPS existentes también se conservan. El almacenamiento local y R2 están descritos en deploy/README.md. El calendario general de Cal.com no sincroniza automáticamente el precio del catálogo: su campo obligatorio `servicio` identifica el trabajo para los mensajes de WhatsApp.

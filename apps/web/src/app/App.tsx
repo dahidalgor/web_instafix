@@ -1,3 +1,5 @@
+import { Contact } from '../features/contact/Contact';
+import { usePageAnalytics } from '../features/analytics/usePageAnalytics';
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from '../components/layout/Brand';
 import { About } from '../features/about/About';
@@ -19,6 +21,9 @@ const links = [
 ] as const;
 export function App() {
   const [page, setPage] = useState(() => resolvePage(window.location.hash));
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  usePageAnalytics(page);
   const main = useRef<HTMLElement>(null);
   useEffect(() => {
     const navigate = () => setPage(resolvePage(window.location.hash));
@@ -26,9 +31,14 @@ export function App() {
     return () => window.removeEventListener('hashchange', navigate);
   }, []);
   useEffect(() => {
+    setMenuOpen(false);
     document.title =
       (links.find(([id]) => id === page)?.[1] ??
-        (page === 'garantia' ? 'Políticas de garantía' : 'Asesoría')) + ' · InstaFix';
+        (page === 'garantia'
+          ? 'Políticas de garantía'
+          : page === 'contacto'
+            ? 'Contacto'
+            : 'Asesoría')) + ' · InstaFix';
     window.scrollTo({ top: 0, behavior: 'instant' });
     main.current?.focus({ preventScroll: true });
     if (window.location.hash === '#nuestro-trabajo')
@@ -46,13 +56,39 @@ export function App() {
       >
         Saltar al contenido
       </a>
-      <header>
+      <header
+        className="public-header"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && menuOpen) {
+            setMenuOpen(false);
+            menuButton.current?.focus();
+          }
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false);
+        }}
+      >
         <Brand />
-        <nav aria-label="Navegación principal">
+        <button
+          ref={menuButton}
+          type="button"
+          className="mobile-menu-toggle"
+          aria-expanded={menuOpen}
+          aria-controls="main-navigation"
+          onClick={() => setMenuOpen((value) => !value)}
+        >
+          <span aria-hidden="true">{menuOpen ? '×' : '☰'}</span> {menuOpen ? 'Cerrar' : 'Menú'}
+        </button>
+        <nav
+          id="main-navigation"
+          className={menuOpen ? 'is-open' : ''}
+          aria-label="Navegación principal"
+        >
           {links.map(([id, label]) => (
             <a
               key={id}
               href={'#' + id}
+              onClick={() => setMenuOpen(false)}
               aria-current={page === id ? 'page' : undefined}
               className={id === 'agenda' ? 'nav-cta' : undefined}
             >
@@ -62,6 +98,7 @@ export function App() {
         </nav>
       </header>
       <main key={page} id="contenido" ref={main} tabIndex={-1} className="page-content">
+        {page === 'contacto' && <Contact />}
         {page === 'inicio' && <Home />}
         {page === 'servicios' && <Services />}
         {page === 'quienes-somos' && <About />}
@@ -74,9 +111,14 @@ export function App() {
       <footer>
         <Brand />
         <span>Tecnología que sigue contigo.</span>
-        <a className="footer-policy" href="#garantia">
-          Políticas de garantía
-        </a>
+        <div className="footer-links">
+          <a className="footer-policy" href="#contacto">
+            Contacto
+          </a>
+          <a className="footer-policy" href="#garantia">
+            Políticas de garantía
+          </a>
+        </div>
       </footer>
       <a
         className="mobile-booking"

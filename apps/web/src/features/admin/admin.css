@@ -3,6 +3,36 @@
 .admin-page {
   padding-bottom: 60px;
 }
+
+/* Seguimiento de automatizaciones, sin exponer credenciales al navegador. */
+.whatsapp-status,
+.whatsapp-jobs article {
+  border: 1px solid #ddd4e4;
+  border-radius: 16px;
+  padding: 22px;
+  margin-block: 18px;
+  overflow-wrap: anywhere;
+}
+.whatsapp-jobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 18px;
+}
+.whatsapp-jobs article {
+  margin: 0;
+}
+.whatsapp-jobs h4 {
+  margin-top: 0;
+}
+.editor .checkbox-label {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+}
+.editor .checkbox-label input {
+  width: auto;
+  flex: 0 0 auto;
+}
 .admin-layout {
   display: grid;
   grid-template-columns: 1fr 1.6fr;
@@ -51,4 +81,23 @@
   .admin-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.admin-table-scroll {
+  overflow-x: auto;
+}
+.admin-table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.admin-table-scroll th,
+.admin-table-scroll td {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }

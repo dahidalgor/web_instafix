@@ -1,3 +1,6 @@
+import { AdminEmail } from './AdminEmail';
+import { AdminSlides } from './AdminSlides';
+import { AdminAnalytics } from './AdminAnalytics';
 import { offeringSchema, type AccountUser, type Offering } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
@@ -8,6 +11,7 @@ import { AdminEquipment } from './AdminEquipment';
 import { AdminJobs } from './AdminJobs';
 import { AdminServices } from './AdminServices';
 import { AdminWarranty } from './AdminWarranty';
+import { AdminWhatsApp } from './AdminWhatsApp';
 export default function Admin() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -113,7 +117,17 @@ export default function Admin() {
       </header>
       <main className="admin-page">
         <div className="filters">
-          {['Servicios', 'Equipos', 'Citas', 'Garantías', 'Trabajos'].map((name) => (
+          {[
+            'Servicios',
+            'Equipos',
+            'Citas',
+            'WhatsApp',
+            'Garantías',
+            'Trabajos',
+            'Presentaciones',
+            'Estadísticas',
+            'Correo',
+          ].map((name) => (
             <button
               disabled={uploading}
               key={name}
@@ -132,7 +146,11 @@ export default function Admin() {
             {message}
           </p>
         )}
-        {tab === 'Citas' && <AdminAppointments />}
+        {tab === 'Correo' && <AdminEmail />}
+        {tab === 'Presentaciones' && <AdminSlides onUploading={setUploading} />}
+        {tab === 'Estadísticas' && <AdminAnalytics />}
+        {tab === 'Citas' && <AdminAppointments services={items} />}
+        {tab === 'WhatsApp' && <AdminWhatsApp />}
         {tab === 'Servicios' && (
           <AdminServices
             items={items}
@@ -152,7 +170,7 @@ export default function Admin() {
         {tab === 'Garantías' && (
           <AdminWarranty policy={policy} setPolicy={setPolicy} run={run} busy={busy} />
         )}
-        {tab === 'Trabajos' && <AdminJobs users={users} run={run} busy={busy} />}
+        {tab === 'Trabajos' && <AdminJobs items={items} users={users} run={run} busy={busy} />}
       </main>
     </>
   );

@@ -4,7 +4,7 @@ import { AppModule } from './app.module';
 import './config/environment';
 import { allowedOrigins } from './config/environment';
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   // Caddy es el único proxy en producción; la API no expone un puerto público.
   if (process.env.NODE_ENV === 'production')
     app.getHttpAdapter().getInstance().set('trust proxy', 1);

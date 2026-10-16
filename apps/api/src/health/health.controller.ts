@@ -1,7 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
+import { calConfiguration, whatsappConfiguration } from '../whatsapp/config';
 @Controller('api/v1')
 export class HealthController {
   @Get('health') health() {
-    return { status: 'ok', calendarConnected: false, whatsappConnected: false };
+    const wa = whatsappConfiguration();
+    return {
+      status: 'ok',
+      calendarConfigured: calConfiguration().configured,
+      whatsappConfigured: wa.configured,
+      whatsappEnabled: wa.enabled,
+    };
   }
 }

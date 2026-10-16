@@ -1,9 +1,25 @@
-import { appointmentLabels, appointmentStatuses, type Appointment } from '@instafix/contracts';
+import {
+  appointmentLabels,
+  appointmentStatuses,
+  type Appointment,
+  type Offering,
+} from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
-type AdminAppointment = Appointment & { user: { name: string; phone: string } };
+type AdminAppointment = Appointment & {
+  offeringId?: string | null;
+  user: { name: string; phone: string } | null;
+  calUid?: string;
+  whatsappConsentAt?: string;
+  automationIssue?: string;
+  locationLatitude?: number;
+  locationLongitude?: number;
+};
 const empty = {
   userId: '',
+  contactName: '',
+  contactPhone: '',
+  whatsappConsent: false,
   title: '',
   device: '',
   startsAt: '',
@@ -17,7 +33,8 @@ const localDate = (value: string) => {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
-export function AdminAppointments() {
+export function AdminAppointments({ services }: { services: Offering[] }) {
+  const [assignedService, setAssignedService] = useState('');
   const [items, setItems] = useState<AdminAppointment[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [draft, setDraft] = useState({ ...empty });
@@ -37,8 +54,12 @@ export function AdminAppointments() {
   }, []);
   function edit(item: AdminAppointment) {
     setId(item.id);
+    setAssignedService(item.offeringId || '');
     setDraft({
-      userId: item.userId,
+      userId: item.userId || '',
+      contactName: item.contactName || item.user?.name || '',
+      contactPhone: item.contactPhone || item.user?.phone || '',
+      whatsappConsent: !!item.whatsappConsentAt,
       title: item.title,
       device: item.device,
       startsAt: localDate(item.startsAt),
@@ -58,6 +79,7 @@ export function AdminAppointments() {
         method: id ? 'PATCH' : 'POST',
         body: JSON.stringify({
           ...draft,
+          userId: draft.userId || null,
           startsAt: new Date(draft.startsAt).toISOString(),
           endsAt: new Date(draft.endsAt).toISOString(),
         }),
@@ -65,9 +87,27 @@ export function AdminAppointments() {
       await load();
       setId(null);
       setDraft({ ...empty });
-      setMessage('Cita guardada y visible en la cuenta del cliente.');
+      setMessage('Cita guardada.');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo guardar');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function assignService() {
+    if (!id || !assignedService) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await api(`admin/appointments/${id}/service`, {
+        method: 'PATCH',
+        body: JSON.stringify({ offeringId: assignedService }),
+      });
+      setDraft((previous) => ({ ...previous, device: result.device }));
+      await load();
+      setMessage('Servicio asignado. La descripción y el horario del cliente se conservan.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo asignar');
     } finally {
       setBusy(false);
     }
@@ -80,7 +120,8 @@ export function AdminAppointments() {
         cuenta.
       </p>
       <p className="small">
-        Esta agenda es de Instafix. Los cambios no se envían todavía a Cal.com ni por WhatsApp.
+        Las reservas de Cal.com se sincronizan automáticamente al activar la integración. Reprograma
+        o cancela esas reservas en Cal.com.
       </p>
       {message && <p role="status">{message}</p>}
       <div className="admin-layout">
@@ -96,25 +137,58 @@ export function AdminAppointments() {
           {items.map((item) => (
             <button className="admin-item" key={item.id} onClick={() => edit(item)}>
               <strong>
-                {item.title} · {item.user.name}
+                {item.title} · {item.contactName || item.user?.name || 'Invitado'}
               </strong>
               <span>
                 {new Date(item.startsAt).toLocaleString('es-EC')} · {appointmentLabels[item.status]}
               </span>
+              {item.automationIssue && <span>{item.automationIssue}</span>}
             </button>
           ))}
         </div>
         <form onSubmit={save} className="editor">
           <h3>{id ? 'Editar cita' : 'Nueva cita'}</h3>
+          {id && (
+            <fieldset>
+              <legend>Servicio asignado por el técnico</legend>
+              <label>
+                Servicio del catálogo
+                <select
+                  value={assignedService}
+                  onChange={(e) => setAssignedService(e.target.value)}
+                >
+                  <option value="">Pendiente de diagnóstico</option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.device} · {service.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" disabled={busy || !assignedService} onClick={assignService}>
+                Asignar servicio
+              </button>
+              <p className="small">
+                Al finalizar, registra el trabajo y su garantía en «Trabajos».
+              </p>
+            </fieldset>
+          )}
           <label>
             Cliente
             <select
-              required
               disabled={!!id}
               value={draft.userId}
-              onChange={(e) => setDraft({ ...draft, userId: e.target.value })}
+              onChange={(e) => {
+                const user = users.find((u) => u.id === e.target.value);
+                setDraft({
+                  ...draft,
+                  userId: e.target.value,
+                  contactName: user?.name || '',
+                  contactPhone: user?.phone || '',
+                });
+              }}
             >
-              <option value="">Selecciona una cuenta</option>
+              <option value="">Invitado sin cuenta</option>
               {users.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.name} · {user.phone}
@@ -123,7 +197,9 @@ export function AdminAppointments() {
             </select>
           </label>
           {[
-            ['title', 'Servicio'],
+            ['contactName', 'Nombre del cliente'],
+            ['contactPhone', 'WhatsApp con código de país'],
+            ['title', 'Descripción del cliente'],
             ['device', 'Equipo'],
             ['address', 'Dirección'],
             ['technician', 'Técnico'],
@@ -133,7 +209,7 @@ export function AdminAppointments() {
               <input
                 required={key === 'title' || key === 'device'}
                 maxLength={key === 'address' ? 500 : 100}
-                value={draft[key as keyof typeof draft]}
+                value={String(draft[key as keyof typeof draft])}
                 onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
               />
             </label>
@@ -145,6 +221,7 @@ export function AdminAppointments() {
           <label>
             Inicio
             <input
+              disabled={!!items.find((item) => item.id === id)?.calUid}
               required
               type="datetime-local"
               value={draft.startsAt}
@@ -154,6 +231,7 @@ export function AdminAppointments() {
           <label>
             Fin estimado
             <input
+              disabled={!!items.find((item) => item.id === id)?.calUid}
               required
               type="datetime-local"
               value={draft.endsAt}
@@ -174,6 +252,7 @@ export function AdminAppointments() {
           <label>
             Estado
             <select
+              disabled={!!items.find((item) => item.id === id)?.calUid}
               value={draft.status}
               onChange={(e) => setDraft({ ...draft, status: e.target.value })}
             >
@@ -184,6 +263,29 @@ export function AdminAppointments() {
               ))}
             </select>
           </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={draft.whatsappConsent}
+              onChange={(e) => setDraft({ ...draft, whatsappConsent: e.target.checked })}
+            />
+            El cliente autorizó recibir mensajes de esta cita por WhatsApp.
+          </label>
+          {items
+            .filter(
+              (item) =>
+                item.id === id && item.locationLatitude != null && item.locationLongitude != null,
+            )
+            .map((item) => (
+              <a
+                key={item.id}
+                href={`https://www.google.com/maps?q=${item.locationLatitude},${item.locationLongitude}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Ver ubicación del cliente
+              </a>
+            ))}
           <button disabled={busy} className="button">
             {busy ? 'Guardando…' : 'Guardar cita'}
           </button>

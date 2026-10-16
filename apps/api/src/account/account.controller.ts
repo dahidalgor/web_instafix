@@ -16,6 +16,14 @@ export class AccountController {
 
   @Get('my/appointments') async appointments(@Req() req: Request) {
     const user = await authenticated(req);
-    return db.appointment.findMany({ where: { userId: user.id }, orderBy: { startsAt: 'asc' } });
+    const appointments = await db.appointment.findMany({
+      where: { userId: user.id },
+      orderBy: { startsAt: 'asc' },
+      include: { offering: { select: { title: true, device: true } } },
+    });
+    return appointments.map(({ offering, ...appointment }) => ({
+      ...appointment,
+      assignedService: offering,
+    }));
   }
 }

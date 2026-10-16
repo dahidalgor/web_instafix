@@ -44,6 +44,8 @@ export class AuthController {
         email: c.email,
         purpose: c.purpose as 'REGISTER' | 'RESET',
         name: c.name ?? undefined,
+        firstName: c.firstName ?? undefined,
+        lastName: c.lastName ?? undefined,
         phone: c.phone ?? undefined,
         passwordHash: c.passwordHash ?? undefined,
         userId: c.userId ?? undefined,
@@ -67,7 +69,9 @@ export class AuthController {
       );
     return createChallenge({
       purpose: 'REGISTER',
-      name: data.data.name,
+      name: `${data.data.firstName} ${data.data.lastName}`,
+      firstName: data.data.firstName,
+      lastName: data.data.lastName,
       phone: data.data.phone,
       email: data.data.email,
       passwordHash: await hashPassword(data.data.password),
@@ -94,6 +98,8 @@ export class AuthController {
           return tx.user.create({
             data: {
               name: c.name,
+              firstName: c.firstName,
+              lastName: c.lastName,
               phone: c.phone,
               email: c.email,
               passwordHash: c.passwordHash,

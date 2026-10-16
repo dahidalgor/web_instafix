@@ -8,7 +8,9 @@ config({ path: '../../.env' });
 const db = new PrismaClient();
 async function main() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const name = await rl.question('Nombre del administrador: ');
+  const firstName = await rl.question('Nombre del administrador: ');
+  const lastName = await rl.question('Apellido del administrador: ');
+  const email = (await rl.question('Correo electrónico: ')).trim().toLowerCase();
   const phone = normalizePhone(await rl.question('Teléfono internacional: '), 'EC');
   rl.close();
   if (!process.stdin.isTTY) throw new Error('Ejecuta este comando en una terminal interactiva');
@@ -41,12 +43,15 @@ async function main() {
     };
     process.stdin.on('data', handler);
   });
-  const parsed = registrationSchema.parse({ name, phone, password });
+  const parsed = registrationSchema.parse({ firstName, lastName, email, phone, password });
   if (await db.user.findUnique({ where: { phone: parsed.phone } }))
     throw new Error('Este teléfono ya tiene cuenta. No se elevarán permisos automáticamente.');
   await db.user.create({
     data: {
-      name: parsed.name,
+      name: `${parsed.firstName} ${parsed.lastName}`,
+      firstName: parsed.firstName,
+      lastName: parsed.lastName,
+      email: parsed.email,
       phone: parsed.phone,
       passwordHash: await hashPassword(password),
       role: 'ADMIN',

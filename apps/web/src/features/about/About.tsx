@@ -1,13 +1,24 @@
 import { useEffect, useState } from 'react';
-import { slides } from './slides';
+import type { SiteSlide } from '@instafix/contracts/src/site';
+import { api } from '../../lib/api';
 
 export function About() {
+  const [slides, setSlides] = useState<SiteSlide[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    api<SiteSlide[]>('slides')
+      .then(setSlides)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   useEffect(() => {
     if (
+      slides.length < 2 ||
       !playing ||
       hovered ||
       focused ||
@@ -19,11 +30,15 @@ export function About() {
       6500,
     );
     return () => window.clearInterval(timer);
-  }, [playing, hovered, focused]);
+  }, [playing, hovered, focused, slides.length]);
   function change(index: number) {
     setPlaying(false);
     setCurrent((index + slides.length) % slides.length);
   }
+  useEffect(() => {
+    if (slides.length && window.location.hash === '#nuestro-trabajo')
+      document.getElementById('nuestro-trabajo')?.scrollIntoView();
+  }, [slides.length]);
   const slide = slides[current];
   return (
     <div className="about-page">
@@ -44,72 +59,91 @@ export function About() {
           </a>
         </div>
       </section>
-      <section
-        id="nuestro-trabajo"
-        className="work-showcase"
-        aria-label="Presentación de nuestros servicios"
-        aria-roledescription="carrusel"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onFocusCapture={() => setFocused(true)}
-        onBlurCapture={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
-        }}
-      >
-        <div className={'work-visual work-visual-' + current}>
-          {slide.image ? (
-            <img src={slide.image} alt={slide.title} />
-          ) : (
-            <>
-              <div className="work-grid" />
-              <div className="work-orbit" />
-              <span className="work-symbol" aria-hidden="true">
-                {slide.symbol}
-              </span>
-              <span className="work-placeholder">
-                Ilustración · Fotos de nuestros trabajos próximamente
-              </span>
-            </>
-          )}
-          <span className="work-overline">INSTAFIX / EN ACCIÓN</span>
-          <span className="work-detail">{slide.detail}</span>
-        </div>
-        <div className="work-story">
-          <div className="work-heading">
-            <span className="eyebrow">LO QUE HACEMOS</span>
-            <span className="work-count">0{current + 1} / 03</span>
-          </div>
-          <div className="work-copy" aria-live={playing ? 'off' : 'polite'} aria-atomic="true">
-            <p className="work-category">{slide.label}</p>
-            <h2>{slide.title}</h2>
-            <p>{slide.description}</p>
-          </div>
-          <div className="work-controls">
-            <div className="work-dots">
-              {slides.map((item, index) => (
-                <button
-                  key={item.label}
-                  aria-label={'Ver ' + item.label.toLowerCase()}
-                  aria-pressed={index === current}
-                  className={index === current ? 'selected' : ''}
-                  onClick={() => change(index)}
+      {loading && <p role="status">Cargando presentación…</p>}
+      {error && <p role="alert">{error}</p>}
+      {slide && (
+        <section
+          id="nuestro-trabajo"
+          className="work-showcase"
+          aria-label="Presentación de nuestros servicios"
+          aria-roledescription="carrusel"
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onFocusCapture={() => setFocused(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+          }}
+        >
+          <div className={'work-visual work-visual-' + current}>
+            {slide.media[0] ? (
+              slide.media[0].type === 'image' ? (
+                <img src={slide.media[0].url} alt={slide.media[0].alt || slide.title} />
+              ) : (
+                <video
+                  key={slide.media[0].url}
+                  src={slide.media[0].url}
+                  poster={slide.media[0].poster}
+                  controls
+                  muted
+                  playsInline
+                  preload="metadata"
+                  aria-label={slide.media[0].alt || slide.title}
                 />
-              ))}
-            </div>
-            <div className="work-arrows">
-              <button aria-label="Diapositiva anterior" onClick={() => change(current - 1)}>
-                ←
-              </button>
-              <button aria-label="Diapositiva siguiente" onClick={() => change(current + 1)}>
-                →
-              </button>
-            </div>
+              )
+            ) : (
+              <>
+                <div className="work-grid" />
+                <div className="work-orbit" />
+                <span className="work-symbol" aria-hidden="true">
+                  {slide.symbol}
+                </span>
+                <span className="work-placeholder">
+                  Ilustración · Fotos de nuestros trabajos próximamente
+                </span>
+              </>
+            )}
+            <span className="work-overline">INSTAFIX / EN ACCIÓN</span>
+            <span className="work-detail">{slide.detail}</span>
           </div>
-          <button className="work-play" onClick={() => setPlaying((value) => !value)}>
-            {playing ? 'Ⅱ Pausar presentación' : '▷ Reproducir presentación'}
-          </button>
-        </div>
-      </section>
+          <div className="work-story">
+            <div className="work-heading">
+              <span className="eyebrow">LO QUE HACEMOS</span>
+              <span className="work-count">
+                {String(current + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
+              </span>
+            </div>
+            <div className="work-copy" aria-live={playing ? 'off' : 'polite'} aria-atomic="true">
+              <p className="work-category">{slide.label}</p>
+              <h2>{slide.title}</h2>
+              <p>{slide.description}</p>
+            </div>
+            <div className="work-controls">
+              <div className="work-dots">
+                {slides.map((item, index) => (
+                  <button
+                    key={item.id}
+                    aria-label={'Ver ' + item.label.toLowerCase()}
+                    aria-pressed={index === current}
+                    className={index === current ? 'selected' : ''}
+                    onClick={() => change(index)}
+                  />
+                ))}
+              </div>
+              <div className="work-arrows">
+                <button aria-label="Diapositiva anterior" onClick={() => change(current - 1)}>
+                  ←
+                </button>
+                <button aria-label="Diapositiva siguiente" onClick={() => change(current + 1)}>
+                  →
+                </button>
+              </div>
+            </div>
+            <button className="work-play" onClick={() => setPlaying((value) => !value)}>
+              {playing ? 'Ⅱ Pausar presentación' : '▷ Reproducir presentación'}
+            </button>
+          </div>
+        </section>
+      )}
       <section className="about-purpose">
         <div>
           <p className="eyebrow">TECNOLOGÍA CON TRATO HUMANO</p>

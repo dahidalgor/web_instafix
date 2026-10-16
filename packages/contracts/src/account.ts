@@ -1,6 +1,9 @@
 export type AccountUser = {
   id: string;
   name: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
   phone: string;
   role: 'CUSTOMER' | 'ADMIN';
   phoneVerifiedAt: string | null;

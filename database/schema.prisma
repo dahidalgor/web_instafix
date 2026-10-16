@@ -29,6 +29,8 @@ model Offering {
   durationMinutes Int
   active Boolean @default(true)
   requests ServiceRequest[]
+  appointments Appointment[]
+  jobs CompletedJob[]
   description String @default("")
   availability Availability @default(AVAILABLE)
   media Json @default("[]")
@@ -84,6 +86,9 @@ model Equipment {
 }
 model User {
   id String @id @default(uuid())
+  firstName String?
+  lastName String?
+  bookingIntents BookingIntent[]
   name String
   phone String @unique
   email String? @unique
@@ -107,6 +112,8 @@ model EmailChallenge {
   createdAt DateTime @default(now())
   consumedAt DateTime?
   name String?
+  firstName String?
+  lastName String?
   phone String?
   passwordHash String?
   userId String?
@@ -121,6 +128,10 @@ model Session {
 }
 model CompletedJob {
   id String @id @default(uuid())
+  offeringId String?
+  offering Offering? @relation(fields: [offeringId], references: [id], onDelete: SetNull)
+  appointmentId String? @unique
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   userId String
   user User @relation(fields: [userId], references: [id])
   title String
@@ -148,8 +159,23 @@ enum AppointmentStatus {
 }
 model Appointment {
   id String @id @default(uuid())
-  userId String
-  user User @relation(fields: [userId], references: [id])
+  offeringId String?
+  offering Offering? @relation(fields: [offeringId], references: [id], onDelete: SetNull)
+  completedJob CompletedJob?
+  userId String?
+  user User? @relation(fields: [userId], references: [id])
+  contactName String @default("")
+  contactPhone String @default("")
+  whatsappConsentAt DateTime?
+  calUid String? @unique
+  calStatus String?
+  locationLatitude Float?
+  locationLongitude Float?
+  locationReceivedAt DateTime?
+  locationRequestedAt DateTime @default(now())
+  automationIssue String?
+  automationRevision Int @default(0)
+  messages AutomationJob[]
   title String
   device String
   startsAt DateTime
@@ -161,4 +187,118 @@ model Appointment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([userId, startsAt])
+  @@index([contactPhone, status])
+}
+
+// Cola persistente: el reinicio de la API no pierde recordatorios.
+model AutomationJob {
+  id String @id @default(uuid())
+  dedupeKey String @unique
+  appointmentId String
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  revision Int
+  kind String
+  status String @default("PENDING")
+  dueAt DateTime
+  expiresAt DateTime
+  attempts Int @default(0)
+  startedAt DateTime?
+  providerId String? @unique
+  deliveryStatus String?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, dueAt])
+}
+
+// No guardamos payloads completos de terceros ni credenciales en el historial.
+model IntegrationEvent {
+  id String @id
+  provider String
+  sourceId String
+  occurredAt DateTime
+  outcome String
+  createdAt DateTime @default(now())
+  @@index([provider, sourceId, occurredAt])
+}
+
+// Una conexión operativa; el estado temporal nunca contiene la Partner Key.
+model WhatsAppConnection {
+  id String @id @default("main")
+  wabaId String?
+  connectionMode String?
+  connectedAt DateTime?
+  stateHash String?
+  stateUserId String?
+  stateExpiresAt DateTime?
+}
+
+// Bandeja durable para responder al webhook antes de ejecutar negocio.
+model BridgeWebhook {
+  id String @id
+  wabaId String
+  event String
+  payload Json
+  status String @default("PENDING")
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+  processedAt DateTime?
+  @@index([status, createdAt])
+}
+
+model WhatsAppMessage {
+  wabaId String
+  messageId String
+  phone String?
+  bsuid String?
+  direction String
+  source String
+  type String
+  text String?
+  occurredAt DateTime
+  content Json
+  @@id([wabaId, messageId])
+  @@index([wabaId, phone, source, occurredAt])
+}
+
+model WhatsAppContact {
+  wabaId String
+  phone String
+  name String?
+  removed Boolean @default(false)
+  occurredAt DateTime
+  @@id([wabaId, phone])
+}
+
+// Contexto opaco de reserva: nunca se confía en un userId enviado por Cal.
+model BookingIntent {
+  tokenHash String @id
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  calUid String? @unique
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+}
+model SiteSlide {
+  id String @id @default(uuid())
+  label String
+  title String
+  description String
+  detail String
+  symbol String @default("✦")
+  media Json @default("[]")
+  position Int @default(0)
+  published Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+// Métricas propias: sin IP, cookies de seguimiento, teléfono ni correo.
+model PageVisit {
+  id String @id
+  sessionId String
+  page String
+  activeSeconds Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([createdAt, page])
 }

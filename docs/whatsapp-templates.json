@@ -1,0 +1,52 @@
+[
+  {
+    "name": "instafix_solicitar_ubicacion",
+    "language": "es",
+    "category": "UTILITY",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hola {{1}}! Hemos recibido su agendamiento para {{2}} en el día {{3}} a las {{4}}, por favor para confirmarla necesitamos que nos envíe en este chat la ubicación donde seria de llegar :)",
+        "example": {
+          "body_text": [["Ana", "Mantenimiento completo de PS5", "20/10/2026", "10:00"]]
+        }
+      }
+    ]
+  },
+  {
+    "name": "instafix_cita_confirmada",
+    "language": "es",
+    "category": "UTILITY",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Listo estimado {{1}} ✅\nEsta agendada su cita, se le enviará un aviso automático para que pueda estar pendiente de la llegada de su técnico asignado ✅",
+        "example": { "body_text": [["Ana"]] }
+      }
+    ]
+  },
+  {
+    "name": "instafix_recordatorio_manana",
+    "language": "es",
+    "category": "UTILITY",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Instafix le recuerda de su cita para el día de mañana!\nTiene {{1}} agendado para mañana a las {{2}}",
+        "example": { "body_text": [["Mantenimiento completo de PS5", "10:00"]] }
+      }
+    ]
+  },
+  {
+    "name": "instafix_recordatorio_hoy",
+    "language": "es",
+    "category": "UTILITY",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Estimad@ {{1}}, le recordamos que su visita está agendada para el día de hoy 😊\nEl técnico se estará comunicando por este chat para informarle cuando esté próximo a llegar ✅\nLa hora agendada corresponde a un horario estimado de llegada. Debido a la duración de servicios anteriores y a los tiempos de traslado, podría presentarse una ligera variación. Agradecemos mucho su comprensión y paciencia 🙌",
+        "example": { "body_text": [["Ana"]] }
+      }
+    ]
+  }
+]

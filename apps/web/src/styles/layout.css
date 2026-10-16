@@ -237,3 +237,54 @@ header nav a[aria-current='page'] {
     outline: 3px solid var(--accent);
   }
 }
+
+/* Menú móvil desplegable: todos los destinos visibles, sin desplazamiento horizontal. */
+.mobile-menu-toggle {
+  display: none;
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+@media (max-width: 760px) {
+  .public-header {
+    gap: 12px;
+    min-height: 80px;
+  }
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+  }
+  .mobile-menu-toggle span {
+    font-size: 22px;
+  }
+  .public-header nav {
+    display: none;
+  }
+  .public-header nav.is-open {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    overflow: visible;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+    animation: page-arrive 180ms ease-out;
+  }
+  .public-header nav > a:not(.nav-cta),
+  .public-header nav .nav-cta {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 12px;
+    font-size: 14px;
+    white-space: normal;
+  }
+}

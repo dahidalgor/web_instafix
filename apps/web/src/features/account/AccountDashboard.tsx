@@ -202,6 +202,14 @@ export function AccountDashboard() {
               <h2>{item.title}</h2>
               <dl className="appointment-details">
                 <div>
+                  <dt>Servicio asignado por el técnico</dt>
+                  <dd>
+                    {item.assignedService
+                      ? `${item.assignedService.device} · ${item.assignedService.title}`
+                      : 'Pendiente de diagnóstico'}
+                  </dd>
+                </div>
+                <div>
                   <dt>Inicio</dt>
                   <dd>{format(item.startsAt, item.timeZone)}</dd>
                 </div>

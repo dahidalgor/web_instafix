@@ -1,7 +1,21 @@
 import { BadRequestException, Body, Controller, Get, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
+import { z } from 'zod';
 import { authenticated, checkOrigin, safeUser } from '../auth/session';
 import { db } from '../database/client';
+import { cancelPendingJobs, lockAppointment } from '../whatsapp/queue';
+
+const jobSchema = z
+  .object({
+    userId: z.string().uuid(),
+    offeringId: z.string().min(1).max(100),
+    appointmentId: z.string().uuid().nullable().optional(),
+    priceMinor: z.number().int().min(0).max(10000000),
+    completedAt: z.string().datetime({ offset: true }),
+    warrantyEndsAt: z.string().datetime({ offset: true }).nullable(),
+    warrantyTerms: z.string().trim().min(1).max(5000),
+  })
+  .strict();
 
 @Controller('api/v1')
 export class JobsController {
@@ -10,44 +24,57 @@ export class JobsController {
     return db.user.findMany({ select: safeUser, orderBy: { createdAt: 'desc' }, take: 100 });
   }
 
-  @Post('admin/jobs') async addJob(@Body() body: any, @Req() req: Request) {
+  @Post('admin/jobs') async addJob(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     await authenticated(req, true);
-    if (
-      typeof body.userId !== 'string' ||
-      typeof body.title !== 'string' ||
-      body.title.length < 3 ||
-      body.title.length > 150 ||
-      typeof body.device !== 'string' ||
-      body.device.length > 100 ||
-      typeof body.warrantyTerms !== 'string' ||
-      body.warrantyTerms.length > 5000 ||
-      !Number.isInteger(body.priceMinor) ||
-      body.priceMinor < 0 ||
-      body.priceMinor > 10000000
-    )
-      throw new BadRequestException('Datos de trabajo no válidos');
-    const completedAt = new Date(body.completedAt);
-    const warrantyEndsAt = body.warrantyEndsAt ? new Date(body.warrantyEndsAt) : null;
-    if (
-      !Number.isFinite(completedAt.getTime()) ||
-      completedAt > new Date() ||
-      (warrantyEndsAt &&
-        (!Number.isFinite(warrantyEndsAt.getTime()) || warrantyEndsAt < completedAt))
-    )
+    const parsed = jobSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Revisa cliente, servicio, precio y fechas');
+    const data = parsed.data;
+    const completedAt = new Date(data.completedAt);
+    const warrantyEndsAt = data.warrantyEndsAt ? new Date(data.warrantyEndsAt) : null;
+    if (completedAt > new Date() || (warrantyEndsAt && warrantyEndsAt < completedAt))
       throw new BadRequestException('Revisa las fechas');
-    const user = await db.user.findUnique({ where: { id: body.userId } });
-    if (!user) throw new BadRequestException('Cliente no encontrado');
-    return db.completedJob.create({
-      data: {
-        userId: user.id,
-        title: body.title,
-        device: body.device,
-        warrantyTerms: body.warrantyTerms,
-        priceMinor: body.priceMinor,
-        completedAt,
-        warrantyEndsAt,
-      },
+    return db.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: data.userId } });
+      const offering = await tx.offering.findUnique({ where: { id: data.offeringId } });
+      if (user?.role !== 'CUSTOMER' || !offering)
+        throw new BadRequestException('Cliente o servicio no encontrado');
+      if (data.appointmentId) {
+        await lockAppointment(tx, data.appointmentId);
+        const appointment = await tx.appointment.findUnique({
+          where: { id: data.appointmentId },
+          include: { completedJob: true },
+        });
+        if (
+          !appointment ||
+          appointment.userId !== user.id ||
+          appointment.status === 'CANCELLED' ||
+          appointment.completedJob
+        )
+          throw new BadRequestException(
+            'La cita no corresponde al cliente, está cancelada o ya tiene un trabajo registrado',
+          );
+        await tx.appointment.update({
+          where: { id: appointment.id },
+          data: { status: 'COMPLETED', offeringId: offering.id, device: offering.device },
+        });
+        await cancelPendingJobs(tx, appointment.id);
+      }
+      // Se conserva una instantánea: cambiar el catálogo no altera precios ni garantías anteriores.
+      return tx.completedJob.create({
+        data: {
+          userId: user.id,
+          offeringId: offering.id,
+          appointmentId: data.appointmentId,
+          title: offering.title,
+          device: offering.device,
+          currency: offering.currency,
+          warrantyTerms: data.warrantyTerms,
+          priceMinor: data.priceMinor,
+          completedAt,
+          warrantyEndsAt,
+        },
+      });
     });
   }
 }

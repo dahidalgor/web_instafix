@@ -10,7 +10,12 @@ import { hashPassword, verifyPassword } from '../auth/security';
 import { db } from '../database/client';
 
 test('registration requires a valid email but login remains phone based', () => {
-  const base = { name: 'Cliente', phone: '+593984703819', password: 'una-clave-muy-segura' };
+  const base = {
+    firstName: 'Cliente',
+    lastName: 'Prueba',
+    phone: '+593984703819',
+    password: 'una-clave-muy-segura',
+  };
   assert.equal(registrationSchema.safeParse(base).success, false);
   assert.equal(registrationSchema.safeParse({ ...base, email: 'invalid' }).success, false);
   assert.equal(

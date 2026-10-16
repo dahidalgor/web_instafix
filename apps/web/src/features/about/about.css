@@ -108,7 +108,8 @@
   font-size: 11px;
   color: #f2dcea;
 }
-.work-visual img {
+.work-visual img,
+.work-visual video {
   width: 100%;
   height: 100%;
   object-fit: cover;

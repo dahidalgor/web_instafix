@@ -4,10 +4,12 @@ import { uploadMedia } from './upload-media';
 type Media = Offering['media'];
 export function MediaEditor({
   value,
+  maxFiles = 12,
   onChange,
   onBusy,
 }: {
   value: Media;
+  maxFiles?: number;
   onChange: (media: Media) => void;
   onBusy: (busy: boolean) => void;
 }) {
@@ -16,8 +18,8 @@ export function MediaEditor({
   const [progress, setProgress] = useState(0);
   async function upload(files: FileList | null) {
     if (!files?.length || busy) return;
-    if (value.length + files.length > 12) {
-      setStatus('Puedes añadir hasta 12 archivos por servicio.');
+    if (value.length + files.length > maxFiles) {
+      setStatus(`Puedes añadir hasta ${maxFiles} archivos.`);
       return;
     }
     setBusy(true);
@@ -43,7 +45,7 @@ export function MediaEditor({
         next = [...next, media];
         onChange(next);
       }
-      setStatus('Archivos preparados. Guarda el servicio para publicarlos.');
+      setStatus('Archivos preparados. Guarda los cambios para publicarlos.');
     } catch (error: any) {
       setStatus(error.message);
     } finally {
@@ -60,16 +62,16 @@ export function MediaEditor({
     <section className="media-editor">
       <h3>Fotos y videos del trabajo</h3>
       <p className="small">
-        Hasta 12 archivos. Fotos: 20 MB. Videos: 100 MB y 60 segundos; se publican sin sonido. El
-        primer archivo encabeza la galería.
+        Hasta {maxFiles} archivos. Fotos: 20 MB. Videos: 100 MB y 60 segundos; se publican sin
+        sonido. El primer archivo encabeza la galería.
       </p>
       <label className="media-upload">
         Subir desde mi dispositivo
         <input
           type="file"
-          multiple
+          multiple={maxFiles > 1}
           accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
-          disabled={busy || value.length >= 12}
+          disabled={busy || value.length >= maxFiles}
           onChange={(e) => {
             void upload(e.target.files);
             e.target.value = '';
@@ -122,7 +124,7 @@ export function MediaEditor({
                 disabled={busy}
                 onClick={() => onChange(value.filter((_, j) => j !== i))}
               >
-                Quitar del servicio
+                Quitar archivo
               </button>
             </div>
           </fieldset>

@@ -7,3 +7,8 @@ dist/
 
 storage/
 .env.production
+
+# Variantes locales nunca se versionan; solo plantillas sin secretos.
+.env.*
+!.env.example
+!**/.env.example
