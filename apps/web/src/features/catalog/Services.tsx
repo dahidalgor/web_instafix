@@ -1,4 +1,4 @@
-import type { Offering } from '@instafix/contracts';
+import { serviceCover, type Offering } from '@instafix/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
@@ -69,10 +69,16 @@ export function Services() {
           .filter((item) => device === 'Todos' || item.device === device)
           .map((item) => (
             <button className="card" key={item.id} onClick={() => setSelected(item)}>
-              {item.media.find((m) => m.type === 'image') ? (
+              {serviceCover(item) ? (
                 <img
                   className="service-cover"
-                  src={item.media.find((m) => m.type === 'image')!.url}
+                  src={serviceCover(item)!.thumbnail || serviceCover(item)!.url}
+                  srcSet={
+                    serviceCover(item)!.thumbnail
+                      ? `${serviceCover(item)!.thumbnail} 640w, ${serviceCover(item)!.url} 1600w`
+                      : undefined
+                  }
+                  sizes="(max-width: 700px) 90vw, 380px"
                   alt=""
                   loading="lazy"
                 />
@@ -116,6 +122,19 @@ export function Services() {
             <span className={'badge ' + selected.availability}>
               {availabilityLabels[selected.availability]}
             </span>
+            {selected.cover && (
+              <img
+                className="service-detail-cover"
+                src={selected.cover.url}
+                srcSet={
+                  selected.cover.thumbnail
+                    ? `${selected.cover.thumbnail} 640w, ${selected.cover.url} 1600w`
+                    : undefined
+                }
+                sizes="(max-width: 700px) 90vw, 640px"
+                alt={selected.cover.alt}
+              />
+            )}
             <MediaCarousel media={selected.media} />
             <p className="service-description">{selected.description}</p>
             <strong className="service-price">{money(selected.priceMinor)}</strong>

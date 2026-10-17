@@ -114,6 +114,8 @@ export class AuthController {
       user?.passwordHash ?? dummyHash,
     );
     if (!user || !valid) throw new UnauthorizedException('Teléfono o contraseña incorrectos');
+    if (!user.active)
+      throw new ForbiddenException('Tu acceso está desactivado. Contacta con el administrador.');
     if (user.role === 'CUSTOMER' && !user.phoneVerifiedAt) {
       // Credenciales correctas, número sin verificar: no se crea otra cuenta ni sesión.
       let verification = null;

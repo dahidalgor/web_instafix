@@ -6,7 +6,7 @@ export type CommunicationEntry = {
   provider: string;
   kind: string;
   recipient: string;
-  status: 'ACCEPTED' | 'FAILED';
+  status: 'ACCEPTED' | 'FAILED' | 'SKIPPED';
   providerMessageId?: string | null;
   error?: string | null;
   appointmentId?: string | null;

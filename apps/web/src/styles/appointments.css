@@ -1,0 +1,327 @@
+/* Citas: tarjetas, estados y botones compartidos por cliente, administración y técnicos. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    filter 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.btn-primary {
+  background: linear-gradient(110deg, #762257, #a00d68);
+  color: #fff;
+  box-shadow: 0 5px 16px #a00d6824;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.btn-secondary {
+  background: var(--surface);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.btn-ghost {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.btn-danger {
+  background: var(--surface);
+  color: #b3261e;
+  border-color: #b3261e;
+}
+.btn-success {
+  background: #1b7a4b;
+  color: #fff;
+}
+.btn-block {
+  width: 100%;
+}
+.btn-small {
+  min-height: 38px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  background: #eee8f3;
+  color: #554065;
+}
+.status-pill.status-PENDING_LOCATION {
+  background: #fff4dc;
+  color: #7a4d00;
+}
+.status-pill.status-CONFIRMED,
+.status-pill.status-IN_PROGRESS {
+  background: #e3f4ec;
+  color: #1b6b43;
+}
+.status-pill.status-COMPLETED {
+  background: #e7ecfb;
+  color: #2b4a99;
+}
+.status-pill.status-CANCELLED {
+  background: #f6e7e7;
+  color: #8a2b2b;
+}
+
+.appt-list {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+}
+.appt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-left: 5px solid #d9a21b;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 18px rgb(23 20 47 / 5%);
+  animation: card-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.appt-card.appt-CONFIRMED,
+.appt-card.appt-IN_PROGRESS {
+  border-left-color: #1b7a4b;
+}
+.appt-card.appt-COMPLETED {
+  border-left-color: #2b4a99;
+}
+.appt-card.appt-CANCELLED {
+  border-left-color: #b3261e;
+  opacity: 0.85;
+}
+.appt-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.appt-highlight {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.appt-when {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 2px 0 0;
+}
+.appt-when strong {
+  font-family: Manrope, sans-serif;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.appt-when span {
+  color: var(--muted);
+  font-weight: 600;
+}
+.appt-client {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.appt-request {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.appt-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 4px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.appt-meta dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.appt-meta dd {
+  margin: 3px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.appt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+.appt-actions .btn {
+  flex: 1 1 140px;
+}
+.performed-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.performed-list li::before {
+  content: '✓ ';
+  color: #1b7a4b;
+  font-weight: 800;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .status-pill.status-PENDING_LOCATION {
+    background: #4a3a14;
+    color: #ffd98a;
+  }
+  .status-pill.status-CONFIRMED,
+  .status-pill.status-IN_PROGRESS {
+    background: #193f35;
+    color: #a7e9cb;
+  }
+  .status-pill.status-COMPLETED {
+    background: #253461;
+    color: #c5d3ff;
+  }
+  .status-pill.status-CANCELLED {
+    background: #482d37;
+    color: #ffc4d0;
+  }
+  .btn-danger {
+    color: #ff9c94;
+    border-color: #ff9c94;
+  }
+}
+
+.appt-meta-wide {
+  grid-column: 1 / -1;
+}
+.appt-hint {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  font-size: 14px;
+}
+.appt-actions .appointment-actions {
+  flex-basis: 100%;
+  margin: 0;
+}
+.appt-actions .calendar-account-note {
+  flex-basis: 100%;
+}
+
+/* Microanimaciones discretas para menús, paneles y avisos (mismo ritmo que la navegación). */
+.filters button {
+  transition:
+    background-color 180ms,
+    color 180ms,
+    border-color 180ms,
+    transform 160ms;
+}
+.filters button:active {
+  transform: scale(0.96);
+}
+.filters .active {
+  animation: tab-arrive 240ms ease-out;
+}
+.admin-message,
+.appointment-actions .security-panel,
+.account-banner,
+.tech-picker {
+  animation: pop-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.public-header nav.is-open a {
+  animation: pop-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.public-header nav.is-open a:nth-child(2) {
+  animation-delay: 20ms;
+}
+.public-header nav.is-open a:nth-child(3) {
+  animation-delay: 40ms;
+}
+.public-header nav.is-open a:nth-child(4) {
+  animation-delay: 60ms;
+}
+.public-header nav.is-open a:nth-child(5) {
+  animation-delay: 80ms;
+}
+.public-header nav.is-open a:nth-child(6) {
+  animation-delay: 100ms;
+}

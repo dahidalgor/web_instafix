@@ -162,3 +162,12 @@ body.service-dialog-open {
     padding: 22px;
   }
 }
+
+.service-detail-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 16px;
+  margin: 16px 0 6px;
+}

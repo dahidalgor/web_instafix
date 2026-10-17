@@ -3,6 +3,8 @@ import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { money } from '../../lib/format';
 import { availabilityLabels } from '../catalog/catalog.constants';
 import { MediaEditor } from '../media/MediaEditor';
+import { CoverEditor } from '../media/CoverEditor';
+import { mediaProblem, serviceCover } from '@instafix/contracts';
 import { emptyService, type Equipment, type ServiceDraft } from './admin.types';
 type Props = {
   items: Offering[];
@@ -35,7 +37,7 @@ export function AdminServices({
         </button>
         {items.map((item) => (
           <button
-            className="admin-item"
+            className="admin-item admin-service-item"
             disabled={uploading}
             key={item.id}
             onClick={() =>
@@ -49,9 +51,17 @@ export function AdminServices({
                 warrantyDays: item.warrantyDays,
                 availability: item.availability,
                 media: item.media,
+                cover: item.cover ?? null,
               })
             }
           >
+            {serviceCover(item) && (
+              <img
+                src={serviceCover(item)!.thumbnail || serviceCover(item)!.url}
+                alt=""
+                loading="lazy"
+              />
+            )}
             <strong>
               {item.device} · {item.title}
             </strong>
@@ -151,13 +161,22 @@ export function AdminServices({
             />
           </label>
         </div>
+        <CoverEditor
+          key={`cover-${draft.id || 'new'}`}
+          value={draft.cover}
+          fallback={
+            draft.cover ? null : (serviceCover({ cover: null, media: draft.media })?.url ?? null)
+          }
+          onChange={(cover) => update('cover', cover)}
+          onBusy={setUploading}
+        />
         <MediaEditor
           key={draft.id || 'new'}
           value={draft.media}
           onChange={(media) => update('media', media)}
           onBusy={setUploading}
         />
-        <button className="button" disabled={busy || uploading}>
+        <button className="button" disabled={busy || uploading || !!mediaProblem(draft.media)}>
           Guardar servicio
         </button>
       </form>

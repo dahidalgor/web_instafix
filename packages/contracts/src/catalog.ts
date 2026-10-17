@@ -14,6 +14,35 @@ const mediaUrl = z
       })(),
     'Usa un archivo subido o una URL HTTPS',
   );
+export const mediaItemSchema = z
+  .object({
+    type: z.enum(['image', 'video']),
+    url: mediaUrl,
+    thumbnail: mediaUrl.optional(),
+    poster: mediaUrl.optional(),
+    alt: z.string().max(200),
+  })
+  .strict();
+export type MediaItem = z.infer<typeof mediaItemSchema>;
+
+export const MAX_VIDEOS = 2;
+export const videoLimitMessage = `Cada servicio admite como máximo ${MAX_VIDEOS} videos.`;
+export const videoSpacingMessage = 'Los videos deben estar separados por al menos una imagen.';
+/** Regla del carrusel compartida por el panel y la API (la API es la autoridad). */
+export function mediaProblem(media: { type: 'image' | 'video' }[]): string | null {
+  if (media.filter((item) => item.type === 'video').length > MAX_VIDEOS) return videoLimitMessage;
+  for (let i = 1; i < media.length; i++)
+    if (media[i].type === 'video' && media[i - 1].type === 'video') return videoSpacingMessage;
+  return null;
+}
+
+/** Portada: una sola imagen, independiente de la galería. */
+export const coverSchema = z
+  .object({ url: mediaUrl, thumbnail: mediaUrl.optional(), alt: z.string().max(200) })
+  .strict()
+  .refine((cover) => !/\.mp4$/.test(cover.url), 'La portada debe ser una imagen');
+export type ServiceCover = z.infer<typeof coverSchema>;
+
 export const offeringSchema = z
   .object({
     equipmentId: z.string().min(1),
@@ -24,24 +53,27 @@ export const offeringSchema = z
     warrantyDays: z.number().int().min(0).max(3650),
     availability: z.enum(['AVAILABLE', 'UNAVAILABLE', 'COMING_SOON']),
     media: z
-      .array(
-        z
-          .object({
-            type: z.enum(['image', 'video']),
-            url: mediaUrl,
-            thumbnail: mediaUrl.optional(),
-            poster: mediaUrl.optional(),
-            alt: z.string().max(200),
-          })
-          .strict(),
-      )
-      .max(12),
+      .array(mediaItemSchema)
+      .max(12)
+      .superRefine((media, ctx) => {
+        const problem = mediaProblem(media);
+        if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+      }),
+    cover: coverSchema.nullable().optional(),
   })
   .strict();
 export type OfferingInput = z.infer<typeof offeringSchema>;
 export type Offering = OfferingInput & {
+  cover?: ServiceCover | null;
   id: string;
   device: string;
   category: string;
   currency: string;
 };
+
+/** Imagen que representa al servicio: portada propia o, en servicios antiguos, la primera foto. */
+export function serviceCover(offering: Pick<Offering, 'cover' | 'media'>) {
+  if (offering.cover) return offering.cover;
+  const image = offering.media.find((item) => item.type === 'image');
+  return image ? { url: image.url, thumbnail: image.thumbnail, alt: image.alt } : null;
+}

@@ -34,7 +34,10 @@ model Offering {
   description String @default("")
   availability Availability @default(AVAILABLE)
   media Json @default("[]")
+  // Portada independiente de la galería: { url, thumbnail?, alt }. NULL = usar la primera foto.
+  cover Json?
   warrantyDays Int @default(0)
+  performedServices AppointmentService[]
   equipmentId String?
   equipment Equipment? @relation(fields: [equipmentId], references: [id])
 }
@@ -74,9 +77,11 @@ enum Availability {
   UNAVAILABLE
   COMING_SOON
 }
+// ADMIN y TECHNICIAN forman el equipo administrativo; comparten la autenticación por sesión.
 enum Role {
   CUSTOMER
   ADMIN
+  TECHNICIAN
 }
 model Equipment {
   id String @id @default(uuid())
@@ -95,12 +100,19 @@ model User {
   emailVerifiedAt DateTime?
   passwordHash String
   role Role @default(CUSTOMER)
+  // Un miembro del equipo desactivado no puede iniciar sesión; sus sesiones se rechazan.
+  active Boolean @default(true)
   phoneVerifiedAt DateTime?
   createdAt DateTime @default(now())
   sessions Session[]
   jobs CompletedJob[]
   appointments Appointment[]
   authTokens AuthToken[]
+  assignedAppointments Appointment[] @relation("AssignedTechnician")
+  confirmedAppointments Appointment[] @relation("ConfirmedBy")
+  completedAppointments Appointment[] @relation("CompletedBy")
+  performedServices AppointmentService[]
+  appointmentActivity AppointmentActivity[]
 }
 // Desafíos aislados por finalidad. Nunca se guarda el código en texto plano.
 model EmailChallenge {
@@ -164,7 +176,7 @@ model Appointment {
   offering Offering? @relation(fields: [offeringId], references: [id], onDelete: SetNull)
   completedJob CompletedJob?
   userId String?
-  user User? @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
   contactName String @default("")
   contactPhone String @default("")
   whatsappConsentAt DateTime?
@@ -188,12 +200,64 @@ model Appointment {
   endsAt DateTime
   timeZone String @default("America/Guayaquil")
   address String
+  // Nombre visible del técnico (histórico y plantillas). La asignación real es assignedTechnicianId.
   technician String
+  assignedTechnicianId String?
+  assignedTechnician User? @relation("AssignedTechnician", fields: [assignedTechnicianId], references: [id], onDelete: SetNull)
+  confirmedAt DateTime?
+  confirmedById String?
+  confirmedBy User? @relation("ConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  completedAt DateTime?
+  completedById String?
+  completedBy User? @relation("CompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  // Notas internas del técnico: nunca se muestran al cliente.
+  technicianNotes String @default("")
+  services AppointmentService[]
+  activity AppointmentActivity[]
   status AppointmentStatus @default(PENDING_LOCATION)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([userId, startsAt])
   @@index([contactPhone, status])
+  @@index([assignedTechnicianId, startsAt])
+  @@index([status, startsAt])
+}
+
+// Trabajo realmente realizado en una visita. Distinto de la solicitud del cliente (Appointment.title).
+// Guarda una instantánea de nombre y precio: cambiar el catálogo no altera visitas anteriores.
+model AppointmentService {
+  id String @id @default(uuid())
+  appointmentId String
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  offeringId String?
+  offering Offering? @relation(fields: [offeringId], references: [id], onDelete: SetNull)
+  nameSnapshot String
+  deviceSnapshot String
+  unitPriceMinor Int
+  quantity Int @default(1)
+  totalMinor Int
+  currency String @default("USD")
+  // Preparado para garantías: días anunciados en el catálogo al registrar el trabajo.
+  warrantyDaysSnapshot Int @default(0)
+  addedById String?
+  addedBy User? @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([appointmentId, offeringId])
+  @@index([offeringId])
+}
+
+// Auditoría de acciones del equipo sobre una cita: quién, qué y cuándo.
+model AppointmentActivity {
+  id String @id @default(uuid())
+  appointmentId String
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  actorId String?
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action String
+  detail Json @default("{}")
+  createdAt DateTime @default(now())
+  @@index([appointmentId, createdAt])
 }
 
 // Cola persistente: el reinicio de la API no pierde recordatorios.

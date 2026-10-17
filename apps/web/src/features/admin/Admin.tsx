@@ -12,6 +12,8 @@ import { AdminJobs } from './AdminJobs';
 import { AdminServices } from './AdminServices';
 import { AdminWarranty } from './AdminWarranty';
 import { AdminWhatsApp } from './AdminWhatsApp';
+import { AdminTeam } from './AdminTeam';
+import { TechnicianPanel } from '../technician/TechnicianPanel';
 export default function Admin() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -80,6 +82,26 @@ export default function Admin() {
         <Login admin onLogin={setUser} />
       </main>
     );
+  const logout = () =>
+    run(async () => {
+      await api('auth/logout', { method: 'POST' });
+      setUser(null);
+    });
+  // El técnico entra directamente a su panel: no ve opciones de administración deshabilitadas.
+  if (user.role === 'TECHNICIAN')
+    return (
+      <>
+        <header className="staff-header">
+          <span className="brand">InstaFix · Técnicos</span>
+          <button className="btn btn-ghost btn-small" onClick={logout}>
+            Cerrar sesión
+          </button>
+        </header>
+        <main>
+          <TechnicianPanel user={user} />
+        </main>
+      </>
+    );
   if (user.role !== 'ADMIN')
     return (
       <main className="account-panel">
@@ -99,19 +121,11 @@ export default function Admin() {
     );
   return (
     <>
-      <header>
+      <header className="staff-header">
         <a className="brand" href="#">
           InstaFix · Administración
         </a>
-        <button
-          className="text-button"
-          onClick={() =>
-            run(async () => {
-              await api('auth/logout', { method: 'POST' });
-              setUser(null);
-            })
-          }
-        >
+        <button className="btn btn-ghost btn-small" onClick={logout}>
           Cerrar sesión
         </button>
       </header>
@@ -121,6 +135,8 @@ export default function Admin() {
             'Servicios',
             'Equipos',
             'Citas',
+            'Panel técnico',
+            'Equipo',
             'WhatsApp',
             'Garantías',
             'Trabajos',
@@ -147,6 +163,8 @@ export default function Admin() {
           </p>
         )}
         {tab === 'Correo' && <AdminEmail />}
+        {tab === 'Panel técnico' && <TechnicianPanel user={user} />}
+        {tab === 'Equipo' && <AdminTeam />}
         {tab === 'Presentaciones' && <AdminSlides onUploading={setUploading} />}
         {tab === 'Estadísticas' && <AdminAnalytics />}
         {tab === 'Citas' && <AdminAppointments services={items} />}

@@ -19,7 +19,7 @@ import {
 import { ProviderError } from '../integrations/provider-error';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
-import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
+import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue';
 
 /**
  * Buzón propio de Instafix que se entrega a Cal.com como correo del asistente. Así Cal.com
@@ -29,6 +29,15 @@ import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '..
 export const relayEmail = () => process.env.CAL_ATTENDEE_RELAY_EMAIL?.trim().toLowerCase() || null;
 export const isRelayEmail = (email?: string | null) =>
   Boolean(email && relayEmail() && email.trim().toLowerCase() === relayEmail());
+
+/** Al reprogramar, la cita vuelve a «pendiente de confirmación» y sin técnico. */
+export const unassignedForReschedule = {
+  status: 'PENDING_LOCATION' as const,
+  assignedTechnicianId: null,
+  technician: '',
+  confirmedAt: null,
+  confirmedById: null,
+};
 
 type Customer = { id: string; name: string; phone: string; email: string | null } | null;
 
@@ -157,10 +166,8 @@ export async function createBooking(
               device: 'Por especificar',
               address: '',
               technician: '',
-              status:
-                booking.status === 'accepted' && !input.whatsappConsent
-                  ? 'CONFIRMED'
-                  : 'PENDING_LOCATION',
+              // Agendada ≠ confirmada: la confirma un técnico desde su panel.
+              status: 'PENDING_LOCATION',
               timeZone: 'America/Guayaquil',
               locationRequestedAt: now,
             },
@@ -171,7 +178,6 @@ export async function createBooking(
       });
       if (saved.whatsappConsentAt && saved.status === 'PENDING_LOCATION')
         await queueJob(tx, saved, 'INITIAL', now);
-      if (saved.status === 'CONFIRMED') await queueReminders(tx, saved, now);
       await markCalEvent(tx, booking.uid, 'CREATED_BY_API', now);
       return {
         appointment: saved,
@@ -271,7 +277,7 @@ export async function rescheduleBooking(userId: string, id: string, startValue: 
       await tx.appointment.delete({ where: { id: duplicate.id } });
     }
     const hasLocation = Boolean(appointment.locationReceivedAt);
-    const accepted = booking.status === 'accepted';
+    // El nuevo horario vuelve a necesitar la confirmación de un técnico disponible.
     const updated = await tx.appointment.update({
       where: { id: appointment.id },
       data: {
@@ -280,19 +286,21 @@ export async function rescheduleBooking(userId: string, id: string, startValue: 
         startsAt: booking.start,
         endsAt: booking.end,
         automationRevision: { increment: 1 },
-        status:
-          accepted && (hasLocation || !appointment.whatsappConsentAt)
-            ? 'CONFIRMED'
-            : 'PENDING_LOCATION',
+        ...unassignedForReschedule,
         locationRequestedAt: now,
       },
     });
     await markCalEvent(tx, appointment.calUid, 'CANCELLED', now);
     await markCalEvent(tx, booking.uid, 'RESCHEDULED_BY_API', now);
-    if (updated.status === 'CONFIRMED') await queueReminders(tx, updated, now);
-    // Con la ubicación ya recibida, solo falta volver a confirmar la nueva reserva en Cal.com.
-    else if (hasLocation) await queueJob(tx, updated, 'CAL_CONFIRM', now);
-    else if (updated.whatsappConsentAt) await queueJob(tx, updated, 'INITIAL', now);
+    if (appointment.assignedTechnicianId)
+      await tx.appointmentActivity.create({
+        data: {
+          appointmentId: appointment.id,
+          action: 'UNASSIGNED_BY_RESCHEDULE',
+          detail: { previousTechnicianId: appointment.assignedTechnicianId },
+        },
+      });
+    if (!hasLocation && updated.whatsappConsentAt) await queueJob(tx, updated, 'INITIAL', now);
     return publishAppointmentEvent(
       tx,
       updated,

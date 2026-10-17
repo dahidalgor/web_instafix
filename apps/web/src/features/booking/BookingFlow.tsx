@@ -112,7 +112,7 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
       return;
     }
     if (!emailOk(guest.email)) {
-      setError('Escribe un correo válido para enviarte la confirmación.');
+      setError('Escribe un correo válido para enviarte los avisos de tu visita.');
       return;
     }
     go('review');
@@ -183,27 +183,23 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
   if (step === 'done' && result) {
     return (
       <div className="booking-flow booking-done">
-        <div className="done-mark" aria-hidden="true">
-          ✓
-        </div>
-        {header(
-          result.status === 'CONFIRMED' ? 'Tu cita está confirmada' : 'Cita agendada',
-          'TODO LISTO',
-        )}
+        <svg className="done-check" viewBox="0 0 72 72" aria-hidden="true">
+          <circle className="done-check-ring" cx="36" cy="36" r="32" />
+          <path className="done-check-mark" d="M22 37.5 31.5 47 50 26" />
+        </svg>
+        {header('Solicitud agendada', 'TODO LISTO')}
         <p className="done-when">
           {formatDay(dayKey(result.startsAt))}
           <strong>{formatTime(result.startsAt)}</strong>
         </p>
         <p className="done-status">
-          {result.status === 'CONFIRMED'
-            ? 'Tu visita está confirmada. Tu técnico se pondrá en contacto contigo antes de llegar.'
-            : 'Recibimos tu solicitud. Te escribiremos por WhatsApp para confirmar la visita y tu ubicación.'}
+          Recibimos tu solicitud. Te avisaremos cuando un técnico confirme tu visita.
         </p>
         {result.email.maskedEmail && result.email.status !== 'NONE' && (
           <p className="done-status">
             {result.email.status === 'SENT'
-              ? `Te enviamos la confirmación a ${result.email.maskedEmail}.`
-              : `Estamos enviando la confirmación a ${result.email.maskedEmail}.`}
+              ? `Te enviamos el resumen de tu solicitud a ${result.email.maskedEmail}.`
+              : `Estamos enviando el resumen de tu solicitud a ${result.email.maskedEmail}.`}
           </p>
         )}
         {result.account === 'GUEST' ? (
@@ -351,7 +347,10 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
               onChange={(e) => setGuest({ ...guest, email: e.target.value })}
             />
           </label>
-          <p className="step-help">Te enviaremos la confirmación de la cita a este correo.</p>
+          <p className="step-help">
+            Te enviaremos aquí el resumen de tu solicitud y el aviso cuando un técnico confirme la
+            visita.
+          </p>
           {errorBox}
           <div className="booking-actions">
             <button type="button" className="text-button" onClick={() => go('request')}>
@@ -430,7 +429,7 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
               onClick={confirm}
               aria-busy={busy}
             >
-              {busy ? 'Agendando…' : 'Confirmar cita'}
+              {busy ? 'Agendando…' : 'Agendar visita'}
               <span>{busy ? '' : '→'}</span>
             </button>
           </div>

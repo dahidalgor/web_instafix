@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { bookingIdentity, bookingIdentityMessage } from '../booking/booking-identity';
 import { tokenHash } from '../auth/security';
 import { db } from '../database/client';
-import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
-import { isRelayEmail } from '../booking/booking.service';
+import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue';
+import { isRelayEmail, unassignedForReschedule } from '../booking/booking.service';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 
 const envelope = z.object({
@@ -134,6 +134,7 @@ export async function receiveCalWebhook(body: unknown) {
         await cancelPendingJobs(tx, current.id);
         const status = String(data.data.status || 'accepted').toLowerCase();
         const hasLocation = Boolean(current.locationReceivedAt);
+        // Reprogramada desde Cal.com: vuelve a esperar la confirmación de un técnico.
         const updated = await tx.appointment.update({
           where: { id: current.id },
           data: {
@@ -142,16 +143,12 @@ export async function receiveCalWebhook(body: unknown) {
             startsAt,
             endsAt,
             automationRevision: { increment: 1 },
-            status:
-              status === 'accepted' && (hasLocation || !current.whatsappConsentAt)
-                ? 'CONFIRMED'
-                : 'PENDING_LOCATION',
+            ...unassignedForReschedule,
             locationRequestedAt: occurredAt,
           },
         });
-        if (updated.status === 'CONFIRMED') await queueReminders(tx, updated);
-        else if (hasLocation) await queueJob(tx, updated, 'CAL_CONFIRM', new Date());
-        else if (updated.whatsappConsentAt) await queueJob(tx, updated, 'INITIAL', new Date());
+        if (!hasLocation && updated.whatsappConsentAt)
+          await queueJob(tx, updated, 'INITIAL', new Date());
         await publishAppointmentEvent(tx, updated, {
           type: 'appointment.rescheduled',
           previousStartsAt: current.startsAt,
@@ -302,8 +299,8 @@ export async function receiveCalWebhook(body: unknown) {
       device: existing?.device || rescheduledFrom?.device || 'Por especificar',
       offeringId: existing?.offeringId || rescheduledFrom?.offeringId || null,
       address: existing?.address || rescheduledFrom?.address || '',
-      technician: existing?.technician || rescheduledFrom?.technician || '',
-      status: 'PENDING_LOCATION' as const,
+      // Un cambio de la reserva vuelve a requerir que un técnico la confirme.
+      ...unassignedForReschedule,
       whatsappConsentAt: consent ? occurredAt : null,
       calStatus,
       automationIssue: issue,

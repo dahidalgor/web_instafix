@@ -47,10 +47,10 @@ export function AppointmentActions({
     <div className="appointment-actions">
       {!mode && (
         <>
-          <button type="button" className="text-button" onClick={() => setMode('reschedule')}>
+          <button type="button" className="btn btn-secondary" onClick={() => setMode('reschedule')}>
             Reprogramar
           </button>
-          <button type="button" className="text-button danger" onClick={() => setMode('cancel')}>
+          <button type="button" className="btn btn-danger" onClick={() => setMode('cancel')}>
             Cancelar cita
           </button>
         </>
@@ -72,7 +72,7 @@ export function AppointmentActions({
           )}
           <button
             type="button"
-            className="button"
+            className="btn btn-primary"
             disabled={busy || !slot}
             onClick={() =>
               run(`my/appointments/${appointment.id}/reschedule`, { start: slot?.start })
@@ -80,7 +80,7 @@ export function AppointmentActions({
           >
             {busy ? 'Reprogramando…' : 'Confirmar nuevo horario'}
           </button>{' '}
-          <button type="button" className="text-button" onClick={() => setMode(null)}>
+          <button type="button" className="btn btn-ghost" onClick={() => setMode(null)}>
             Volver
           </button>
         </div>
@@ -90,13 +90,13 @@ export function AppointmentActions({
           <p>¿Seguro que quieres cancelar esta cita? El horario quedará libre.</p>
           <button
             type="button"
-            className="button danger"
+            className="btn btn-danger"
             disabled={busy}
             onClick={() => run(`my/appointments/${appointment.id}/cancel`)}
           >
             {busy ? 'Cancelando…' : 'Sí, cancelar'}
           </button>{' '}
-          <button type="button" className="text-button" onClick={() => setMode(null)}>
+          <button type="button" className="btn btn-ghost" onClick={() => setMode(null)}>
             No, mantener
           </button>
         </div>

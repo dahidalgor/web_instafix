@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   appointmentCancelledEmail,
+  appointmentConfirmedEmail,
   appointmentCreatedEmail,
   appointmentRescheduledEmail,
   emailVerificationEmail,
@@ -16,10 +17,15 @@ const base = {
   guest: false,
 };
 
-test('appointment confirmation shows the request, Ecuador time and escapes content', () => {
+test('booking email: request received, pending, Ecuador time, escaped; never says confirmed', () => {
   const email = appointmentCreatedEmail(base);
-  assert.equal(email.subject, 'Tu cita con Instafix está confirmada');
-  assert.ok(email.html.includes('✓ Tu cita está confirmada'));
+  assert.equal(email.subject, 'Recibimos tu solicitud de visita · Instafix');
+  assert.ok(email.html.includes('✓ Solicitud recibida'));
+  assert.equal(
+    /confirmada/i.test(email.subject + email.text.replace(/pendiente de confirmación/gi, '')),
+    false,
+  );
+  assert.ok(email.text.includes('Estado: Pendiente de confirmación'));
   assert.ok(email.text.includes('Sábado, 24 de octubre'));
   assert.ok(email.text.includes('15:30'));
   assert.ok(email.html.includes('Solicitud'));
@@ -31,18 +37,21 @@ test('appointment confirmation shows the request, Ecuador time and escapes conte
   );
   assert.ok(email.html.includes('Ver mi cita'));
   assert.ok(email.html.includes('max-width:600px'));
-});
-
-test('pending location appointment is not called confirmed', () => {
-  const email = appointmentCreatedEmail({ ...base, confirmed: false });
-  assert.ok(email.html.includes('✓ Tu cita fue agendada'));
-  assert.equal(email.subject.includes('confirmada'), false);
   assert.ok(email.text.includes('WhatsApp'));
 });
 
-test('guest confirmation offers account creation instead of a login-only button', () => {
+test('confirmation email: technician, date, time and request', () => {
+  const email = appointmentConfirmedEmail({ ...base, technicianName: 'Anthony' });
+  assert.equal(email.subject, 'Tu visita está confirmada ✓ · Instafix');
+  assert.ok(email.html.includes('✓ Tu visita está confirmada'));
+  assert.ok(email.text.includes('Técnico asignado: Anthony'));
+  assert.ok(email.text.includes('Hora estimada: 15:30'));
+  assert.ok(email.text.includes('Solicitud: “Mi PS5 se apaga'));
+});
+
+test('guest booking email offers account creation instead of a login-only button', () => {
   const email = appointmentCreatedEmail({ ...base, guest: true });
-  assert.ok(email.text.includes('Tu cita ha sido creada correctamente.'));
+  assert.ok(email.text.includes('Tu solicitud de visita fue creada correctamente'));
   assert.ok(email.text.includes('Crea tu cuenta'));
   assert.equal(email.html.includes('Ver mi cita'), false);
 });

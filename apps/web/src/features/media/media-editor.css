@@ -47,3 +47,60 @@
 .media-editor-actions button {
   padding: 8px 12px;
 }
+
+.cover-preview img,
+.cover-empty {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.cover-empty {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: var(--surface-soft);
+  color: var(--muted);
+  overflow: hidden;
+}
+.cover-empty img {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  border: 0;
+  opacity: 0.35;
+}
+.cover-empty span {
+  position: relative;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+.cover-editor .tech-actions-row {
+  margin: 12px 0;
+}
+.cover-editor label.btn {
+  margin: 0;
+  font-size: 15px;
+}
+.admin-service-item:has(img) {
+  display: grid !important;
+  grid-template-columns: 64px 1fr;
+  column-gap: 14px;
+  align-items: center;
+}
+.admin-service-item img {
+  grid-row: span 2;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.admin-service-item span {
+  margin-top: 4px !important;
+}

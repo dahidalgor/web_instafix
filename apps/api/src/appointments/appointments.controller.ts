@@ -76,7 +76,11 @@ export class AppointmentsController {
     await authenticated(req, true);
     return db.appointment.findMany({
       orderBy: { startsAt: 'desc' },
-      include: { user: { select: { name: true, phone: true } } },
+      include: {
+        user: { select: { name: true, phone: true } },
+        assignedTechnician: { select: { id: true, name: true } },
+        services: { orderBy: { createdAt: 'asc' } },
+      },
     });
   }
 
@@ -165,6 +169,8 @@ export class AppointmentsController {
         where: { id },
         data: {
           ...data,
+          // Con un técnico asignado desde su panel, el nombre visible lo define la asignación.
+          technician: existing.assignedTechnicianId ? existing.technician : data.technician,
           contactPhone: phone || '',
           ...(changed
             ? {

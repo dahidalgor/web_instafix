@@ -71,8 +71,8 @@ export function AdminEmail() {
             {status.replyTo ? 'configurado' : 'sin configurar (las respuestas van al remitente)'}.
             Avisos de citas por correo:{' '}
             {status.appointmentEmails
-              ? 'activados'
-              : 'desactivados (APPOINTMENT_EMAILS_ENABLED=false hasta desactivar los correos de Cal.com)'}
+              ? 'activados («Recibimos tu solicitud» y «Tu visita está confirmada»)'
+              : 'DESACTIVADOS: ningún cliente recibe correos de sus citas. Pon APPOINTMENT_EMAILS_ENABLED=true en el servidor (con CAL_ATTENDEE_RELAY_EMAIL configurado para que Cal.com no duplique).'}
             .
           </p>
           <button disabled={busy || !status.configured} onClick={() => run('admin/email/verify')}>
@@ -99,8 +99,14 @@ export function AdminEmail() {
           <ul className="comm-log">
             {status.recent.map((row, i) => (
               <li key={i}>
-                <strong>{row.status === 'ACCEPTED' ? '✓ Aceptado' : '✕ Fallido'}</strong> ·{' '}
-                {row.channel} · {row.kind} · {row.recipient} ·{' '}
+                <strong>
+                  {row.status === 'ACCEPTED'
+                    ? '✓ Aceptado por Brevo'
+                    : row.status === 'SKIPPED'
+                      ? '— No enviado'
+                      : '✕ Fallido'}
+                </strong>{' '}
+                · {row.channel} · {row.kind} · {row.recipient} ·{' '}
                 {new Date(row.createdAt).toLocaleString('es-EC')}
                 {row.error && <span> · {row.error}</span>}
               </li>

@@ -21,6 +21,8 @@ import { RequestsController } from './requests/requests.controller';
 import { WarrantiesController } from './warranties/warranties.controller';
 import { WebhooksController } from './integrations/webhooks.controller';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
+import { StaffController } from './staff/staff.controller';
+import { TeamController } from './staff/team.controller';
 
 @Module({
   imports: [WhatsAppModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])],
@@ -41,6 +43,8 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     MediaController,
     HealthController,
     WebhooksController,
+    StaffController,
+    TeamController,
   ],
   providers: [
     VerificationService,
