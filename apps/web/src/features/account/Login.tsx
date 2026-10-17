@@ -29,9 +29,7 @@ export function Login({
   const [mode, setMode] = useState<Mode>(initialResetToken ? 'new-password' : 'login');
   const [country, setCountry] = useState<CountryCode>('EC');
   const [ticket, setTicket] = useState<VerificationTicket | null>(null);
-  const [credentials, setCredentials] = useState<{ phone: string; password: string } | null>(
-    null,
-  );
+  const [credentials, setCredentials] = useState<{ phone: string; password: string } | null>(null);
   const [resetToken, setResetToken] = useState(initialResetToken || '');
   const [email, setEmail] = useState('');
   const [error, setError] = useState<ReactNode>('');
@@ -333,8 +331,8 @@ export function Login({
               )}
               {mode === 'register' && (
                 <p className="small">
-                  Usa al menos 12 caracteres. Te enviaremos un código por WhatsApp; el correo
-                  podrás verificarlo después desde Mi cuenta.
+                  Usa al menos 12 caracteres. Te enviaremos un código por WhatsApp; el correo podrás
+                  verificarlo después desde Mi cuenta.
                 </p>
               )}
               {mode === 'login' && (

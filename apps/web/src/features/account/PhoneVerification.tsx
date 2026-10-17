@@ -78,7 +78,8 @@ export function PhoneVerification<T>({
         setNotice('Te enviamos un código nuevo. El anterior ya no es válido.');
       }
     } catch (e) {
-      if (e instanceof ApiError && typeof e.body?.retryAfter === 'number') setWait(e.body.retryAfter);
+      if (e instanceof ApiError && typeof e.body?.retryAfter === 'number')
+        setWait(e.body.retryAfter);
       setError(e instanceof Error ? e.message : 'No se pudo reenviar.');
     } finally {
       setBusy(false);

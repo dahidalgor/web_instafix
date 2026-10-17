@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Req,
+  Inject,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { authenticated, checkOrigin } from '../auth/session';
@@ -19,7 +20,9 @@ import { otpConfiguration } from './otp.provider';
 
 @Controller('api/v1/admin/whatsapp')
 export class WhatsAppAdminController {
-  constructor(private readonly onboarding: WhatsAppOnboardingService) {}
+  constructor(
+    @Inject(WhatsAppOnboardingService) private readonly onboarding: WhatsAppOnboardingService,
+  ) {}
   @Post('connect/session') @Header('Cache-Control', 'no-store') async connect(@Req() req: Request) {
     checkOrigin(req);
     const user = await authenticated(req, true);

@@ -22,7 +22,7 @@ El estado de agenda, de trabajo y de pago serán independientes. Recibir ubicaci
 
 ## Identidad
 
-Reservar no exige una cuenta ni correo. El teléfono se almacena en formato internacional, pero no es una clave primaria ni prueba automática de identidad. Cada solicitud inicial crea un cliente provisional para evitar apropiación de historiales. Las cuentas pueden registrarse con teléfono y contraseña; los trabajos se vinculan explícitamente después de comprobar la identidad. La API aplica permisos por rol en cada operación administrativa, independientemente del subdominio.
+Reservar no exige una cuenta. El teléfono se almacena en E.164 y es único por cuenta. Una cuenta de cliente solo está activa con `phoneVerifiedAt` (OTP por WhatsApp); el correo es opcional (`emailVerifiedAt`). Las reservas de invitado del mismo número se asocian solo tras verificar el OTP. Los trabajos se vinculan explícitamente después de comprobar la identidad. Comunicaciones y agenda: [Comunicaciones](communications.md). La API aplica permisos por rol en cada operación administrativa, independientemente del subdominio.
 
 ## Lo que falta antes de producción
 

@@ -138,7 +138,10 @@ export async function sendEmail(input: {
     await logCommunication({
       ...base,
       status: 'FAILED',
-      error: error instanceof ServiceUnavailableException ? 'SMTP sin configurar' : 'Envío rechazado o sin respuesta',
+      error:
+        error instanceof ServiceUnavailableException
+          ? 'SMTP sin configurar'
+          : 'Envío rechazado o sin respuesta',
     });
     if (error instanceof ServiceUnavailableException) throw error;
     throw new EmailDeliveryError();

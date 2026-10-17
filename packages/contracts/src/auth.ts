@@ -39,9 +39,7 @@ export const loginSchema = z
   .strict();
 export const emailRequestSchema = z.object({ email: emailSchema }).strict();
 export const phoneRequestSchema = z.object({ phone: phoneInput }).strict();
-export const verifyPhoneSchema = z
-  .object({ verificationId: z.string().uuid(), code })
-  .strict();
+export const verifyPhoneSchema = z.object({ verificationId: z.string().uuid(), code }).strict();
 export const resendVerificationSchema = z.object({ verificationId: z.string().uuid() }).strict();
 export const tokenSchema = z.object({ token }).strict();
 export const completeResetSchema = z.object({ token, password: newPassword }).strict();

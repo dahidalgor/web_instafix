@@ -37,6 +37,12 @@ La Partner Key viene del panel de WasapFlow y se transmite exclusivamente en `x-
 
 El enlace dura 30 minutos; WasapFlow admite finalizar un flujo abierto a tiempo durante otros 30 minutos. Cerrar/cancelar la ventana permite repetir con un nuevo estado. Solo se guarda el hash del estado, vinculado al administrador; no el token del enlace.
 
+## Plantilla de verificación (OTP)
+
+La verificación de cuentas, la recuperación de contraseña y el cambio de número usan una plantilla de categoría **AUTHENTICATION** (`instafix_codigo_verificacion`, idioma `es`, botón «Copiar código», caducidad 10 minutos, recomendación de seguridad activada). Meta fija su texto. Configura `WHATSAPP_TEMPLATE_OTP` y `WHATSAPP_OTP_ENABLED=true` cuando esté aprobada. Es independiente de `WHATSAPP_ENABLED`, que controla los avisos de citas. Detalles en [Comunicaciones](communications.md).
+
+Plantillas UTILITY adicionales, opcionales (sin plantilla configurada no se envía el aviso): `instafix_recordatorio_visita` (`WHATSAPP_TEMPLATE_VISIT_REMINDER`, sustituye al recordatorio del mismo día e incluye la hora), `instafix_cita_reprogramada`, `instafix_cita_cancelada`, `instafix_tecnico_asignado` y `instafix_tecnico_en_camino`. Sus cuerpos están en [whatsapp-templates.json](whatsapp-templates.json).
+
 ## Textos y plantillas conservados
 
 Los cuatro cuerpos de [whatsapp-templates.json](whatsapp-templates.json) se mantienen sin cambios:

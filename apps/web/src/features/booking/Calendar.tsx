@@ -76,7 +76,9 @@ export function Calendar() {
       {result ? (
         <div className="booking-done" role="status">
           <p className="booking-check">✓</p>
-          <h3>{result.status === 'CONFIRMED' ? 'Tu cita está confirmada' : 'Tu cita fue agendada'}</h3>
+          <h3>
+            {result.status === 'CONFIRMED' ? 'Tu cita está confirmada' : 'Tu cita fue agendada'}
+          </h3>
           <p>
             <strong>{slotDate(result.startsAt)}</strong> · Hora estimada{' '}
             <strong>{slotTime(result.startsAt)}</strong>

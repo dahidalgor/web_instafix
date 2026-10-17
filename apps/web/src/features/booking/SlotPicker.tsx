@@ -80,8 +80,8 @@ export function SlotPicker({
   if (!sorted.length)
     return (
       <p role="status" className="slot-state">
-        No hay horarios disponibles en las próximas semanas. Escríbenos por WhatsApp y
-        buscaremos un espacio.
+        No hay horarios disponibles en las próximas semanas. Escríbenos por WhatsApp y buscaremos un
+        espacio.
       </p>
     );
   return (

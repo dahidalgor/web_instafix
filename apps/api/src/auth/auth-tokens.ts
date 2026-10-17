@@ -39,7 +39,11 @@ export async function issueAuthToken(
       (recent[0] && recent[0].createdAt.getTime() > now.getTime() - cooldown * 1000)
     )
       throw new HttpException(
-        { statusCode: 429, code: 'TOKEN_RATE_LIMIT', message: 'Espera antes de solicitar otro enlace.' },
+        {
+          statusCode: 429,
+          code: 'TOKEN_RATE_LIMIT',
+          message: 'Espera antes de solicitar otro enlace.',
+        },
         429,
       );
   }

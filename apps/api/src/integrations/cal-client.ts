@@ -38,9 +38,12 @@ async function call(path: string, version: string, init: RequestInit = {}, uncer
   }
   const body = await response.json().catch(() => null);
   if (!response.ok)
-    throw Object.assign(new ProviderError(`Cal.com HTTP ${response.status}`, disposition(response.status)), {
-      httpStatus: response.status,
-    });
+    throw Object.assign(
+      new ProviderError(`Cal.com HTTP ${response.status}`, disposition(response.status)),
+      {
+        httpStatus: response.status,
+      },
+    );
   return body;
 }
 

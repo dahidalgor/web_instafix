@@ -1,5 +1,10 @@
 import type { AccountUser, VerificationTicket } from '@instafix/contracts';
-import { maskEmail, maskPhone, normalizePhone, type CountryCode } from '@instafix/contracts/src/phone';
+import {
+  maskEmail,
+  maskPhone,
+  normalizePhone,
+  type CountryCode,
+} from '@instafix/contracts/src/phone';
 import { useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
 import { PhoneField } from './PhoneField';
@@ -41,10 +46,11 @@ export function AccountSecurity({
   }
   const sendVerification = () =>
     run(async () => {
-      const result = await api<{ accepted?: boolean; alreadyVerified?: boolean; maskedEmail: string }>(
-        'my/email/verification',
-        { method: 'POST' },
-      );
+      const result = await api<{
+        accepted?: boolean;
+        alreadyVerified?: boolean;
+        maskedEmail: string;
+      }>('my/email/verification', { method: 'POST' });
       // Solo se informa del envío cuando el proveedor aceptó el mensaje.
       setMessage(
         result.alreadyVerified
@@ -111,7 +117,11 @@ export function AccountSecurity({
             {user.phoneVerifiedAt ? '✓ Verificado' : 'Sin verificar'}
           </span>
         </div>
-        <button type="button" className="text-button" onClick={() => open(panel === 'phone' ? null : 'phone')}>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => open(panel === 'phone' ? null : 'phone')}
+        >
           Cambiar número
         </button>
       </article>
@@ -137,7 +147,12 @@ export function AccountSecurity({
               Tu número actual se mantiene hasta que verifiques el nuevo con el código que te
               enviaremos por WhatsApp.
             </p>
-            <PhoneField id="new-phone" label="Nuevo WhatsApp" country={country} onCountry={setCountry} />
+            <PhoneField
+              id="new-phone"
+              label="Nuevo WhatsApp"
+              country={country}
+              onCountry={setCountry}
+            />
             <label>
               Contraseña actual
               <input name="password" type="password" autoComplete="current-password" required />
@@ -164,7 +179,11 @@ export function AccountSecurity({
               Verificar correo
             </button>
           )}
-          <button type="button" className="text-button" onClick={() => open(panel === 'email' ? null : 'email')}>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => open(panel === 'email' ? null : 'email')}
+          >
             Cambiar correo
           </button>
         </div>
@@ -190,7 +209,11 @@ export function AccountSecurity({
           <p className="eyebrow">Contraseña</p>
           <strong>••••••••</strong>
         </div>
-        <button type="button" className="text-button" onClick={() => open(panel === 'password' ? null : 'password')}>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => open(panel === 'password' ? null : 'password')}
+        >
           Cambiar contraseña
         </button>
       </article>
@@ -198,15 +221,34 @@ export function AccountSecurity({
         <form className="security-panel" onSubmit={changePassword}>
           <label>
             Contraseña actual
-            <input name="currentPassword" type="password" autoComplete="current-password" required />
+            <input
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
           </label>
           <label>
             Nueva contraseña
-            <input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required />
+            <input
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+            />
           </label>
           <label>
             Repite la nueva contraseña
-            <input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required />
+            <input
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+            />
           </label>
           <button className="button" disabled={busy}>
             {busy ? 'Guardando…' : 'Guardar contraseña'}

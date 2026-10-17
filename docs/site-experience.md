@@ -88,7 +88,7 @@ En Administración → Citas, «Recuperar vínculos» aparece si existen reserva
 
 Mi cuenta vuelve a consultar las citas al recuperar el foco o volver a la pestaña. Muestra futuras e históricas exclusivamente por el usuario autenticado. Las discrepancias de contacto aparecen como pendientes de revisión.
 
-**Responsabilidad de correo:** Cal.com debe enviar la confirmación de reserva; Brevo sigue enviando verificación y recuperación de cuenta. No se añadió un segundo correo de confirmación desde InstaFix. Si el evento requiere confirmación, comprobar primero si la reserva sigue pendiente de ubicación/aprobación. Después revisar en Cal.com el correo del asistente, la opción de confirmación y los workflows para evitar duplicados. La configuración real y la entrega todavía deben comprobarse en el entorno afectado.
+**Responsabilidad de correo (actualizado el 17 de octubre de 2026):** Instafix envía por Brevo la confirmación, la reprogramación y la cancelación de citas; Cal.com no recibe el correo del cliente. Ver [Comunicaciones](communications.md). El texto siguiente describe la situación anterior. Si el evento requiere confirmación, comprobar primero si la reserva sigue pendiente de ubicación/aprobación. Después revisar en Cal.com el correo del asistente, la opción de confirmación y los workflows para evitar duplicados. La configuración real y la entrega todavía deben comprobarse en el entorno afectado.
 
 El teléfono mostrado por InstaFix es de solo lectura y el backend valida los datos recibidos. Esto **no bloquea el campo dentro del iframe de Cal.com**. Revisar la posibilidad de bloquear el campo prerrellenado requiere inspeccionar la configuración real del evento. No realizar cambios externos sin autorización del propietario.
 

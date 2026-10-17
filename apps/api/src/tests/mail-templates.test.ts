@@ -26,7 +26,9 @@ test('appointment confirmation shows the request, Ecuador time and escapes conte
   // Nunca afirma un servicio realizado: solo la necesidad descrita por el cliente.
   assert.equal(/Servicio realizado/i.test(email.html), false);
   assert.ok(email.html.includes('&amp; más'));
-  assert.ok(email.html.includes('David &lt;b&gt;Pérez&lt;/b&gt;') || !email.html.includes('<b>Pérez'));
+  assert.ok(
+    email.html.includes('David &lt;b&gt;Pérez&lt;/b&gt;') || !email.html.includes('<b>Pérez'),
+  );
   assert.ok(email.html.includes('Ver mi cita'));
   assert.ok(email.html.includes('max-width:600px'));
 });
@@ -58,9 +60,15 @@ test('reschedule shows previous and new date; cancellation has its own template'
 
 test('verification and reset emails carry single-use links, not codes', () => {
   const token = 'a'.repeat(64);
-  const verify = emailVerificationEmail({ name: 'Ana', url: `https://instafix.ec/#verificar-correo?token=${token}` });
+  const verify = emailVerificationEmail({
+    name: 'Ana',
+    url: `https://instafix.ec/#verificar-correo?token=${token}`,
+  });
   assert.ok(verify.html.includes(token));
   assert.ok(verify.text.includes('24 horas'));
-  const reset = passwordResetEmail({ name: 'Ana', url: `https://instafix.ec/#restablecer?token=${token}` });
+  const reset = passwordResetEmail({
+    name: 'Ana',
+    url: `https://instafix.ec/#restablecer?token=${token}`,
+  });
   assert.ok(reset.text.includes('30 minutos'));
 });

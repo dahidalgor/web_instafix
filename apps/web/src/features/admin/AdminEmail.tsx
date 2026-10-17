@@ -67,7 +67,8 @@ export function AdminEmail() {
             <p role="alert">Usa el puerto SMTP indicado por tu proveedor: 465 o 587.</p>
           )}
           <p className="small">
-            Reply-To {status.replyTo ? 'configurado' : 'sin configurar (las respuestas van al remitente)'}.
+            Reply-To{' '}
+            {status.replyTo ? 'configurado' : 'sin configurar (las respuestas van al remitente)'}.
             Avisos de citas por correo:{' '}
             {status.appointmentEmails
               ? 'activados'
@@ -98,8 +99,9 @@ export function AdminEmail() {
           <ul className="comm-log">
             {status.recent.map((row, i) => (
               <li key={i}>
-                <strong>{row.status === 'ACCEPTED' ? '✓ Aceptado' : '✕ Fallido'}</strong> · {row.channel}{' '}
-                · {row.kind} · {row.recipient} · {new Date(row.createdAt).toLocaleString('es-EC')}
+                <strong>{row.status === 'ACCEPTED' ? '✓ Aceptado' : '✕ Fallido'}</strong> ·{' '}
+                {row.channel} · {row.kind} · {row.recipient} ·{' '}
+                {new Date(row.createdAt).toLocaleString('es-EC')}
                 {row.error && <span> · {row.error}</span>}
               </li>
             ))}

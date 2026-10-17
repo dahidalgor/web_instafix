@@ -1,5 +1,9 @@
 # InstaFix
 
+## Comunicaciones y verificación (17 de octubre de 2026)
+
+Las cuentas se activan verificando el WhatsApp con un código (OTP) enviado por WasapFlow; el correo es opcional y se verifica desde Mi cuenta → Seguridad. La contraseña se recupera por WhatsApp o por correo verificados. La web reserva mediante la API de Cal.com (sin iframe) e Instafix envía por Brevo las confirmaciones, reprogramaciones y cancelaciones. Arquitectura, reglas de seguridad, pruebas y pasos manuales en [Comunicaciones](docs/communications.md).
+
 Consulta la [guía de organización del código](docs/code-organization.md) para localizar componentes, estilos, controladores y contratos. Usa `pnpm format` para mantener el formato uniforme y `pnpm format:check` para comprobarlo.
 
 ## WhatsApp y Cal.com (14 de octubre de 2026)
@@ -85,9 +89,9 @@ Consultar `docs/architecture.md` para las reglas del flujo.
 
 La web incluye Contacto en el footer y menú móvil desplegable. Administración permite editar las diapositivas, asignar servicios a citas, registrar trabajos y consultar visitas/tiempo visible por página. El cliente sigue describiendo su necesidad al reservar; el técnico elige el servicio después. Consulta [la guía de funcionamiento y configuración SMTP](docs/site-experience.md). El proveedor elegido es Brevo; el propietario confirmó la recepción de correos el 16 de octubre de 2026. Cada entorno necesita sus variables SMTP privadas.
 
-## Agenda Cal.com integrada
+## Agenda con Cal.com
 
-La sección `#agenda` muestra el evento real `instafix/agenda-tu-cita-con-instafix` mediante su vista incrustada en un iframe. Conserva `overlayCalendar=true` y omite la fecha fija del enlace original. No se cambian los ajustes de la cuenta de Cal.com.
+La sección `#agenda` es un formulario propio de Instafix: consulta la disponibilidad real del evento `instafix/agenda-tu-cita-con-instafix` y crea la reserva mediante la API de Cal.com desde el backend. Cal.com ya no recibe el correo del cliente (ver [Comunicaciones](docs/communications.md)).
 
 La sincronización con PostgreSQL y la confirmación por ubicación requieren activar los webhooks y configurar el evento como pendiente de confirmación según [la guía de WhatsApp](docs/whatsapp-setup.md). No hacer reservas ficticias en la agenda real para probarla.
 
@@ -122,6 +126,6 @@ El comando de administrador pide teléfono y contraseña de forma interactiva; l
 
 El acceso administrativo se verifica por rol en cada endpoint, independientemente del hostname. El subdominio no es una medida de autorización. Para producción hay que configurar DNS/TLS y `VITE_ADMIN_HOST`, los orígenes permitidos y NODE_ENV=production. Las cookies son de host, HttpOnly, SameSite=Strict y Secure en producción; las sesiones caducan en 24 horas y se revocan al salir. Contraseñas con scrypt y sal aleatoria. No se guarda el token de sesión en texto claro.
 
-Las cuentas se registran con teléfono, correo y contraseña. La verificación de correo y recuperación de contraseña requieren configurar SMTP. La propiedad del teléfono todavía no se verifica al registrarse; por eso no se reclaman trabajos de invitados automáticamente por coincidencia de teléfono. Administración puede registrar trabajos completados vinculados explícitamente a una cuenta, después de comprobar la identidad. Cada trabajo conserva condiciones y fechas de garantía propias, independientes de cambios en la política pública.
+Las cuentas se registran con WhatsApp, correo y contraseña y se activan al verificar el WhatsApp por OTP. Tras esa verificación, las reservas de invitado del mismo número (últimos 180 días) se asocian a la cuenta. Los trabajos completados siguen vinculándose explícitamente desde administración. Administración puede registrar trabajos completados vinculados explícitamente a una cuenta, después de comprobar la identidad. Cada trabajo conserva condiciones y fechas de garantía propias, independientes de cambios en la política pública.
 
 Las fotos y videos se suben desde el dispositivo en administración; los enlaces HTTPS existentes también se conservan. El almacenamiento local y R2 están descritos en deploy/README.md. El calendario general de Cal.com no sincroniza automáticamente el precio del catálogo: su campo obligatorio `servicio` identifica el trabajo para los mensajes de WhatsApp.

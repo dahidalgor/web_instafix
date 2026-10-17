@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
@@ -8,7 +8,7 @@ import { WasapFlowClient } from './wasapflow.client';
 
 @Injectable()
 export class WhatsAppService {
-  constructor(private readonly bridge: WasapFlowClient) {}
+  constructor(@Inject(WasapFlowClient) private readonly bridge: WasapFlowClient) {}
   private async sendingWaba() {
     if (process.env.WHATSAPP_ENABLED !== 'true')
       throw new ProviderError('Envíos de WhatsApp desactivados', 'FAILED');
