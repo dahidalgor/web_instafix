@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { bookingIdentity, bookingIdentityMessage } from '../booking/booking-identity';
 import { tokenHash } from '../auth/security';
 import { db } from '../database/client';
-import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue';
+import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
+import { isRelayEmail } from '../booking/booking.service';
+import { publishAppointmentEvent } from '../notifications/appointment-events';
 
 const envelope = z.object({
   triggerEvent: z.string(),
@@ -78,18 +80,93 @@ export async function receiveCalWebhook(body: unknown) {
     if (cancelled) {
       if (existing) {
         await lockAppointment(tx, existing.id);
-        await tx.appointment.update({
-          where: { id: existing.id },
-          data: {
-            status: 'CANCELLED',
-            calStatus: 'cancelled',
-            automationRevision: { increment: 1 },
-          },
-        });
-        await cancelPendingJobs(tx, existing.id);
+        const current = await tx.appointment.findUniqueOrThrow({ where: { id: existing.id } });
+        if (current.status !== 'CANCELLED') {
+          const updated = await tx.appointment.update({
+            where: { id: existing.id },
+            data: {
+              status: 'CANCELLED',
+              calStatus: 'cancelled',
+              automationRevision: { increment: 1 },
+            },
+          });
+          await cancelPendingJobs(tx, existing.id);
+          // Cancelación hecha desde Cal.com: Instafix avisa al cliente (deduplicado).
+          if (['PENDING_LOCATION', 'CONFIRMED'].includes(current.status))
+            await publishAppointmentEvent(tx, updated, { type: 'appointment.cancelled' });
+        }
       }
       await saveEvent('CANCELLED');
       return { ok: true };
+    }
+    const data = details.safeParse(event.payload);
+    if (!data.success) throw new BadRequestException('Faltan datos de la reserva');
+    const fromApi = data.data.metadata.instafixSource === 'api';
+    // Reserva creada por Instafix: su fila ya es la fuente de verdad. El webhook solo
+    // actualiza el estado de Cal.com y nunca genera un segundo aviso del mismo hecho.
+    if (existing && existing.source === 'INSTAFIX_API' && !event.payload.rescheduleUid) {
+      await tx.appointment.update({
+        where: { id: existing.id },
+        data: { calStatus: (data.data.status || existing.calStatus || '').toLowerCase() || null },
+      });
+      await saveEvent('UPDATED');
+      return { ok: true };
+    }
+    if (event.payload.rescheduleUid && event.payload.rescheduleUid !== uid) {
+      const moved = existing?.source === 'INSTAFIX_API' ? existing : await tx.appointment.findUnique({ where: { calUid: event.payload.rescheduleUid } });
+      if (moved?.source === 'INSTAFIX_API') {
+        await lockAppointment(tx, moved.id);
+        const current = await tx.appointment.findUniqueOrThrow({ where: { id: moved.id } });
+        const startsAt = new Date(data.data.startTime);
+        const endsAt = new Date(data.data.endTime);
+        if (current.calUid === uid && current.startsAt.getTime() === startsAt.getTime()) {
+          // Reprogramación iniciada por Instafix y ya registrada.
+          await saveEvent('UPDATED');
+          return { ok: true };
+        }
+        if (!['PENDING_LOCATION', 'CONFIRMED'].includes(current.status)) {
+          await saveEvent('IGNORED_TERMINAL');
+          return { ok: true };
+        }
+        await cancelPendingJobs(tx, current.id);
+        const status = String(data.data.status || 'accepted').toLowerCase();
+        const hasLocation = Boolean(current.locationReceivedAt);
+        const updated = await tx.appointment.update({
+          where: { id: current.id },
+          data: {
+            calUid: uid,
+            calStatus: status,
+            startsAt,
+            endsAt,
+            automationRevision: { increment: 1 },
+            status:
+              status === 'accepted' && (hasLocation || !current.whatsappConsentAt)
+                ? 'CONFIRMED'
+                : 'PENDING_LOCATION',
+            locationRequestedAt: occurredAt,
+          },
+        });
+        if (updated.status === 'CONFIRMED') await queueReminders(tx, updated);
+        else if (hasLocation) await queueJob(tx, updated, 'CAL_CONFIRM', new Date());
+        else if (updated.whatsappConsentAt) await queueJob(tx, updated, 'INITIAL', new Date());
+        await publishAppointmentEvent(tx, updated, {
+          type: 'appointment.rescheduled',
+          previousStartsAt: current.startsAt,
+        });
+        await tx.integrationEvent.upsert({
+          where: { id: `${id}:previous` },
+          update: {},
+          create: {
+            id: `${id}:previous`,
+            provider: 'CAL',
+            sourceId: event.payload.rescheduleUid,
+            occurredAt,
+            outcome: 'CANCELLED',
+          },
+        });
+        await saveEvent('RESCHEDULED');
+        return { ok: true };
+      }
     }
     if (event.payload.rescheduleUid && event.payload.rescheduleUid !== uid) {
       const old = await tx.appointment.findUnique({
@@ -121,8 +198,6 @@ export async function receiveCalWebhook(body: unknown) {
         },
       });
     }
-    const data = details.safeParse(event.payload);
-    if (!data.success) throw new BadRequestException('Faltan datos de la reserva');
     const p = data.data;
     const start = new Date(p.startTime),
       end = new Date(p.endTime);
@@ -156,7 +231,8 @@ export async function receiveCalWebhook(body: unknown) {
         previousOwner && selected?.user && previousOwner.id !== selected.user.id,
       ),
       phone: phoneValue,
-      email: p.attendees[0].email ?? undefined,
+      // El buzón de reenvío de Instafix no es el correo del cliente.
+      email: isRelayEmail(p.attendees[0].email) ? undefined : (p.attendees[0].email ?? undefined),
       name: p.attendees[0].name,
     });
     const phone = identity.contactPhone;
@@ -233,13 +309,29 @@ export async function receiveCalWebhook(body: unknown) {
       locationReceivedAt: null,
       locationRequestedAt: occurredAt,
     };
+    const attendeeEmail = p.attendees[0].email?.trim().toLowerCase() || null;
+    const contactEmail =
+      (identity.userId ? owner?.email : null) ||
+      (attendeeEmail && !isRelayEmail(attendeeEmail) ? attendeeEmail : null) ||
+      existing?.contactEmail ||
+      null;
     const appointment = existing
       ? await tx.appointment.update({
           where: { id: existing.id },
-          data: { ...dataToSave, automationRevision: { increment: 1 } },
+          data: { ...dataToSave, contactEmail, automationRevision: { increment: 1 } },
         })
-      : await tx.appointment.create({ data: { ...dataToSave, calUid: uid } });
+      : await tx.appointment.create({
+          data: {
+            ...dataToSave,
+            contactEmail,
+            calUid: uid,
+            // Respuesta de la API perdida: la reserva sí es de Instafix y se avisa una vez.
+            source: fromApi ? 'INSTAFIX_API' : 'CAL_EMBED',
+          },
+        });
     if (!issue) await queueJob(tx, appointment, 'INITIAL', new Date());
+    if (!existing && fromApi && !issue)
+      await publishAppointmentEvent(tx, appointment, { type: 'appointment.created' });
     await saveEvent(issue ? 'NEEDS_REVIEW' : 'IMPORTED');
     return { ok: true };
   });

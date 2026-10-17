@@ -7,6 +7,9 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountController } from './account/account.controller';
+import { SecurityController } from './account/security.controller';
+import { VerificationService } from './auth/verification.service';
+import { NotificationWorker } from './notifications/notification.service';
 import { AppointmentsController } from './appointments/appointments.controller';
 import { AuthController } from './auth/auth.controller';
 import { CatalogController } from './catalog/catalog.controller';
@@ -28,6 +31,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     BookingController,
     AuthController,
     AccountController,
+    SecurityController,
     CatalogController,
     AppointmentsController,
     JobsController,
@@ -37,6 +41,6 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     HealthController,
     WebhooksController,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [VerificationService, NotificationWorker, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

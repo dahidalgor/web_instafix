@@ -4,5 +4,7 @@ export type Page = (typeof pages)[number];
 export function resolvePage(hash: string): Page {
   const value = hash.replace(/^#/, '').split('?')[0];
   if (value === 'nuestro-trabajo') return 'quienes-somos';
+  // Enlaces de correo: recuperación y verificación se gestionan dentro de Mi cuenta.
+  if (value === 'restablecer' || value === 'verificar-correo') return 'cuenta';
   return pages.includes(value as Page) ? (value as Page) : 'inicio';
 }

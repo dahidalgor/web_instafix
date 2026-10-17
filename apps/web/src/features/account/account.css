@@ -278,3 +278,137 @@
     box-shadow: 0 12px 30px rgb(31 18 48 / 7%);
   }
 }
+
+/* Verificación por WhatsApp (OTP) */
+.otp-form h1 {
+  text-align: center;
+}
+.otp-phone {
+  display: block;
+  margin: 6px 0;
+  color: var(--text);
+  font-size: 18px;
+  letter-spacing: 0.5px;
+}
+.otp-input {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 330px;
+  margin: 0 auto 8px;
+}
+.account-login-card .otp-input input {
+  margin: 0;
+  padding: 12px 0;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  border-radius: 10px;
+}
+.otp-input input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.otp-input input[aria-invalid='true'] {
+  border-color: #c0262d;
+}
+.otp-resend,
+.otp-notice {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.recovery-options {
+  display: grid;
+  gap: 12px;
+}
+.account-login-card .recovery-options .button {
+  width: 100%;
+  margin: 0;
+}
+.button.secondary {
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.account-banner {
+  max-width: 1200px;
+  margin: 20px auto 0;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+/* Mi cuenta → Seguridad */
+.security-list {
+  display: grid;
+  gap: 14px;
+  margin: 24px 0;
+}
+.security-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.security-item .eyebrow {
+  margin: 0 0 6px;
+}
+.security-item strong {
+  display: block;
+  font-size: 18px;
+}
+.security-item .verified,
+.security-item .unverified {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.security-item .verified {
+  color: #1b7a4b;
+}
+.security-item .unverified {
+  color: #a35d00;
+}
+.security-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.security-panel {
+  padding: 20px 22px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+}
+.appointment-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.appointment-actions .security-panel {
+  width: 100%;
+}
+.text-button.danger,
+.button.danger {
+  color: #b3261e;
+}
+.button.danger {
+  background: #fff;
+  border: 1px solid #b3261e;
+}
+@media (max-width: 520px) {
+  .otp-input {
+    gap: 6px;
+  }
+  .security-item {
+    padding: 16px;
+  }
+}

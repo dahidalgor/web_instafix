@@ -3,7 +3,7 @@ import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
 import { requireConnectedWaba } from './connection';
-import { messageContent, type MessageKind } from './messages';
+import { messageContent, templateFor, type MessageKind } from './messages';
 import { WasapFlowClient } from './wasapflow.client';
 
 @Injectable()
@@ -19,7 +19,7 @@ export class WhatsAppService {
       throw new ProviderError('Falta autorización del cliente', 'FAILED');
     const wabaId = await this.sendingWaba();
     const content = messageContent(kind, appointment);
-    const template = process.env[`WHATSAPP_TEMPLATE_${kind}`];
+    const template = templateFor(kind);
     if (!template) throw new ProviderError(`Falta plantilla ${kind}`, 'FAILED');
     // Conservamos los cuatro flujos como templates: pueden iniciar conversación fuera de 24 h.
     const messageId = await this.bridge.sendTemplate(

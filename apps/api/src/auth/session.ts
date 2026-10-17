@@ -12,7 +12,9 @@ export const safeUser = {
   phone: true,
   role: true,
   phoneVerifiedAt: true,
+  emailVerifiedAt: true,
 } as const;
+export const phoneUnverifiedMessage = 'Verifica tu WhatsApp para continuar.';
 export const cookieName = 'instafix_session';
 // Las operaciones con cookies verifican el origen antes de modificar datos.
 export function checkOrigin(req: Request) {
@@ -37,9 +39,18 @@ export async function authenticated(req: Request, admin = false) {
   });
   if (!session || session.expiresAt <= new Date()) throw new UnauthorizedException('Inicia sesión');
   if (admin && session.user.role !== 'ADMIN') throw new ForbiddenException('Acceso restringido');
+  // Una cuenta de cliente solo está activa después de demostrar que controla su WhatsApp.
+  // Sesiones anteriores a este requisito vuelven al inicio de sesión para verificarse.
+  if (session.user.role === 'CUSTOMER' && !session.user.phoneVerifiedAt)
+    throw new UnauthorizedException({
+      statusCode: 401,
+      code: 'PHONE_UNVERIFIED',
+      message: phoneUnverifiedMessage,
+    });
   return session.user;
 }
 export async function issueSession(userId: string, res: Response) {
+  // El llamador garantiza que la cuenta de cliente ya verificó su WhatsApp.
   const token = newToken();
   await db.session.create({
     data: { userId, tokenHash: tokenHash(token), expiresAt: new Date(Date.now() + 86400000) },

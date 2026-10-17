@@ -15,6 +15,7 @@ import { calConfiguration, whatsappConfiguration } from './config';
 import { lockAppointment } from './queue';
 import { WhatsAppOnboardingService } from './onboarding.service';
 import { connectedWaba } from './connection';
+import { otpConfiguration } from './otp.provider';
 
 @Controller('api/v1/admin/whatsapp')
 export class WhatsAppAdminController {
@@ -77,6 +78,7 @@ export class WhatsAppAdminController {
         connected: !!wabaId,
         connectionMode: wabaId ? 'coexistence' : null,
       },
+      otp: otpConfiguration(),
       cal: calConfiguration(),
       jobs,
       issues,

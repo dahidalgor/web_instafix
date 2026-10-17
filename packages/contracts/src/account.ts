@@ -7,6 +7,7 @@ export type AccountUser = {
   phone: string;
   role: 'CUSTOMER' | 'ADMIN';
   phoneVerifiedAt: string | null;
+  emailVerifiedAt?: string | null;
 };
 export type CompletedJob = {
   id: string;

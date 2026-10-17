@@ -5,6 +5,7 @@ import { WhatsAppService } from './whatsapp.service';
 import { WhatsAppOnboardingService } from './onboarding.service';
 import { WhatsAppWorker } from './worker';
 import { BridgeWebhookWorker } from './bridge-webhooks';
+import { WHATSAPP_OTP_PROVIDER, otpProviderFactory } from './otp.provider';
 
 @Module({
   controllers: [WhatsAppAdminController],
@@ -14,7 +15,8 @@ import { BridgeWebhookWorker } from './bridge-webhooks';
     WhatsAppOnboardingService,
     WhatsAppWorker,
     BridgeWebhookWorker,
+    { provide: WHATSAPP_OTP_PROVIDER, useFactory: otpProviderFactory, inject: [WasapFlowClient] },
   ],
-  exports: [WhatsAppService],
+  exports: [WhatsAppService, WHATSAPP_OTP_PROVIDER],
 })
 export class WhatsAppModule {}
