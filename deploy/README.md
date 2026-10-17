@@ -36,6 +36,20 @@ docker compose --env-file .env.production -f compose.production.yaml up -d
 
 La base de producción empieza vacía. El seed es para la primera instalación; no ejecutarlo en actualizaciones porque puede sobrescribir el catálogo. No transfiere usuarios/datos del Mac: para conservarlos se necesita exportar/restaurar PostgreSQL antes de abrir la web. Caddy solicita y renueva HTTPS cuando el DNS apunta al servidor.
 
+## Actualizaciones
+
+1. Copia de seguridad de PostgreSQL (ver abajo) antes de cualquier cambio.
+2. Copiar el proyecto con `rsync`, excluyendo `.env*`, `node_modules`, `.pnpm-store`, `.git`, `dist`, `storage/media` y `.agent-runner`.
+3. Construir, aplicar migraciones pendientes y arrancar:
+
+```sh
+docker compose --env-file .env.production -f compose.production.yaml build api web
+docker compose --env-file .env.production -f compose.production.yaml run --rm api pnpm exec prisma migrate deploy --schema /app/database/schema.prisma
+docker compose --env-file .env.production -f compose.production.yaml up -d
+```
+
+La imagen normaliza permisos de lectura (`chmod -R a+rX /app`): un archivo con permisos 600 en el Mac dejaba la API en reinicio continuo (`EACCES` al leer `package.json`, Caddy respondía 502).
+
 ## Copias de seguridad
 
 Antes de actualizar y diariamente, exportar PostgreSQL:
