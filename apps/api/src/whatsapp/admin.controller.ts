@@ -79,7 +79,10 @@ export class WhatsAppAdminController {
       whatsapp: {
         ...whatsappConfiguration(),
         connected: !!wabaId,
-        connectionMode: wabaId ? 'coexistence' : null,
+        connectionMode: wabaId
+          ? ((await db.whatsAppConnection.findUnique({ where: { id: 'main' } }))?.connectionMode ??
+            null)
+          : null,
       },
       otp: otpConfiguration(),
       cal: calConfiguration(),

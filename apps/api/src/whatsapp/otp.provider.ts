@@ -36,14 +36,23 @@ export class WasapFlowOtpProvider implements WhatsAppOtpProvider {
   constructor(@Inject(WasapFlowClient) private readonly bridge: WasapFlowClient) {}
   async sendAuthenticationCode(to: string, code: string) {
     const config = otpConfiguration();
-    if (!config.enabled) throw new ProviderError('Verificación por WhatsApp desactivada', 'FAILED');
-    if (!config.template) throw new ProviderError('Falta la plantilla OTP aprobada', 'FAILED');
-    const wabaId = await requireConnectedWaba();
+    if (!config.enabled)
+      throw new ProviderError(
+        'Verificación por WhatsApp desactivada (WHATSAPP_OTP_ENABLED≠true)',
+        'FAILED',
+      );
+    if (!config.template)
+      throw new ProviderError(
+        'Falta WHATSAPP_TEMPLATE_OTP (plantilla de autenticación aprobada)',
+        'FAILED',
+      );
+    const wabaId = await requireConnectedWaba(this.bridge);
     const messageId = await this.bridge.sendAuthenticationTemplate(
       wabaId,
       to.replace(/^\+/, ''),
       config.template,
-      process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'es',
+      // Debe coincidir con el idioma con que Meta aprobó la plantilla (es, es_MX, es_ES…).
+      process.env.WHATSAPP_TEMPLATE_OTP_LANGUAGE || process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'es',
       code,
     );
     return { messageId };

@@ -26,6 +26,17 @@ La Partner Key viene del panel de WasapFlow y se transmite exclusivamente en `x-
 
 `WASAPFLOW_WABA_ID` es opcional: limita qué WABA puede conectarse. La WABA operativa se persiste en `WhatsAppConnection` al completar el onboarding. Poner un ID en el entorno **no activa** una conexión sin verificar. No necesitas tokens, App Secret ni Phone Number ID de Meta en Instafix.
 
+## Diagnóstico de envíos
+
+```sh
+pnpm --filter @instafix/api whatsapp:diagnose
+pnpm --filter @instafix/api whatsapp:diagnose --to +5939XXXXXXXX --send   # envío real de la plantilla OTP
+```
+
+Revisa variables, conexión guardada, Partner Key y WABAs de la cuenta (`GET /clients`) y, con `--send`, envía un código de prueba mostrando el error exacto de WasapFlow/Meta. No imprime claves ni códigos. Los fallos también quedan en Administración → Comunicaciones y en la consola de la API (`WhatsApp OTP no enviado: …`).
+
+**WABA registrada directamente en WasapFlow** (panel o `POST /clients/register`): configura `WASAPFLOW_WABA_ID` con su ID. Al arrancar, y antes de cada envío si hace falta, Instafix confirma en `GET /clients` que pertenece a tu partner y está activa, y la guarda como conexión. No hace falta repetir el alta con el botón de Administración.
+
 ## Conectar el número sin quitarlo de la aplicación
 
 1. Configura Partner Key y Webhook Secret en el servidor; deja `WHATSAPP_ENABLED=false`.

@@ -45,7 +45,7 @@ async function main() {
     );
     return;
   }
-  await requireConnectedWaba();
+  await requireConnectedWaba(new WasapFlowClient());
   const id = await new WhatsAppService(new WasapFlowClient()).replyText(phone, text);
   console.log(
     `WasapFlow aceptó el mensaje: ${id}. Comprueba la entrega en el teléfono y en el panel.`,

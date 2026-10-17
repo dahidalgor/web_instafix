@@ -40,8 +40,13 @@ export type VerificationTicket = {
 };
 
 export class OtpDeliveryError extends HttpException {
-  constructor() {
-    super('No pudimos enviar el código por WhatsApp. Inténtalo de nuevo en unos minutos.', 503);
+  constructor(reason?: string) {
+    // En desarrollo se muestra la causa para corregirla; en producción, solo el mensaje general.
+    super(
+      'No pudimos enviar el código por WhatsApp. Inténtalo de nuevo en unos minutos.' +
+        (reason && process.env.NODE_ENV !== 'production' ? ` [Causa: ${reason}]` : ''),
+      503,
+    );
   }
 }
 export class OtpRateLimitError extends HttpException {
@@ -160,7 +165,10 @@ export class VerificationService {
         error: error instanceof ProviderError ? error.message : 'Error inesperado al enviar',
         userId: input.userId,
       });
-      throw new OtpDeliveryError();
+      const reason = error instanceof ProviderError ? error.message : 'Error inesperado al enviar';
+      // Sin código, teléfono completo ni credenciales: solo la causa del proveedor.
+      console.error(`WhatsApp OTP no enviado: ${reason}`);
+      throw new OtpDeliveryError(reason);
     }
   }
 
