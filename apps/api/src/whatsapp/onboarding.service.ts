@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { db } from '../database/client';
@@ -7,7 +7,7 @@ import { WasapFlowClient } from './wasapflow.client';
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 @Injectable()
 export class WhatsAppOnboardingService {
-  constructor(private readonly bridge: WasapFlowClient) {}
+  constructor(@Inject(WasapFlowClient) private readonly bridge: WasapFlowClient) {}
   async start(userId: string) {
     const state = randomBytes(32).toString('hex');
     const session = await this.bridge.createConnectSession(state);

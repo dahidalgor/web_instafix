@@ -1,63 +1,116 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 
-type MailStatus = { configured: boolean; missing: string[]; validPort: boolean };
+type LogRow = {
+  channel: string;
+  provider: string;
+  kind: string;
+  recipient: string;
+  status: string;
+  providerMessageId: string | null;
+  error: string | null;
+  createdAt: string;
+};
+type MailStatus = {
+  configured: boolean;
+  missing: string[];
+  validPort: boolean;
+  provider: string;
+  replyTo: boolean;
+  appointmentEmails: boolean;
+  recent: LogRow[];
+};
 export function AdminEmail() {
   const [status, setStatus] = useState<MailStatus | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
+  const [to, setTo] = useState('');
+  const load = () =>
     api<MailStatus>('admin/email/status')
       .then(setStatus)
       .catch((e) => setMessage(e.message));
+  useEffect(() => {
+    void load();
   }, []);
-  async function verify() {
+  async function run(path: string, body?: unknown) {
     setBusy(true);
     setMessage('');
     try {
-      const result = await api<{ message: string }>('admin/email/verify', { method: 'POST' });
+      const result = await api<{ message: string }>(path, {
+        method: 'POST',
+        body: body ? JSON.stringify(body) : undefined,
+      });
       setMessage(result.message);
+      await load();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'No se pudo comprobar');
+      setMessage(e instanceof Error ? e.message : 'No se pudo completar');
     } finally {
       setBusy(false);
     }
   }
   return (
     <section className="editor">
-      <h2>Correo de verificación</h2>
+      <h2>Comunicaciones</h2>
       <p>
-        Para enviar códigos desde instafix.ec, conecta un proveedor de correo. El dominio por sí
-        solo no envía mensajes.
+        Instafix envía sus correos por Brevo: verificación de correo, recuperación de contraseña y
+        avisos de citas. Cal.com solo gestiona la agenda.
       </p>
-      <ol>
-        <li>Crea una cuenta con un proveedor que permita enviar por SMTP.</li>
-        <li>Verifica instafix.ec añadiendo en su DNS los registros que te indique el proveedor.</li>
-        <li>
-          Configura en el servidor su host, puerto, usuario, contraseña y remitente autorizado.
-          Reinicia la API.
-        </li>
-        <li>
-          Comprueba la conexión y registra una cuenta de prueba con un correo al que tengas acceso.
-        </li>
-      </ol>
       {status && (
         <>
           <strong>
-            {status.configured ? 'Configuración presente' : 'Pendiente de configurar'}
+            {status.configured
+              ? `Correo configurado (${status.provider})`
+              : 'Correo pendiente de configurar'}
           </strong>
           {!!status.missing.length && <p className="small">Faltan: {status.missing.join(', ')}</p>}
           {!status.validPort && (
             <p role="alert">Usa el puerto SMTP indicado por tu proveedor: 465 o 587.</p>
           )}
-          <button disabled={busy || !status.configured} onClick={verify}>
+          <p className="small">
+            Reply-To{' '}
+            {status.replyTo ? 'configurado' : 'sin configurar (las respuestas van al remitente)'}.
+            Avisos de citas por correo:{' '}
+            {status.appointmentEmails
+              ? 'activados'
+              : 'desactivados (APPOINTMENT_EMAILS_ENABLED=false hasta desactivar los correos de Cal.com)'}
+            .
+          </p>
+          <button disabled={busy || !status.configured} onClick={() => run('admin/email/verify')}>
             {busy ? 'Comprobando…' : 'Comprobar conexión sin enviar correo'}
           </button>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run('admin/email/test', { email: to });
+            }}
+          >
+            <label>
+              Enviar correo de prueba a un buzón propio
+              <input type="email" required value={to} onChange={(e) => setTo(e.target.value)} />
+            </label>
+            <button disabled={busy || !status.configured}>Enviar prueba real</button>
+          </form>
+          <p className="small">
+            «Aceptado» significa que Brevo recibió el mensaje. La llegada a la bandeja se comprueba
+            en el buzón y en los eventos de Brevo.
+          </p>
+          <h3>Últimos envíos</h3>
+          {!status.recent.length && <p className="small">Todavía no hay envíos registrados.</p>}
+          <ul className="comm-log">
+            {status.recent.map((row, i) => (
+              <li key={i}>
+                <strong>{row.status === 'ACCEPTED' ? '✓ Aceptado' : '✕ Fallido'}</strong> ·{' '}
+                {row.channel} · {row.kind} · {row.recipient} ·{' '}
+                {new Date(row.createdAt).toLocaleString('es-EC')}
+                {row.error && <span> · {row.error}</span>}
+              </li>
+            ))}
+          </ul>
         </>
       )}
       <p className="small">
-        Esta pantalla nunca muestra ni guarda contraseñas. Los códigos siguen caducando a los 10
-        minutos y son de un solo uso.
+        Esta pantalla nunca muestra contraseñas, códigos ni tokens. Los destinatarios aparecen
+        enmascarados.
       </p>
       {message && <p role="status">{message}</p>}
     </section>

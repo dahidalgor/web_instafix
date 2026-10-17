@@ -26,6 +26,17 @@ La Partner Key viene del panel de WasapFlow y se transmite exclusivamente en `x-
 
 `WASAPFLOW_WABA_ID` es opcional: limita qué WABA puede conectarse. La WABA operativa se persiste en `WhatsAppConnection` al completar el onboarding. Poner un ID en el entorno **no activa** una conexión sin verificar. No necesitas tokens, App Secret ni Phone Number ID de Meta en Instafix.
 
+## Diagnóstico de envíos
+
+```sh
+pnpm --filter @instafix/api whatsapp:diagnose
+pnpm --filter @instafix/api whatsapp:diagnose --to +5939XXXXXXXX --send   # envío real de la plantilla OTP
+```
+
+Revisa variables, conexión guardada, Partner Key y WABAs de la cuenta (`GET /clients`) y, con `--send`, envía un código de prueba mostrando el error exacto de WasapFlow/Meta. No imprime claves ni códigos. Los fallos también quedan en Administración → Comunicaciones y en la consola de la API (`WhatsApp OTP no enviado: …`).
+
+**WABA registrada directamente en WasapFlow** (panel o `POST /clients/register`): configura `WASAPFLOW_WABA_ID` con su ID. Al arrancar, y antes de cada envío si hace falta, Instafix confirma en `GET /clients` que pertenece a tu partner y está activa, y la guarda como conexión. No hace falta repetir el alta con el botón de Administración.
+
 ## Conectar el número sin quitarlo de la aplicación
 
 1. Configura Partner Key y Webhook Secret en el servidor; deja `WHATSAPP_ENABLED=false`.
@@ -36,6 +47,12 @@ La Partner Key viene del panel de WasapFlow y se transmite exclusivamente en `x-
 6. El panel mostrará **Conectado con Coexistence**. Confirma que sigues enviando manualmente desde tu teléfono y que aparece la actividad como **WhatsApp Business App**. Verifica la sincronización inicial el mismo día; el proveedor documenta límites temporales para iniciarla. Instafix no ejecuta operaciones de desconexión ni re-registro para forzarla.
 
 El enlace dura 30 minutos; WasapFlow admite finalizar un flujo abierto a tiempo durante otros 30 minutos. Cerrar/cancelar la ventana permite repetir con un nuevo estado. Solo se guarda el hash del estado, vinculado al administrador; no el token del enlace.
+
+## Plantilla de verificación (OTP)
+
+La verificación de cuentas, la recuperación de contraseña y el cambio de número usan una plantilla de categoría **AUTHENTICATION** (`instafix_codigo_verificacion`, idioma `es`, botón «Copiar código», caducidad 10 minutos, recomendación de seguridad activada). Meta fija su texto. Configura `WHATSAPP_TEMPLATE_OTP` y `WHATSAPP_OTP_ENABLED=true` cuando esté aprobada. Es independiente de `WHATSAPP_ENABLED`, que controla los avisos de citas. Detalles en [Comunicaciones](communications.md).
+
+Plantillas UTILITY adicionales, opcionales (sin plantilla configurada no se envía el aviso): `instafix_recordatorio_visita` (`WHATSAPP_TEMPLATE_VISIT_REMINDER`, sustituye al recordatorio del mismo día e incluye la hora), `instafix_cita_reprogramada`, `instafix_cita_cancelada`, `instafix_tecnico_asignado` y `instafix_tecnico_en_camino`. Sus cuerpos están en [whatsapp-templates.json](whatsapp-templates.json).
 
 ## Textos y plantillas conservados
 

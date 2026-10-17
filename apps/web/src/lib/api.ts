@@ -2,10 +2,21 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    /** Cuerpo de error del backend: código (p. ej. PHONE_UNVERIFIED) y datos asociados. */
+    public body: Record<string, any> | null = null,
   ) {
     super(message);
   }
+  get code(): string | undefined {
+    return typeof this.body?.code === 'string' ? this.body.code : undefined;
+  }
 }
+const sessionPaths = [
+  'auth/login',
+  'auth/phone/verify',
+  'auth/logout',
+  'auth/password-reset/complete',
+];
 export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/v1/${path}`, {
     ...options,
@@ -13,11 +24,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
   // El encabezado se sincroniza tras cambios de sesión y sesiones caducadas.
-  if (
-    (response.ok &&
-      ['auth/login', 'auth/verify-email', 'auth/logout', 'auth/reset-password'].includes(path)) ||
-    response.status === 401
-  )
+  if ((response.ok && sessionPaths.includes(path)) || response.status === 401)
     window.dispatchEvent(new Event('instafix:session-change'));
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -26,6 +33,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
         ? body.message
         : 'No pudimos completar la operación. Revisa los datos o la conexión.',
       response.status,
+      body && typeof body === 'object' ? body : null,
     );
   }
   return response.json();

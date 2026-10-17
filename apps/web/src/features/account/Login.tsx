@@ -1,41 +1,85 @@
-import type { AccountUser } from '@instafix/contracts';
-import {
-  getCountries,
-  getCountryCallingCode,
-  normalizePhone,
-  type CountryCode,
-} from '@instafix/contracts/src/phone';
-import { useState, type FormEvent } from 'react';
-import { api } from '../../lib/api';
+import type { AccountUser, VerificationTicket } from '@instafix/contracts';
+import { type CountryCode, normalizePhone } from '@instafix/contracts/src/phone';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { api, ApiError } from '../../lib/api';
+import { PhoneField } from './PhoneField';
+import { PhoneVerification } from './PhoneVerification';
 
-const names = new Intl.DisplayNames(['es'], { type: 'region' });
-const countries = getCountries().sort((a, b) =>
-  (names.of(a) ?? a).localeCompare(names.of(b) ?? b, 'es'),
-);
-const flag = (country: string) =>
-  [...country].map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0))).join('');
-type Mode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
+type Mode =
+  | 'login'
+  | 'register'
+  | 'verify'
+  | 'forgot'
+  | 'forgot-whatsapp'
+  | 'forgot-email'
+  | 'reset-code'
+  | 'email-sent'
+  | 'new-password';
 
 export function Login({
   admin = false,
   onLogin,
+  resetToken: initialResetToken,
 }: {
   admin?: boolean;
   onLogin: (user: AccountUser) => void;
+  /** Token recibido en el enlace de recuperación por correo. */
+  resetToken?: string;
 }) {
-  const [mode, setMode] = useState<Mode>('login');
+  const [mode, setMode] = useState<Mode>(initialResetToken ? 'new-password' : 'login');
   const [country, setCountry] = useState<CountryCode>('EC');
-  const [challengeId, setChallengeId] = useState('');
+  const [ticket, setTicket] = useState<VerificationTicket | null>(null);
+  const [credentials, setCredentials] = useState<{ phone: string; password: string } | null>(null);
+  const [resetToken, setResetToken] = useState(initialResetToken || '');
   const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<ReactNode>('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const [resendAfter, setResendAfter] = useState(0);
+  // Segundos hasta poder pedir otro código (límite de 60 s por número).
+  const [wait, setWait] = useState(0);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const timer = window.setTimeout(() => setWait((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [wait]);
   const changeMode = (next: Mode) => {
     setMode(next);
     setError('');
     setNotice('');
   };
+  const phoneFrom = (data: FormData) => {
+    // Ayuda inmediata en el navegador; el backend vuelve a normalizar y decide.
+    const raw = String(data.get('phone') ?? '');
+    return normalizePhone(raw, country) ?? raw;
+  };
+  const toVerification = (next: VerificationTicket | null, message = '') => {
+    setTicket(next);
+    setMode('verify');
+    setError('');
+    setNotice(message);
+  };
+
+  async function login(phone: string, password: string) {
+    try {
+      onLogin(
+        await api<AccountUser>('auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ phone, password }),
+        }),
+      );
+      return null;
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'PHONE_UNVERIFIED') {
+        setCredentials({ phone, password });
+        return {
+          verification: (e.body?.verification ?? null) as VerificationTicket | null,
+          deliveryError: (e.body?.deliveryError ?? '') as string,
+        };
+      }
+      throw e;
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -43,260 +87,291 @@ export function Login({
     const data = new FormData(event.currentTarget);
     setBusy(true);
     try {
-      if (mode === 'login' || mode === 'register') {
-        const phone = normalizePhone(String(data.get('phone') ?? ''), country);
-        if (!phone) throw new Error('Revisa tu número y el país seleccionado.');
-        const payload = {
-          phone,
-          password: data.get('password'),
-          ...(mode === 'register'
-            ? { firstName: data.get('firstName'), lastName: data.get('lastName'), email }
-            : {}),
-        };
-        if (mode === 'login')
-          onLogin(
-            await api<AccountUser>('auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+      if (mode === 'login') {
+        const pending = await login(phoneFrom(data), String(data.get('password') ?? ''));
+        if (pending)
+          toVerification(
+            pending.verification,
+            pending.deliveryError || 'Verifica tu WhatsApp para continuar.',
           );
-        else {
-          const result = await api<{ challengeId: string }>('auth/register', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
-          setChallengeId(result.challengeId);
-          setMode('verify');
-          setResendAfter(Date.now() + 60000);
+      } else if (mode === 'register') {
+        const payload = {
+          firstName: data.get('firstName'),
+          lastName: data.get('lastName'),
+          email,
+          phone: phoneFrom(data),
+          password: data.get('password'),
+        };
+        try {
+          toVerification(
+            await api<VerificationTicket>('auth/register', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            }),
+          );
+        } catch (e) {
+          if (e instanceof ApiError && e.code === 'PHONE_IN_USE') {
+            setError(
+              <>
+                {e.message}{' '}
+                <button type="button" className="auth-link" onClick={() => changeMode('login')}>
+                  Iniciar sesión
+                </button>{' '}
+                ·{' '}
+                <button type="button" className="auth-link" onClick={() => changeMode('forgot')}>
+                  Recuperar contraseña
+                </button>
+              </>,
+            );
+            return;
+          }
+          throw e;
         }
-      } else if (mode === 'forgot') {
-        const result = await api<{ challengeId: string }>('auth/forgot-password', {
+      } else if (mode === 'forgot-whatsapp') {
+        const result = await api<VerificationTicket & { message: string }>(
+          'auth/password-reset/whatsapp',
+          { method: 'POST', body: JSON.stringify({ phone: phoneFrom(data) }) },
+        );
+        setTicket(result);
+        setMode('reset-code');
+        setNotice(result.message);
+      } else if (mode === 'forgot-email') {
+        const result = await api<{ message: string }>('auth/password-reset/email', {
           method: 'POST',
           body: JSON.stringify({ email }),
         });
-        setChallengeId(result.challengeId);
-        setMode('reset');
-        setResendAfter(Date.now() + 60000);
-      } else if (mode === 'verify') {
-        onLogin(
-          await api<AccountUser>('auth/verify-email', {
-            method: 'POST',
-            body: JSON.stringify({ challengeId, code: data.get('code') }),
-          }),
-        );
-      } else {
+        setMode('email-sent');
+        setNotice(result.message);
+      } else if (mode === 'new-password') {
         if (data.get('password') !== data.get('confirmPassword'))
           throw new Error('Las contraseñas no coinciden.');
-        await api('auth/reset-password', {
+        await api('auth/password-reset/complete', {
           method: 'POST',
-          body: JSON.stringify({
-            challengeId,
-            code: data.get('code'),
-            password: data.get('password'),
-          }),
+          body: JSON.stringify({ token: resetToken, password: data.get('password') }),
         });
+        if (window.location.hash.startsWith('#restablecer'))
+          history.replaceState(null, '', '#cuenta');
+        setResetToken('');
         setMode('login');
         setNotice('Contraseña actualizada. Ya puedes iniciar sesión.');
       }
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'OTP_RATE_LIMIT') {
+        setWait(Number(e.body?.retryAfter) || 60);
+        setError(
+          'Ya pediste un código para este número hace muy poco. Si tu WhatsApp está verificado, revisa tus mensajes; si no, podrás pedir otro cuando termine la cuenta atrás.',
+        );
+        return;
+      }
       setError(e instanceof Error ? e.message : 'No se pudo completar la solicitud.');
     } finally {
       setBusy(false);
     }
   }
-  async function resend() {
-    setError('');
-    setNotice('');
-    if (Date.now() < resendAfter) {
-      setError('Espera un minuto entre envíos.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await api<{ challengeId: string }>('auth/resend-code', {
-        method: 'POST',
-        body: JSON.stringify({ challengeId }),
-      });
-      setChallengeId(result.challengeId);
-      setResendAfter(Date.now() + 60000);
-      setNotice('Si el correo corresponde a la solicitud, recibirás un nuevo código.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo reenviar.');
-    } finally {
-      setBusy(false);
-    }
-  }
-  const titles = {
+
+  const titles: Partial<Record<Mode, string>> = {
     login: 'Iniciar sesión',
     register: 'Crea tu cuenta',
     forgot: 'Recupera tu acceso',
-    verify: 'Verifica tu correo',
-    reset: 'Nueva contraseña',
+    'forgot-whatsapp': 'Recuperar por WhatsApp',
+    'forgot-email': 'Recuperar por correo',
+    'email-sent': 'Revisa tu correo',
+    'new-password': 'Nueva contraseña',
   };
-  const labels = {
+  const intros: Partial<Record<Mode, string>> = {
+    login: 'Tus citas, servicios y garantías en un solo lugar.',
+    register: 'Verificaremos tu número por WhatsApp para activar tu cuenta.',
+    forgot: 'Elige cómo quieres recuperar tu cuenta. Solo funcionan los canales ya verificados.',
+    'forgot-whatsapp': 'Escribe el WhatsApp verificado de tu cuenta.',
+    'forgot-email': 'Escribe el correo verificado de tu cuenta.',
+    'new-password': 'Elige una contraseña nueva de al menos 12 caracteres.',
+  };
+  const labels: Partial<Record<Mode, string>> = {
     login: 'Entrar',
     register: 'Crear cuenta',
-    forgot: 'Enviar código',
-    verify: 'Verificar cuenta',
-    reset: 'Guardar contraseña',
+    'forgot-whatsapp': 'Enviar código',
+    'forgot-email': 'Enviar enlace',
+    'new-password': 'Guardar contraseña',
   };
+  const form = !['verify', 'reset-code', 'forgot', 'email-sent'].includes(mode);
+
   return (
     <section className="account-panel account-login">
       <div className="account-login-card">
         <p className="eyebrow">{admin ? 'ACCESO RESTRINGIDO' : 'TU ESPACIO INSTAFIX'}</p>
-        <h1>{titles[mode]}</h1>
-        <p className="account-login-intro">
-          {mode === 'verify'
-            ? `Enviamos un código a ${email}. Caduca en 10 minutos.`
-            : mode === 'reset'
-              ? 'Si el correo está verificado en una cuenta, recibirás un código válido durante 10 minutos. Revisa también spam.'
-              : mode === 'forgot'
-                ? 'Usa el correo verificado de tu cuenta para recibir un código.'
-                : 'Tus citas, servicios y garantías en un solo lugar.'}
-        </p>
-        <form key={mode} onSubmit={submit}>
-          {mode === 'register' && (
-            <div className="form-row">
-              <label>
-                Nombre
-                <input
-                  name="firstName"
-                  autoComplete="given-name"
-                  required
-                  minLength={2}
-                  maxLength={50}
-                />
-              </label>
-              <label>
-                Apellido
-                <input
-                  name="lastName"
-                  autoComplete="family-name"
-                  required
-                  minLength={2}
-                  maxLength={50}
-                />
-              </label>
+        {mode === 'verify' && (
+          <>
+            {notice && (
+              <p role="status" className="small otp-notice">
+                {notice}
+              </p>
+            )}
+            <PhoneVerification<AccountUser>
+              key={ticket?.verificationId ?? 'pending'}
+              ticket={ticket}
+              verifyPath="auth/phone/verify"
+              resendPath="auth/phone/resend"
+              onVerified={onLogin}
+              onResendWithoutTicket={async () => {
+                if (!credentials) return null;
+                const pending = await login(credentials.phone, credentials.password);
+                if (pending?.deliveryError) throw new Error(pending.deliveryError);
+                return pending?.verification ?? null;
+              }}
+            />
+          </>
+        )}
+        {mode === 'reset-code' && (
+          <>
+            {notice && (
+              <p role="status" className="small otp-notice">
+                {notice}
+              </p>
+            )}
+            <PhoneVerification<{ resetToken: string }>
+              key={ticket?.verificationId ?? 'pending'}
+              title="Código de recuperación"
+              ticket={ticket}
+              verifyPath="auth/password-reset/whatsapp/verify"
+              resendPath="auth/phone/resend"
+              submitLabel="Continuar"
+              onVerified={(result) => {
+                setResetToken(result.resetToken);
+                changeMode('new-password');
+              }}
+            />
+          </>
+        )}
+        {mode === 'forgot' && (
+          <>
+            <h1>{titles.forgot}</h1>
+            <p className="account-login-intro">{intros.forgot}</p>
+            <div className="recovery-options">
+              <button className="button" onClick={() => changeMode('forgot-whatsapp')}>
+                Recuperar por WhatsApp
+              </button>
+              <button className="button secondary" onClick={() => changeMode('forgot-email')}>
+                Recuperar por correo
+              </button>
             </div>
-          )}
-          {(mode === 'register' || mode === 'forgot') && (
-            <label>
-              Correo electrónico
-              <input
-                name="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                maxLength={254}
-                placeholder="nombre@correo.com"
-              />
-            </label>
-          )}
-          {(mode === 'login' || mode === 'register') && (
-            <div className="auth-phone-field">
-              <label htmlFor="auth-phone">Número de teléfono</label>
-              <div className="auth-phone-control">
-                <div className="auth-country">
-                  <span aria-hidden="true">
-                    {flag(country)} +{getCountryCallingCode(country)}{' '}
-                    <span className="auth-country-chevron">⌄</span>
-                  </span>
-                  <select
-                    name="country"
-                    aria-label="País y código"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value as CountryCode)}
-                    autoComplete="tel-country-code"
-                  >
-                    {countries.map((code) => (
-                      <option key={code} value={code}>
-                        {flag(code)} {names.of(code)} (+{getCountryCallingCode(code)})
-                      </option>
-                    ))}
-                  </select>
+          </>
+        )}
+        {mode === 'email-sent' && (
+          <>
+            <h1>{titles['email-sent']}</h1>
+            <p role="status" className="account-login-intro">
+              {notice} El enlace caduca en 30 minutos. Revisa también la carpeta de spam.
+            </p>
+          </>
+        )}
+        {form && (
+          <>
+            <h1>{titles[mode]}</h1>
+            <p className="account-login-intro">{intros[mode]}</p>
+            <form key={mode} onSubmit={submit}>
+              {mode === 'register' && (
+                <div className="form-row">
+                  <label>
+                    Nombre
+                    <input
+                      name="firstName"
+                      autoComplete="given-name"
+                      required
+                      minLength={2}
+                      maxLength={50}
+                    />
+                  </label>
+                  <label>
+                    Apellido
+                    <input
+                      name="lastName"
+                      autoComplete="family-name"
+                      required
+                      minLength={2}
+                      maxLength={50}
+                    />
+                  </label>
                 </div>
-                <input
+              )}
+              {(mode === 'register' || mode === 'forgot-email') && (
+                <label>
+                  Correo electrónico
+                  <input
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    maxLength={254}
+                    placeholder="nombre@correo.com"
+                  />
+                </label>
+              )}
+              {(mode === 'login' || mode === 'register' || mode === 'forgot-whatsapp') && (
+                <PhoneField
                   id="auth-phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="username"
-                  placeholder="987654321"
-                  required
-                  maxLength={30}
+                  label={mode === 'login' ? 'Número de WhatsApp' : 'WhatsApp'}
+                  country={country}
+                  onCountry={setCountry}
+                  autoComplete={mode === 'login' ? 'username' : 'tel-national'}
                 />
+              )}
+              {(mode === 'login' || mode === 'register' || mode === 'new-password') && (
+                <label>
+                  {mode === 'new-password' ? 'Nueva contraseña' : 'Contraseña'}
+                  <input
+                    name="password"
+                    type="password"
+                    minLength={mode === 'login' ? 1 : 12}
+                    maxLength={128}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    required
+                  />
+                </label>
+              )}
+              {mode === 'new-password' && (
+                <label>
+                  Repite la contraseña
+                  <input
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={128}
+                  />
+                </label>
+              )}
+              {mode === 'register' && (
+                <p className="small">
+                  Usa al menos 12 caracteres. Te enviaremos un código por WhatsApp; el correo podrás
+                  verificarlo después desde Mi cuenta.
+                </p>
+              )}
+              {mode === 'login' && (
+                <button type="button" className="auth-link" onClick={() => changeMode('forgot')}>
+                  ¿Olvidaste tu contraseña?
+                </button>
+              )}
+              {error && (
+                <p role="alert" className="error">
+                  {error}
+                </p>
+              )}
+              {notice && (
+                <p role="status" className="small">
+                  {notice}
+                </p>
+              )}
+              <div className="auth-actions">
+                <button className="button" disabled={busy || wait > 0}>
+                  {busy ? 'Procesando…' : wait > 0 ? `Espera ${wait} s` : labels[mode]}
+                </button>
               </div>
-            </div>
-          )}
-          {(mode === 'verify' || mode === 'reset') && (
-            <label>
-              Código de verificación
-              <input
-                className="auth-code"
-                name="code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]{6}"
-                minLength={6}
-                maxLength={6}
-                required
-                placeholder="000000"
-              />
-            </label>
-          )}
-          {(mode === 'login' || mode === 'register' || mode === 'reset') && (
-            <label>
-              {mode === 'reset' ? 'Nueva contraseña' : 'Contraseña'}
-              <input
-                name="password"
-                type="password"
-                minLength={12}
-                maxLength={128}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                required
-              />
-            </label>
-          )}
-          {mode === 'reset' && (
-            <label>
-              Repite la contraseña
-              <input
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={12}
-                maxLength={128}
-              />
-            </label>
-          )}
-          {(mode === 'register' || mode === 'reset') && (
-            <p className="small">Usa al menos 12 caracteres para tu contraseña.</p>
-          )}
-          {mode === 'login' && (
-            <button type="button" className="auth-link" onClick={() => changeMode('forgot')}>
-              ¿Olvidaste tu contraseña?
-            </button>
-          )}
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
-          {notice && (
-            <p role="status" className="small">
-              {notice}
-            </p>
-          )}
-          <div className="auth-actions">
-            <button className="button" disabled={busy}>
-              {busy ? 'Procesando…' : labels[mode]}
-            </button>
-          </div>
-          {(mode === 'verify' || mode === 'reset') && (
-            <button className="auth-link" type="button" disabled={busy} onClick={resend}>
-              Reenviar código
-            </button>
-          )}
-        </form>
+            </form>
+          </>
+        )}
       </div>
       <p className="account-login-switch">
         {mode === 'login' ? (

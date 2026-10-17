@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Req,
+  Inject,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { authenticated, checkOrigin } from '../auth/session';
@@ -15,10 +16,13 @@ import { calConfiguration, whatsappConfiguration } from './config';
 import { lockAppointment } from './queue';
 import { WhatsAppOnboardingService } from './onboarding.service';
 import { connectedWaba } from './connection';
+import { otpConfiguration } from './otp.provider';
 
 @Controller('api/v1/admin/whatsapp')
 export class WhatsAppAdminController {
-  constructor(private readonly onboarding: WhatsAppOnboardingService) {}
+  constructor(
+    @Inject(WhatsAppOnboardingService) private readonly onboarding: WhatsAppOnboardingService,
+  ) {}
   @Post('connect/session') @Header('Cache-Control', 'no-store') async connect(@Req() req: Request) {
     checkOrigin(req);
     const user = await authenticated(req, true);
@@ -75,8 +79,12 @@ export class WhatsAppAdminController {
       whatsapp: {
         ...whatsappConfiguration(),
         connected: !!wabaId,
-        connectionMode: wabaId ? 'coexistence' : null,
+        connectionMode: wabaId
+          ? ((await db.whatsAppConnection.findUnique({ where: { id: 'main' } }))?.connectionMode ??
+            null)
+          : null,
       },
+      otp: otpConfiguration(),
       cal: calConfiguration(),
       jobs,
       issues,

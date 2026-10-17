@@ -136,6 +136,19 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
       setBusy(false);
     }
   }
+  async function onTheWay() {
+    if (!id) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await api(`admin/appointments/${id}/on-the-way`, { method: 'POST' });
+      setMessage('Aviso «técnico en camino» encolado para WhatsApp.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo enviar el aviso');
+    } finally {
+      setBusy(false);
+    }
+  }
   async function linkAccount() {
     if (!id || !linkUserId || !identityVerified) return;
     setBusy(true);
@@ -162,8 +175,8 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
         cuenta.
       </p>
       <p className="small">
-        Las reservas de Cal.com se sincronizan automáticamente al activar la integración. Reprograma
-        o cancela esas reservas en Cal.com.
+        Las reservas se crean en Cal.com desde la web de Instafix. Si reprogramas o cancelas una
+        reserva en el panel de Cal.com, el webhook actualiza la cita e Instafix avisa al cliente.
       </p>
       {recoverable > 0 && (
         <p>
@@ -373,6 +386,11 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
                 Ver ubicación del cliente
               </a>
             ))}
+          {id && ['CONFIRMED', 'IN_PROGRESS'].includes(draft.status) && (
+            <button type="button" disabled={busy} onClick={onTheWay}>
+              Avisar «técnico en camino» por WhatsApp
+            </button>
+          )}
           <button disabled={busy} className="button">
             {busy ? 'Guardando…' : 'Guardar cita'}
           </button>

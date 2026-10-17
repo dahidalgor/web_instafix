@@ -43,6 +43,7 @@ test(
             emailVerifiedAt: new Date(),
             role,
             passwordHash: 'not-a-login',
+            phoneVerifiedAt: new Date(),
           },
         });
         ids.push(user.id);

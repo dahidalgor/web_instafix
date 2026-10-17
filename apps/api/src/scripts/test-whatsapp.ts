@@ -1,4 +1,6 @@
+import { randomInt } from 'node:crypto';
 import { parseArgs } from 'node:util';
+import { WasapFlowOtpProvider } from '../whatsapp/otp.provider';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { db } from '../database/client';
 import { requireConnectedWaba } from '../whatsapp/connection';
@@ -8,11 +10,33 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 // Proceso independiente: nunca inicia workers ni procesa citas de otros clientes.
 async function main() {
   const { values } = parseArgs({
-    options: { to: { type: 'string' }, send: { type: 'boolean', default: false } },
+    options: {
+      to: { type: 'string' },
+      send: { type: 'boolean', default: false },
+      otp: { type: 'boolean', default: false },
+    },
   });
   const phone = normalizePhone(values.to || '', 'EC');
   if (!phone || phone === (process.env.WHATSAPP_BUSINESS_PHONE || '+593984703819'))
     throw new Error('Indica --to con tu teléfono de prueba, distinto al número empresarial');
+  if (values.otp) {
+    // Prueba de la plantilla AUTHENTICATION: código aleatorio que no valida ninguna cuenta.
+    console.log(
+      `Destinatario de prueba: ${phone}\nPlantilla OTP: ${process.env.WHATSAPP_TEMPLATE_OTP || '(sin configurar)'}`,
+    );
+    if (!values.send) {
+      console.log('Simulación: no se envió nada. Añade --send con WHATSAPP_OTP_ENABLED=true.');
+      return;
+    }
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const { messageId } = await new WasapFlowOtpProvider(
+      new WasapFlowClient(),
+    ).sendAuthenticationCode(phone, code);
+    console.log(
+      `WasapFlow aceptó la plantilla OTP: ${messageId}. Comprueba la recepción en el teléfono y el estado en el panel.`,
+    );
+    return;
+  }
   const text = 'Prueba de integración de InstaFix ✅ Este mensaje no corresponde a una cita real.';
   console.log(`Destinatario de prueba: ${phone}\n${text}`);
   if (!values.send) {
@@ -21,7 +45,7 @@ async function main() {
     );
     return;
   }
-  await requireConnectedWaba();
+  await requireConnectedWaba(new WasapFlowClient());
   const id = await new WhatsAppService(new WasapFlowClient()).replyText(phone, text);
   console.log(
     `WasapFlow aceptó el mensaje: ${id}. Comprueba la entrega en el teléfono y en el panel.`,
