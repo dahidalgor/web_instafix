@@ -3,6 +3,8 @@ import { ProviderError } from '../integrations/provider-error';
 import type { WasapFlowClient } from './wasapflow.client';
 
 const configuredId = () => process.env.WASAPFLOW_WABA_ID?.trim() || null;
+/** Un WABA ID es numérico. Otro valor (p. ej. la Partner Key pegada por error) nunca se repite. */
+export const validWabaId = (value: string | null) => !value || /^\d{5,25}$/.test(value);
 
 /** WABA con la que opera Instafix, ya verificada y guardada en PostgreSQL. */
 export async function connectedWaba() {
@@ -25,6 +27,11 @@ export async function connectedWaba() {
  */
 export async function adoptConfiguredWaba(bridge: WasapFlowClient) {
   const wabaId = configuredId();
+  if (!validWabaId(wabaId))
+    throw new ProviderError(
+      'WASAPFLOW_WABA_ID no es un ID de WABA (debe ser solo números). Revisa que no contenga la Partner Key.',
+      'FAILED',
+    );
   if (!wabaId)
     throw new ProviderError(
       'No hay WABA conectada: configura WASAPFLOW_WABA_ID o conecta desde Administración → WhatsApp',
