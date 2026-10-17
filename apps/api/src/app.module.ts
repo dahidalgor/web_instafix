@@ -4,7 +4,8 @@ import { SiteController } from './site/site.controller';
 import { AnalyticsController } from './analytics/analytics.controller';
 import { BookingController } from './booking/booking.controller';
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ProviderErrorFilter } from './common/provider-error.filter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountController } from './account/account.controller';
 import { SecurityController } from './account/security.controller';
@@ -45,6 +46,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     VerificationService,
     NotificationWorker,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_FILTER, useClass: ProviderErrorFilter },
   ],
 })
 export class AppModule {}

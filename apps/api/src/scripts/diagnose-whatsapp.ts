@@ -93,7 +93,23 @@ async function main() {
     }
   } else info('Omitido: falta Partner Key o URL base');
 
-  console.log('\n4. Envío real de la plantilla OTP');
+  console.log('\n4. Alta de un número (Embedded Signup)');
+  if (key && base === BRIDGE_BASE) {
+    try {
+      const config = await bridge.signupConfig();
+      config.connection_mode === 'coexistence'
+        ? ok('Embedded Signup disponible en modo Coexistence')
+        : fail(
+            `Embedded Signup en modo «${String(config.connection_mode ?? 'sin definir')}»: activa Coexistence en WasapFlow para conectar el número sin quitarlo de la app`,
+          );
+    } catch (e) {
+      fail(
+        `No se pudo leer /embedded-signup/config: ${e instanceof ProviderError ? e.message : 'error de red'}`,
+      );
+    }
+  } else info('Omitido: falta Partner Key o URL base');
+
+  console.log('\n5. Envío real de la plantilla OTP');
   const phone = normalizePhone(values.to || '', 'EC');
   if (!values.to) info('Omitido. Añade --to +5939XXXXXXXX --send para enviar un código de prueba');
   else if (!phone) fail('--to no es un número válido');

@@ -92,27 +92,36 @@ export class WasapFlowClient {
     }
     return all;
   }
+  /** Configuración del alta alojada (modo de conexión que ofrece la cuenta de partner). */
+  async signupConfig(): Promise<Record<string, unknown>> {
+    return this.request('/embedded-signup/config');
+  }
   async createConnectSession(state: string) {
     // El hosting se encarga de Embedded Signup y Coexistence; no se manejan tokens Meta.
-    const config = await this.request('/embedded-signup/config');
+    const config = await this.signupConfig();
     if (config.connection_mode !== 'coexistence')
       throw new ProviderError(
-        'WasapFlow debe habilitar Coexistence antes de conectar el número',
+        `WasapFlow informa connection_mode=«${String(config.connection_mode ?? 'sin definir')}». Activa Coexistence en la configuración de Embedded Signup de WasapFlow para conectar el número sin quitarlo de WhatsApp Business App.`,
         'FAILED',
       );
     const data = z
-      .object({ connect_url: z.string().url(), expires_in: z.number().int().positive().max(3600) })
-      .parse(await this.request('/connect/session', { display_name: 'Instafix', state }));
-    const url = new URL(data.connect_url);
-    if (
-      url.origin !== BRIDGE_ORIGIN ||
-      url.pathname !== '/bridge/connect' ||
-      !url.searchParams.get('token') ||
-      [...url.searchParams.keys()].some((key) => key !== 'token') ||
-      data.connect_url.includes(process.env.WASAPFLOW_PARTNER_KEY!)
-    )
-      throw new ProviderError('WasapFlow devolvió un enlace de conexión no válido', 'FAILED');
-    return data;
+      .object({ connect_url: z.string().url(), expires_in: z.coerce.number().int().positive() })
+      .safeParse(await this.request('/connect/session', { display_name: 'Instafix', state }));
+    if (!data.success)
+      throw new ProviderError(
+        `WasapFlow respondió a /connect/session sin ${data.error.issues.map((i) => i.path.join('.')).join(', ')} válidos`,
+        'FAILED',
+      );
+    const url = new URL(data.data.connect_url);
+    // Seguridad: el popup solo puede abrir el dominio oficial y la URL nunca lleva la clave.
+    if (url.origin !== BRIDGE_ORIGIN)
+      throw new ProviderError(`El enlace de conexión no es de ${BRIDGE_ORIGIN}`, 'FAILED');
+    if (data.data.connect_url.includes(process.env.WASAPFLOW_PARTNER_KEY!.trim()))
+      throw new ProviderError(
+        'El enlace de conexión contiene la Partner Key; no se abrirá',
+        'FAILED',
+      );
+    return { connect_url: data.data.connect_url, expires_in: Math.min(data.data.expires_in, 7200) };
   }
   async verifyClient(wabaId: string) {
     // La lista verifica pertenencia al partner; el modo se exige también en el resultado del popup.
