@@ -1,8 +1,12 @@
 -- Aditiva: no elimina datos. EmailChallenge se conserva como historial.
-ALTER TABLE "Appointment" ADD COLUMN "source" TEXT NOT NULL DEFAULT 'CAL_EMBED',
-  ADD COLUMN "contactEmail" TEXT;
+-- Tolerante a bases locales donde alguna columna o tabla ya existía fuera de las migraciones.
+ALTER TABLE "Appointment" ADD COLUMN IF NOT EXISTS "source" TEXT,
+  ADD COLUMN IF NOT EXISTS "contactEmail" TEXT;
+UPDATE "Appointment" SET "source" = 'CAL_EMBED' WHERE "source" IS NULL;
+ALTER TABLE "Appointment" ALTER COLUMN "source" SET DEFAULT 'CAL_EMBED',
+  ALTER COLUMN "source" SET NOT NULL;
 
-CREATE TABLE "PhoneChallenge" (
+CREATE TABLE IF NOT EXISTS "PhoneChallenge" (
   "id" TEXT NOT NULL,
   "purpose" TEXT NOT NULL,
   "phone" TEXT NOT NULL,
@@ -22,10 +26,10 @@ CREATE TABLE "PhoneChallenge" (
   CONSTRAINT "PhoneChallenge_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "PhoneChallenge_purpose_check" CHECK ("purpose" IN ('PHONE_VERIFICATION', 'PASSWORD_RESET', 'PHONE_CHANGE'))
 );
-CREATE INDEX "PhoneChallenge_phone_createdAt_idx" ON "PhoneChallenge"("phone", "createdAt");
-CREATE INDEX "PhoneChallenge_userId_createdAt_idx" ON "PhoneChallenge"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "PhoneChallenge_phone_createdAt_idx" ON "PhoneChallenge"("phone", "createdAt");
+CREATE INDEX IF NOT EXISTS "PhoneChallenge_userId_createdAt_idx" ON "PhoneChallenge"("userId", "createdAt");
 
-CREATE TABLE "AuthToken" (
+CREATE TABLE IF NOT EXISTS "AuthToken" (
   "tokenHash" TEXT NOT NULL,
   "purpose" TEXT NOT NULL,
   "userId" TEXT NOT NULL,
@@ -38,9 +42,9 @@ CREATE TABLE "AuthToken" (
   CONSTRAINT "AuthToken_purpose_check" CHECK ("purpose" IN ('PASSWORD_RESET', 'EMAIL_VERIFICATION')),
   CONSTRAINT "AuthToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-CREATE INDEX "AuthToken_userId_purpose_createdAt_idx" ON "AuthToken"("userId", "purpose", "createdAt");
+CREATE INDEX IF NOT EXISTS "AuthToken_userId_purpose_createdAt_idx" ON "AuthToken"("userId", "purpose", "createdAt");
 
-CREATE TABLE "Notification" (
+CREATE TABLE IF NOT EXISTS "Notification" (
   "id" TEXT NOT NULL,
   "dedupeKey" TEXT NOT NULL,
   "channel" TEXT NOT NULL,
@@ -59,10 +63,10 @@ CREATE TABLE "Notification" (
   CONSTRAINT "Notification_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "Notification_appointmentId_fkey" FOREIGN KEY ("appointmentId") REFERENCES "Appointment"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-CREATE UNIQUE INDEX "Notification_dedupeKey_key" ON "Notification"("dedupeKey");
-CREATE INDEX "Notification_status_dueAt_idx" ON "Notification"("status", "dueAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "Notification_dedupeKey_key" ON "Notification"("dedupeKey");
+CREATE INDEX IF NOT EXISTS "Notification_status_dueAt_idx" ON "Notification"("status", "dueAt");
 
-CREATE TABLE "CommunicationLog" (
+CREATE TABLE IF NOT EXISTS "CommunicationLog" (
   "id" TEXT NOT NULL,
   "channel" TEXT NOT NULL,
   "provider" TEXT NOT NULL,
@@ -76,5 +80,5 @@ CREATE TABLE "CommunicationLog" (
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "CommunicationLog_pkey" PRIMARY KEY ("id")
 );
-CREATE INDEX "CommunicationLog_createdAt_idx" ON "CommunicationLog"("createdAt");
-CREATE INDEX "CommunicationLog_kind_createdAt_idx" ON "CommunicationLog"("kind", "createdAt");
+CREATE INDEX IF NOT EXISTS "CommunicationLog_createdAt_idx" ON "CommunicationLog"("createdAt");
+CREATE INDEX IF NOT EXISTS "CommunicationLog_kind_createdAt_idx" ON "CommunicationLog"("kind", "createdAt");
