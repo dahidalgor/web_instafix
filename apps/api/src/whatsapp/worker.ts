@@ -15,6 +15,25 @@ type Providers = {
   confirm: (uid: string) => Promise<void>;
 };
 
+/** Cada aviso solo es pertinente en ciertos estados; los obsoletos se cancelan sin enviar. */
+export function kindStillValid(kind: string, appointment: Appointment) {
+  switch (kind) {
+    case 'INITIAL':
+      return appointment.status === 'PENDING_LOCATION' && !appointment.locationReceivedAt;
+    case 'CAL_CONFIRM':
+      return appointment.status === 'PENDING_LOCATION' && Boolean(appointment.locationReceivedAt);
+    case 'CANCELLED':
+      return appointment.status === 'CANCELLED';
+    case 'RESCHEDULED':
+      return ['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status);
+    case 'TECHNICIAN_ASSIGNED':
+    case 'TECHNICIAN_ON_THE_WAY':
+      return ['CONFIRMED', 'IN_PROGRESS'].includes(appointment.status);
+    default:
+      return appointment.status === 'CONFIRMED';
+  }
+}
+
 export async function processJob(id: string, providers: Providers, now = new Date()) {
   const claimed = await db.automationJob.updateMany({
     where: { id, status: { in: ['PENDING', 'RETRY'] }, dueAt: { lte: now } },
@@ -29,7 +48,6 @@ export async function processJob(id: string, providers: Providers, now = new Dat
         const appointment = await tx.appointment.findUniqueOrThrow({
           where: { id: job.appointmentId },
         });
-        const isInitial = job.kind === 'INITIAL';
         const isConfirm = job.kind === 'CAL_CONFIRM';
         const invalid =
           Boolean(appointment.bookingIdentityIssue) ||
@@ -37,12 +55,9 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           !appointment.whatsappConsentAt ||
           !appointment.contactPhone ||
           job.expiresAt <= now ||
-          appointment.startsAt <= now ||
-          (isInitial
-            ? appointment.status !== 'PENDING_LOCATION' || Boolean(appointment.locationReceivedAt)
-            : isConfirm
-              ? appointment.status !== 'PENDING_LOCATION' || !appointment.locationReceivedAt
-              : appointment.status !== 'CONFIRMED');
+          // «En camino» puede llegar después de la hora estimada; su límite es expiresAt.
+          (job.kind !== 'TECHNICIAN_ON_THE_WAY' && appointment.startsAt <= now) ||
+          !kindStillValid(job.kind, appointment);
         if (invalid) {
           await tx.automationJob.update({ where: { id }, data: { status: 'CANCELLED' } });
           return;

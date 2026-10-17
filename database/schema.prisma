@@ -100,6 +100,7 @@ model User {
   sessions Session[]
   jobs CompletedJob[]
   appointments Appointment[]
+  authTokens AuthToken[]
 }
 // Desafíos aislados por finalidad. Nunca se guarda el código en texto plano.
 model EmailChallenge {
@@ -176,7 +177,11 @@ model Appointment {
   automationIssue String?
   bookingIdentityIssue String?
   automationRevision Int @default(0)
+  // INSTAFIX_API: creada por Instafix mediante la API de Cal.com. CAL_EMBED: histórico del iframe.
+  source String @default("CAL_EMBED")
+  contactEmail String?
   messages AutomationJob[]
+  notifications Notification[]
   title String
   device String
   startsAt DateTime
@@ -302,4 +307,80 @@ model PageVisit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([createdAt, page])
+}
+
+// OTP de WhatsApp. Solo se guarda el hash con sal; cada propósito es independiente.
+// El registro se conserva aquí hasta verificar el número: la cuenta se crea después.
+model PhoneChallenge {
+  id String @id @default(uuid())
+  purpose String
+  phone String
+  userId String?
+  codeHash String
+  attempts Int @default(0)
+  expiresAt DateTime
+  consumedAt DateTime?
+  delivered Boolean @default(false)
+  providerMessageId String?
+  firstName String?
+  lastName String?
+  name String?
+  email String?
+  passwordHash String?
+  createdAt DateTime @default(now())
+  @@index([phone, createdAt])
+  @@index([userId, createdAt])
+}
+
+// Tokens de un solo uso fuera de la sesión: recuperación de contraseña y verificación de correo.
+model AuthToken {
+  tokenHash String @id
+  purpose String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email String?
+  channel String?
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, purpose, createdAt])
+}
+
+// Bandeja durable de avisos de citas por correo. La clave única impide duplicados
+// entre la respuesta de la API y los webhooks de Cal.com del mismo hecho.
+model Notification {
+  id String @id @default(uuid())
+  dedupeKey String @unique
+  channel String
+  kind String
+  appointmentId String?
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  recipient String
+  data Json
+  status String @default("PENDING")
+  attempts Int @default(0)
+  dueAt DateTime @default(now())
+  providerMessageId String?
+  lastError String?
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, dueAt])
+}
+
+// Historial de envíos: destinatario enmascarado; nunca códigos, tokens ni credenciales.
+model CommunicationLog {
+  id String @id @default(uuid())
+  channel String
+  provider String
+  kind String
+  recipient String
+  status String
+  providerMessageId String?
+  error String?
+  appointmentId String?
+  userId String?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+  @@index([kind, createdAt])
 }

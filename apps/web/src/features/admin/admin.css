@@ -101,3 +101,10 @@
   flex-wrap: wrap;
   gap: 12px;
 }
+
+.comm-log {
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}

@@ -114,6 +114,41 @@ export class WasapFlowClient {
       ),
     );
   }
+  /**
+   * Plantilla de categoría AUTHENTICATION con botón «Copiar código». Meta exige el código
+   * como parámetro del cuerpo y del botón; siempre se envía a un teléfono, nunca a un BSUID.
+   */
+  async sendAuthenticationTemplate(
+    wabaId: string,
+    to: string,
+    name: string,
+    language: string,
+    code: string,
+  ) {
+    if (!/^\d{4,8}$/.test(code)) throw new ProviderError('Código OTP inválido', 'FAILED');
+    return this.messageId(
+      await this.request(
+        '/messages/template',
+        {
+          to,
+          template: {
+            name,
+            language,
+            components: [
+              { type: 'body', parameters: [{ type: 'text', text: code }] },
+              {
+                type: 'button',
+                sub_type: 'url',
+                index: '0',
+                parameters: [{ type: 'text', text: code }],
+              },
+            ],
+          },
+        },
+        wabaId,
+      ),
+    );
+  }
   async sendText(wabaId: string, to: string, text: string) {
     return this.messageId(
       await this.request('/messages/send', { to, text, preview_url: false }, wabaId),

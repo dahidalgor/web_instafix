@@ -70,3 +70,98 @@
   color: var(--text);
   font-size: 14px;
 }
+
+/* Reserva propia de Instafix */
+.booking-form {
+  display: grid;
+  gap: 22px;
+  max-width: 760px;
+}
+.booking-form fieldset {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px;
+  margin: 0;
+  background: var(--surface);
+}
+.booking-form legend {
+  padding: 0 8px;
+  font-weight: 700;
+}
+.slot-days {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x mandatory;
+}
+.slot-days button {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 2px;
+  min-width: 64px;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  scroll-snap-align: start;
+  text-transform: capitalize;
+}
+.slot-days button strong {
+  font-size: 20px;
+}
+.slot-days button span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.slot-times {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin: 16px 0 6px;
+}
+.slot-times button {
+  padding: 11px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+.slot-days button.active,
+.slot-times button.active {
+  border-color: var(--accent);
+  background: var(--surface-soft);
+  color: var(--accent);
+}
+.slot-state {
+  color: var(--muted);
+}
+.booking-summary {
+  margin: 0;
+}
+.booking-done {
+  max-width: 560px;
+  padding: 30px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.booking-check {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin: 0 0 12px;
+  border-radius: 50%;
+  background: #e5f5ec;
+  color: #1b7a4b;
+  font-size: 24px;
+  font-weight: 700;
+}
+@media (max-width: 520px) {
+  .booking-form fieldset {
+    padding: 16px;
+  }
+}

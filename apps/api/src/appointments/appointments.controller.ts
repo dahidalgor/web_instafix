@@ -15,6 +15,7 @@ import { db } from '../database/client';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
 import { z } from 'zod';
+import { publishAppointmentEvent } from '../notifications/appointment-events';
 
 @Controller('api/v1')
 export class AppointmentsController {
@@ -45,6 +46,29 @@ export class AppointmentsController {
         where: { id },
         data: { offeringId: offering.id, device: offering.device },
       });
+    });
+  }
+
+  /** Aviso manual del técnico: requiere plantilla aprobada y consentimiento del cliente. */
+  @Post('admin/appointments/:id/on-the-way') async onTheWay(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    checkOrigin(req);
+    await authenticated(req, true);
+    return db.$transaction(async (tx) => {
+      await lockAppointment(tx, id);
+      const appointment = await tx.appointment.findUnique({ where: { id } });
+      if (!appointment || !['CONFIRMED', 'IN_PROGRESS'].includes(appointment.status))
+        throw new BadRequestException('Solo para citas confirmadas o en servicio');
+      if (!appointment.whatsappConsentAt || !process.env.WHATSAPP_TEMPLATE_TECHNICIAN_ON_THE_WAY)
+        throw new BadRequestException(
+          'Falta el consentimiento de WhatsApp o la plantilla aprobada «técnico en camino».',
+        );
+      await publishAppointmentEvent(tx, appointment, {
+        type: 'appointment.technician_on_the_way',
+      });
+      return { queued: true };
     });
   }
 
@@ -165,6 +189,10 @@ export class AppointmentsController {
           await queueJob(tx, appointment, 'INITIAL', new Date());
         await queueReminders(tx, appointment);
       }
+      if (appointment.technician && appointment.technician !== existing.technician)
+        await publishAppointmentEvent(tx, appointment, {
+          type: 'appointment.technician_assigned',
+        });
       return appointment;
     });
   }
