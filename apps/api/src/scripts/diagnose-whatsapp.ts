@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
-import { connectedWaba } from '../whatsapp/connection';
+import { connectedWaba, validWabaId } from '../whatsapp/connection';
 import { otpConfiguration, WasapFlowOtpProvider } from '../whatsapp/otp.provider';
 import { BRIDGE_BASE, WasapFlowClient } from '../whatsapp/wasapflow.client';
 
@@ -37,9 +37,14 @@ async function main() {
   base === BRIDGE_BASE
     ? ok(`URL base ${base}`)
     : fail(`WASAPFLOW_BASE_URL debe ser ${BRIDGE_BASE}`);
-  env('WASAPFLOW_WABA_ID')
-    ? ok(`WASAPFLOW_WABA_ID=${env('WASAPFLOW_WABA_ID')}`)
-    : fail('Falta WASAPFLOW_WABA_ID (ID de la WABA tal como aparece en WasapFlow)');
+  const wabaEnv = env('WASAPFLOW_WABA_ID');
+  if (!wabaEnv) info('WASAPFLOW_WABA_ID vacío: correcto mientras no hayas conectado un número');
+  else if (!validWabaId(wabaEnv))
+    // Nunca se imprime: suele ser la Partner Key pegada en la variable equivocada.
+    fail(
+      `WASAPFLOW_WABA_ID no es un ID de WABA (debe ser solo números)${wabaEnv.startsWith('wf_') ? ' y parece una Partner Key: bórralo del .env y rota la clave' : ''}`,
+    );
+  else ok(`WASAPFLOW_WABA_ID=${wabaEnv}`);
   const otp = otpConfiguration();
   otp.enabled ? ok('WHATSAPP_OTP_ENABLED=true') : fail('WHATSAPP_OTP_ENABLED no es "true"');
   otp.template
@@ -78,8 +83,12 @@ async function main() {
         info(
           `WABA ${c.waba_id} · estado ${c.status} · modo ${c.connection_mode ?? '(no indicado)'}`,
         );
-      const target = clients.find((c) => c.waba_id === env('WASAPFLOW_WABA_ID'));
-      if (!env('WASAPFLOW_WABA_ID')) {
+      const target = clients.find((c) => c.waba_id === wabaEnv);
+      if (!clients.length)
+        fail(
+          'Tu cuenta de WasapFlow no tiene ningún número conectado. Conéctalo en Administración → WhatsApp → Conectar WhatsApp Business',
+        );
+      if (!wabaEnv || !validWabaId(wabaEnv) || !clients.length) {
       } else if (!target)
         fail(
           `WASAPFLOW_WABA_ID no está en tu cuenta de WasapFlow. Usa uno de los IDs listados arriba o regístrala en WasapFlow.`,
