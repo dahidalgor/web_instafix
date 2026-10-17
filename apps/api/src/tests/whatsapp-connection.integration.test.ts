@@ -86,7 +86,7 @@ test(
       );
       // Una WABA que WasapFlow no lista nunca se adopta.
       await db.whatsAppConnection.deleteMany({ where: { id: 'main' } });
-      process.env.WASAPFLOW_WABA_ID = '999';
+      process.env.WASAPFLOW_WABA_ID = '999888777';
       await assert.rejects(
         provider.sendAuthenticationCode('+593981234519', '123456'),
         /no está registrada/,
