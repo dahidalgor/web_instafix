@@ -22,22 +22,14 @@
   }
   .page-content,
   header nav a[aria-current='page'],
-  .journey-step.is-current .moto-drawing {
-    animation: none;
+  .scene *,
+  .scene *::after {
+    animation: none !important;
   }
-  header nav a,
-  .journey-step,
-  .journey-art svg,
-  .journey-progress > span,
-  .journey-guide nav a {
+  header nav a {
     transition: none;
   }
-  .journey-step {
-    opacity: 1;
-    transform: none;
-  }
-  header nav a:hover,
-  .journey-step.is-current .journey-art svg {
+  header nav a:hover {
     transform: none;
   }
 }
