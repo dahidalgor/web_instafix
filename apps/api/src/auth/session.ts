@@ -1,6 +1,6 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { allowedOrigins } from '../config/environment';
+import { isAllowedOrigin } from '../config/environment';
 import { db } from '../database/client';
 import { newToken, tokenHash } from './security';
 export const safeUser = {
@@ -18,9 +18,12 @@ export const phoneUnverifiedMessage = 'Verifica tu WhatsApp para continuar.';
 export const cookieName = 'instafix_session';
 // Las operaciones con cookies verifican el origen antes de modificar datos.
 export function checkOrigin(req: Request) {
-  const allowed = allowedOrigins();
-  if (!req.headers.origin || !allowed.includes(req.headers.origin))
-    throw new ForbiddenException('Origen no permitido');
+  if (!isAllowedOrigin(req.headers.origin))
+    throw new ForbiddenException(
+      process.env.NODE_ENV === 'production'
+        ? 'Origen no permitido'
+        : `Origen no permitido: ${req.headers.origin ?? '(sin cabecera Origin)'}. Añádelo a ALLOWED_ORIGINS en .env.`,
+    );
 }
 export function sessionToken(req: Request) {
   return (

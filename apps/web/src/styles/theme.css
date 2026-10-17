@@ -132,4 +132,26 @@
     background: var(--surface-soft);
     color: var(--muted);
   }
+  .booking-error {
+    background: #3a1f24;
+    color: #ffd2d6;
+    border-left-color: #ff8a95;
+  }
+  .slot-alert {
+    background: #3a2d14;
+    color: #ffe1a8;
+    border-left-color: #e0a63a;
+  }
+  .booking-flow {
+    box-shadow: none;
+  }
+  .month-day.is-today {
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .button.danger {
+    background: #b3372f;
+  }
+  .text-button.danger {
+    color: #ff9b94;
+  }
 }

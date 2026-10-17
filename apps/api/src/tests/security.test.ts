@@ -47,3 +47,23 @@ test('catalog validates prices, states and unsafe media', () => {
     false,
   );
 });
+
+test('origin check: strict list in production, any local port in development', async () => {
+  const { isAllowedOrigin } = await import('../config/environment');
+  const env = { node: process.env.NODE_ENV, list: process.env.ALLOWED_ORIGINS };
+  try {
+    process.env.ALLOWED_ORIGINS = 'https://instafix.ec, https://admin.instafix.ec/';
+    process.env.NODE_ENV = 'production';
+    assert.equal(isAllowedOrigin('https://admin.instafix.ec'), true); // espacios y barra final
+    assert.equal(isAllowedOrigin('http://localhost:5174'), false);
+    assert.equal(isAllowedOrigin(undefined), false);
+    process.env.NODE_ENV = 'development';
+    assert.equal(isAllowedOrigin('http://localhost:5174'), true);
+    assert.equal(isAllowedOrigin('http://127.0.0.1:5173'), true);
+    assert.equal(isAllowedOrigin('http://localhost.evil.com'), false);
+    assert.equal(isAllowedOrigin('https://evil.com'), false);
+  } finally {
+    process.env.NODE_ENV = env.node;
+    process.env.ALLOWED_ORIGINS = env.list;
+  }
+});

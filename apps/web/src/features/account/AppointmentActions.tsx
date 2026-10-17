@@ -1,7 +1,8 @@
 import type { Appointment } from '@instafix/contracts';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { api } from '../../lib/api';
-import { SlotPicker, slotDate, slotTime } from '../booking/SlotPicker';
+import { dayKey, formatDay, formatTime } from '../booking/booking-time';
+import { ScheduleStep, type BookingSlot, type FetchAvailability } from '../booking/ScheduleStep';
 
 /** Reprogramar y cancelar pasan por Instafix: Cal.com solo cambia la agenda. */
 export function AppointmentActions({
@@ -12,7 +13,16 @@ export function AppointmentActions({
   onChanged: () => void;
 }) {
   const [mode, setMode] = useState<null | 'reschedule' | 'cancel'>(null);
-  const [slot, setSlot] = useState<string | null>(null);
+  const [slot, setSlot] = useState<BookingSlot | null>(null);
+  const [day, setDay] = useState<string | null>(null);
+  const fetchAvailability = useCallback<FetchAvailability>(async (start, end) => {
+    const data = await api<{ days: Record<string, string[]> }>(
+      `booking/slots?from=${start}&to=${end}`,
+    );
+    return Object.fromEntries(
+      Object.entries(data.days).map(([key, starts]) => [key, starts.map((s) => ({ start: s }))]),
+    );
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const changeable =
@@ -47,17 +57,26 @@ export function AppointmentActions({
       )}
       {mode === 'reschedule' && (
         <div className="security-panel">
-          <SlotPicker selected={slot} onSelect={setSlot} />
+          <ScheduleStep
+            fetchAvailability={fetchAvailability}
+            selectedDay={day}
+            selectedSlot={slot}
+            onDayChange={setDay}
+            onSlotChange={setSlot}
+          />
           {slot && (
             <p>
-              Nueva visita: <strong>{slotDate(slot)}</strong> · <strong>{slotTime(slot)}</strong>
+              Nueva visita: <strong>{formatDay(dayKey(slot.start))}</strong> ·{' '}
+              <strong>{formatTime(slot.start)}</strong>
             </p>
           )}
           <button
             type="button"
             className="button"
             disabled={busy || !slot}
-            onClick={() => run(`my/appointments/${appointment.id}/reschedule`, { start: slot })}
+            onClick={() =>
+              run(`my/appointments/${appointment.id}/reschedule`, { start: slot?.start })
+            }
           >
             {busy ? 'Reprogramando…' : 'Confirmar nuevo horario'}
           </button>{' '}
