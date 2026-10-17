@@ -12,6 +12,8 @@ RUN pnpm db:generate
 ARG VITE_ADMIN_HOST
 ENV VITE_ADMIN_HOST=$VITE_ADMIN_HOST
 RUN pnpm build
+# El código copiado conserva los permisos del equipo de origen; el usuario node debe poder leerlo.
+RUN chmod -R a+rX /app
 
 FROM build AS api
 WORKDIR /app/apps/api
