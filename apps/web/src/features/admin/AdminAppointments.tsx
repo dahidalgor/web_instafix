@@ -3,7 +3,10 @@ import {
   appointmentStatuses,
   type Appointment,
   type Offering,
+  type PerformedService,
 } from '@instafix/contracts';
+import { AppointmentCard } from '../../components/appointments/AppointmentCard';
+import { money } from '../../lib/format';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
 type AdminAppointment = Appointment & {
@@ -14,6 +17,9 @@ type AdminAppointment = Appointment & {
   automationIssue?: string;
   locationLatitude?: number;
   locationLongitude?: number;
+  assignedTechnician?: { id: string; name: string } | null;
+  services: PerformedService[];
+  technicianNotes?: string;
 };
 const empty = {
   userId: '',
@@ -33,11 +39,10 @@ const localDate = (value: string) => {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
-export function AdminAppointments({ services }: { services: Offering[] }) {
+export function AdminAppointments(_props: { services: Offering[] }) {
   const [linkUserId, setLinkUserId] = useState('');
   const [identityVerified, setIdentityVerified] = useState(false);
   const [recoverable, setRecoverable] = useState(0);
-  const [assignedService, setAssignedService] = useState('');
   const [items, setItems] = useState<AdminAppointment[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [draft, setDraft] = useState({ ...empty });
@@ -61,7 +66,6 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
     setId(item.id);
     setLinkUserId('');
     setIdentityVerified(false);
-    setAssignedService(item.offeringId || '');
     setDraft({
       userId: item.userId || '',
       contactName: item.contactName || item.user?.name || '',
@@ -97,24 +101,6 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
       setMessage('Cita guardada.');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo guardar');
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function assignService() {
-    if (!id || !assignedService) return;
-    setBusy(true);
-    setMessage('');
-    try {
-      const result = await api(`admin/appointments/${id}/service`, {
-        method: 'PATCH',
-        body: JSON.stringify({ offeringId: assignedService }),
-      });
-      setDraft((previous) => ({ ...previous, device: result.device }));
-      await load();
-      setMessage('Servicio asignado. La descripción y el horario del cliente se conservan.');
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'No se pudo asignar');
     } finally {
       setBusy(false);
     }
@@ -190,24 +176,52 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
       <div className="admin-layout">
         <div>
           <button
+            className="btn btn-primary"
             onClick={() => {
               setId(null);
               setDraft({ ...empty });
             }}
           >
-            Nueva cita
+            + Nueva cita
           </button>
-          {items.map((item) => (
-            <button className="admin-item" key={item.id} onClick={() => edit(item)}>
-              <strong>
-                {item.title} · {item.contactName || item.user?.name || 'Invitado'}
-              </strong>
-              <span>
-                {new Date(item.startsAt).toLocaleString('es-EC')} · {appointmentLabels[item.status]}
-              </span>
-              {item.automationIssue && <span>{item.automationIssue}</span>}
-            </button>
-          ))}
+          <div className="appt-list admin-appt-list">
+            {items.map((item) => (
+              <AppointmentCard
+                key={item.id}
+                status={item.status}
+                startsAt={item.startsAt}
+                timeZone={item.timeZone}
+                client={item.contactName || item.user?.name || 'Invitado'}
+                request={item.title}
+                technician={item.assignedTechnician?.name || item.technician || null}
+                highlight={item.id === id ? 'Editando' : undefined}
+                details={
+                  <>
+                    {!!item.services?.length && (
+                      <div>
+                        <dt>Servicios realizados</dt>
+                        <dd>
+                          {item.services
+                            .map((s) => s.nameSnapshot + (s.quantity > 1 ? ` ×${s.quantity}` : ''))
+                            .join(', ')}
+                        </dd>
+                      </div>
+                    )}
+                    {item.automationIssue && (
+                      <div>
+                        <dt>Incidencia</dt>
+                        <dd>{item.automationIssue}</dd>
+                      </div>
+                    )}
+                  </>
+                }
+              >
+                <button type="button" className="btn btn-secondary" onClick={() => edit(item)}>
+                  Ver y editar
+                </button>
+              </AppointmentCard>
+            ))}
+          </div>
         </div>
         <form onSubmit={save} className="editor">
           <h3>{id ? 'Editar cita' : 'Nueva cita'}</h3>
@@ -248,31 +262,37 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
               </button>
             </fieldset>
           )}
-          {id && (
-            <fieldset>
-              <legend>Servicio asignado por el técnico</legend>
-              <label>
-                Servicio del catálogo
-                <select
-                  value={assignedService}
-                  onChange={(e) => setAssignedService(e.target.value)}
-                >
-                  <option value="">Pendiente de diagnóstico</option>
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.device} · {service.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button type="button" disabled={busy || !assignedService} onClick={assignService}>
-                Asignar servicio
-              </button>
-              <p className="small">
-                Al finalizar, registra el trabajo y su garantía en «Trabajos».
-              </p>
-            </fieldset>
-          )}
+          {id &&
+            items
+              .filter((item) => item.id === id)
+              .map((item) => (
+                <fieldset key={item.id}>
+                  <legend>Visita técnica</legend>
+                  <p>
+                    <strong>Técnico asignado:</strong>{' '}
+                    {item.assignedTechnician?.name ||
+                      'Sin asignar (lo asigna el técnico al confirmar)'}
+                  </p>
+                  <p>
+                    <strong>Servicios realizados:</strong>{' '}
+                    {item.services?.length ? '' : 'Aún sin registrar.'}
+                  </p>
+                  {!!item.services?.length && (
+                    <ul className="performed-list">
+                      {item.services.map((s) => (
+                        <li key={s.id}>
+                          {s.nameSnapshot} ×{s.quantity} · {money(s.totalMinor)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {item.technicianNotes && (
+                    <p className="small">
+                      <strong>Notas internas:</strong> {item.technicianNotes}
+                    </p>
+                  )}
+                </fieldset>
+              ))}
           <label>
             Cliente
             <select
@@ -302,11 +322,14 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
             ['title', 'Descripción del cliente'],
             ['device', 'Equipo'],
             ['address', 'Dirección'],
-            ['technician', 'Técnico'],
+            ['technician', 'Técnico (texto, citas manuales)'],
           ].map(([key, label]) => (
             <label key={key}>
               {label}
               <input
+                disabled={
+                  key === 'technician' && !!items.find((item) => item.id === id)?.assignedTechnician
+                }
                 required={key === 'title' || key === 'device'}
                 maxLength={key === 'address' ? 500 : 100}
                 value={String(draft[key as keyof typeof draft])}

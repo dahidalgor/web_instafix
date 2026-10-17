@@ -19,11 +19,37 @@ export class AccountController {
     const appointments = await db.appointment.findMany({
       where: { userId: user.id },
       orderBy: { startsAt: 'asc' },
-      include: { offering: { select: { title: true, device: true } } },
+      include: {
+        offering: { select: { title: true, device: true } },
+        assignedTechnician: { select: { name: true } },
+        services: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            offeringId: true,
+            nameSnapshot: true,
+            deviceSnapshot: true,
+            unitPriceMinor: true,
+            quantity: true,
+            totalMinor: true,
+            currency: true,
+            warrantyDaysSnapshot: true,
+          },
+        },
+      },
     });
-    return appointments.map(({ offering, ...appointment }) => ({
-      ...appointment,
-      assignedService: offering,
-    }));
+    // Datos internos del equipo (notas técnicas, auditoría, incidencias) no salen al cliente.
+    return appointments.map(
+      ({
+        offering,
+        technicianNotes: _notes,
+        confirmedById: _confirmedBy,
+        completedById: _completedBy,
+        assignedTechnicianId: _technicianId,
+        automationIssue: _issue,
+        automationRevision: _revision,
+        ...appointment
+      }) => ({ ...appointment, assignedService: offering }),
+    );
   }
 }

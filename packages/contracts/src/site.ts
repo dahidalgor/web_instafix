@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { offeringSchema } from './catalog';
+import { mediaItemSchema } from './catalog';
 
 export const publicPages = [
   'inicio',
@@ -19,7 +19,7 @@ export const slideSchema = z
     description: z.string().trim().min(10).max(2000),
     detail: z.string().trim().max(100),
     symbol: z.string().max(4).default('✦'),
-    media: offeringSchema.shape.media.max(1),
+    media: z.array(mediaItemSchema).max(1),
     position: z.number().int().min(0).max(1000),
     published: z.boolean(),
   })

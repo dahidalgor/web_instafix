@@ -141,8 +141,9 @@ test(
     await ingest(message('message.echo', 'echo'));
     await ingest(message('message.history', 'history'));
     assert.equal(
-      (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status,
-      'PENDING_LOCATION',
+      (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } }))
+        .locationReceivedAt,
+      null,
     );
     const service = new WhatsAppService(new WasapFlowClient());
     await assert.rejects(service.sendAppointmentMessage(appointment, 'INITIAL'));
@@ -151,19 +152,20 @@ test(
     assert.equal(sendCount, 0);
     await ingest(message('message.received', 'bsuid', { from: null, bsuid: 'EC.123456789' }));
     assert.equal(
-      (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status,
-      'PENDING_LOCATION',
+      (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } }))
+        .locationReceivedAt,
+      null,
     );
     const live = message('message.received', 'live');
     await ingest(live);
     await ingest(live);
-    assert.equal(
-      (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status,
-      'CONFIRMED',
-    );
+    // La ubicación en vivo se guarda; la confirmación la hace después un técnico.
+    const located = await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    assert.ok(located.locationReceivedAt);
+    assert.equal(located.status, 'PENDING_LOCATION');
     assert.equal(
       await db.automationJob.count({ where: { appointmentId: appointment.id, kind: 'CONFIRMED' } }),
-      1,
+      0,
     );
     assert.equal(
       await db.whatsAppMessage.count({ where: { wabaId, messageId: `${prefix}:live` } }),

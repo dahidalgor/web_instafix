@@ -108,3 +108,10 @@
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
+
+.staff-header {
+  gap: 12px;
+}
+.staff-header .brand {
+  font-size: 20px;
+}

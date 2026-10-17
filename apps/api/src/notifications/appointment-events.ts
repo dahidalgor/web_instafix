@@ -1,5 +1,5 @@
 import type { Appointment, Prisma } from '@prisma/client';
-import { queueJob } from '../whatsapp/queue';
+import { queueJob, queueReminders } from '../whatsapp/queue';
 import { templateFor } from '../whatsapp/messages';
 import { enqueueAppointmentEmail } from './notification.service';
 
@@ -13,6 +13,8 @@ export type AppointmentEvent =
   | { type: 'appointment.created' }
   | { type: 'appointment.rescheduled'; previousStartsAt: Date }
   | { type: 'appointment.cancelled' }
+  | { type: 'appointment.confirmed'; technicianName: string }
+  | { type: 'appointment.completed' }
   | { type: 'appointment.technician_assigned' }
   | { type: 'appointment.technician_on_the_way' };
 
@@ -53,6 +55,15 @@ export async function publishAppointmentEvent(
     case 'appointment.cancelled':
       await email('APPOINTMENT_CANCELLED');
       await whatsapp('CANCELLED');
+      break;
+    case 'appointment.confirmed':
+      // Un técnico confirmó y quedó asignado: correo de Instafix + WhatsApp «cita confirmada».
+      await email('APPOINTMENT_CONFIRMED', { technicianName: event.technicianName });
+      await whatsapp('CONFIRMED');
+      await queueReminders(tx, appointment, now);
+      break;
+    case 'appointment.completed':
+      // Punto de extensión (encuesta, garantía, factura). Hoy no envía mensajes.
       break;
     case 'appointment.technician_assigned':
       await whatsapp('TECHNICIAN_ASSIGNED');

@@ -55,20 +55,25 @@ WhatsApp (enmascarado, verificado), correo (enmascarado, verificado/sin verifica
 
 ## Citas y correos de Instafix
 
-| Evento            | Disparador                                                    | Correo                                                                   | WhatsApp                                                             |
-| ----------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Creada            | API Instafix tras crear en Cal.com y guardar en PostgreSQL    | «Tu cita está confirmada» / «Tu cita fue agendada» si falta la ubicación | Solicitud de ubicación existente (`instafix_solicitar_ubicacion`)    |
-| Reprogramada      | API Instafix o webhook `BOOKING_RESCHEDULED` hecho en Cal.com | Fecha anterior y nueva                                                   | `instafix_cita_reprogramada` si está configurada                     |
-| Cancelada         | API Instafix o webhook `BOOKING_CANCELLED`/`BOOKING_REJECTED` | «Tu cita fue cancelada»                                                  | `instafix_cita_cancelada` si está configurada                        |
-| Técnico asignado  | Administración cambia el técnico                              | —                                                                        | `instafix_tecnico_asignado`                                          |
-| Técnico en camino | Botón en Administración → Citas                               | —                                                                        | `instafix_tecnico_en_camino`                                         |
-| Recordatorio      | 08:00 Ecuador                                                 | —                                                                        | `instafix_recordatorio_visita` (texto nuevo) o la plantilla anterior |
+| Evento            | Disparador                                                                | Correo                                                                                  | WhatsApp                                                             |
+| ----------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Creada            | API Instafix tras crear en Cal.com y guardar en PostgreSQL                | «Recibimos tu solicitud de visita» (pendiente de confirmación; nunca dice «confirmada») | Solicitud de ubicación existente (`instafix_solicitar_ubicacion`)    |
+| Confirmada        | Un técnico pulsa «Confirmar cita» en su panel (ver `docs/technicians.md`) | «Tu visita está confirmada ✓» con técnico, fecha, hora y solicitud                      | `instafix_cita_confirmada` + recordatorios                           |
+| Reprogramada      | API Instafix o webhook `BOOKING_RESCHEDULED` hecho en Cal.com             | Fecha anterior y nueva                                                                  | `instafix_cita_reprogramada` si está configurada                     |
+| Cancelada         | API Instafix o webhook `BOOKING_CANCELLED`/`BOOKING_REJECTED`             | «Tu cita fue cancelada»                                                                 | `instafix_cita_cancelada` si está configurada                        |
+| Técnico asignado  | Administración cambia el técnico                                          | —                                                                                       | `instafix_tecnico_asignado`                                          |
+| Técnico en camino | Botón en Administración → Citas                                           | —                                                                                       | `instafix_tecnico_en_camino`                                         |
+| Recordatorio      | 08:00 Ecuador                                                             | —                                                                                       | `instafix_recordatorio_visita` (texto nuevo) o la plantilla anterior |
 
 El correo muestra «Solicitud: “…”» con lo que describió el cliente; nunca un servicio realizado. Los invitados reciben «Tu cita ha sido creada correctamente» y una invitación a crear la cuenta con el mismo WhatsApp, sin botón que exija iniciar sesión.
 
 **Sin duplicados**: cada correo tiene una clave única (`email:<cita>:APPOINTMENT_CREATED`, `…:APPOINTMENT_CANCELLED`, `…:APPOINTMENT_RESCHEDULED:<nuevo inicio>`). La API y el webhook usan el mismo bloqueo de PostgreSQL; si el webhook llega antes que la respuesta de Cal.com, la API completa la misma fila. Los webhooks de reservas creadas por Instafix (`source = INSTAFIX_API`) solo actualizan el estado de Cal.com. Si Cal.com falla, no se guarda la cita ni se envía nada; si falla PostgreSQL después de crear en Cal.com, se cancela esa reserva.
 
-**Activación**: `APPOINTMENT_EMAILS_ENABLED=false` por defecto, para no duplicar con Cal.com mientras siga enviando sus correos.
+**Activación**: `APPOINTMENT_EMAILS_ENABLED=true` los activa y `false` los desactiva. Vacío: se activan solo si `CAL_ATTENDEE_RELAY_EMAIL` está configurado (Cal.com ya no puede escribir al cliente). Cuando un aviso no se envía, queda una fila `SKIPPED` en `CommunicationLog` con el motivo (avisos desactivados o cita sin correo), visible en Administración → Correo.
+
+**Causa de «el correo de la cita no llega» (18-10-2026)**: con `APPOINTMENT_EMAILS_ENABLED=false` (el valor de los `.env.example`) `enqueueAppointmentEmail` devolvía `null` sin registrar nada: ni Brevo ni ningún log. Además, el correo de creación decía «Tu cita está confirmada» cuando la reserva no pedía ubicación. Ahora el motivo queda registrado y el correo de creación nunca anuncia una confirmación. «Aceptado por Brevo» en el historial no garantiza la bandeja de entrada: eso depende de SPF/DKIM/DMARC y se comprueba en el buzón y en los eventos de Brevo.
+
+La ubicación por WhatsApp ya no confirma la visita: la confirma un técnico.
 
 ## Cal.com: qué enviaba y cómo se desactiva
 

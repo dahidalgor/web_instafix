@@ -1,9 +1,12 @@
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import type { Appointment, Prisma } from '@prisma/client';
+import { maskRecipient } from '../communications/log';
+import { retryCalConfirmations } from '../staff/staff-appointments.service';
 import { db } from '../database/client';
 import { appointmentEmailsEnabled, mailStatus, sendEmail } from '../mail/email.service';
 import {
   appointmentCancelledEmail,
+  appointmentConfirmedEmail,
   appointmentCreatedEmail,
   appointmentRescheduledEmail,
   type AppointmentEmailData,
@@ -11,6 +14,7 @@ import {
 
 export const appointmentEmailKinds = {
   APPOINTMENT_CREATED: appointmentCreatedEmail,
+  APPOINTMENT_CONFIRMED: appointmentConfirmedEmail,
   APPOINTMENT_RESCHEDULED: appointmentRescheduledEmail,
   APPOINTMENT_CANCELLED: appointmentCancelledEmail,
 } as const;
@@ -23,11 +27,22 @@ const MAX_ATTEMPTS = 5;
  */
 export function notificationKey(
   kind: AppointmentEmailKind,
-  appointment: Pick<Appointment, 'id' | 'startsAt'>,
+  appointment: Pick<Appointment, 'id' | 'startsAt'> & { confirmedAt?: Date | null },
 ) {
-  return kind === 'APPOINTMENT_RESCHEDULED'
-    ? `email:${appointment.id}:${kind}:${appointment.startsAt.toISOString()}`
-    : `email:${appointment.id}:${kind}`;
+  if (kind === 'APPOINTMENT_RESCHEDULED')
+    return `email:${appointment.id}:${kind}:${appointment.startsAt.toISOString()}`;
+  // Una confirmación por asignación: tras reprogramar y volver a confirmar hay un aviso nuevo.
+  if (kind === 'APPOINTMENT_CONFIRMED')
+    return `email:${appointment.id}:${kind}:${appointment.confirmedAt?.toISOString() ?? 'none'}`;
+  return `email:${appointment.id}:${kind}`;
+}
+
+/** Motivo por el que una cita no genera correo; se registra para poder diagnosticarlo. */
+export function appointmentEmailSkipReason(appointment: Pick<Appointment, 'contactEmail'>) {
+  if (!appointmentEmailsEnabled())
+    return 'Avisos de citas desactivados (APPOINTMENT_EMAILS_ENABLED=false)';
+  if (!appointment.contactEmail) return 'La cita no tiene correo del cliente';
+  return null;
 }
 
 /** Encola el correo dentro de la transacción que registra el cambio de la cita. */
@@ -35,15 +50,32 @@ export async function enqueueAppointmentEmail(
   tx: Prisma.TransactionClient,
   appointment: Appointment,
   kind: AppointmentEmailKind,
-  extra: { previousStartsAt?: Date | null } = {},
+  extra: { previousStartsAt?: Date | null; technicianName?: string | null } = {},
 ) {
-  if (!appointmentEmailsEnabled() || !appointment.contactEmail) return null;
+  const skipped = appointmentEmailSkipReason(appointment);
+  if (skipped || !appointment.contactEmail) {
+    // Queda constancia del aviso no enviado (sin destinatario real) para diagnosticarlo.
+    await tx.communicationLog.create({
+      data: {
+        channel: 'EMAIL',
+        provider: 'INSTAFIX',
+        kind,
+        recipient: appointment.contactEmail ? maskRecipient(appointment.contactEmail) : '—',
+        status: 'SKIPPED',
+        error: skipped,
+        appointmentId: appointment.id,
+        userId: appointment.userId,
+      },
+    });
+    return null;
+  }
   const data: AppointmentEmailData = {
     name: appointment.contactName || 'cliente',
     startsAt: appointment.startsAt.toISOString(),
     timeZone: appointment.timeZone,
     request: appointment.title,
     confirmed: appointment.status === 'CONFIRMED',
+    technicianName: extra.technicianName ?? (appointment.technician || null),
     guest: !appointment.userId,
     previousStartsAt: extra.previousStartsAt?.toISOString() ?? null,
   };
@@ -78,8 +110,10 @@ export async function deliverNotification(id: string, now = new Date()): Promise
   });
   // Un aviso de cita creada/reprogramada no se envía si la cita ya fue cancelada.
   if (
-    row.kind !== 'APPOINTMENT_CANCELLED' &&
-    (!row.appointment || row.appointment.status === 'CANCELLED')
+    (row.kind !== 'APPOINTMENT_CANCELLED' &&
+      (!row.appointment || row.appointment.status === 'CANCELLED')) ||
+    // Una confirmación pendiente pierde sentido si la cita volvió a quedar sin técnico.
+    (row.kind === 'APPOINTMENT_CONFIRMED' && !row.appointment?.assignedTechnicianId)
   ) {
     await db.notification.update({ where: { id }, data: { status: 'CANCELLED' } });
     return 'CANCELLED';
@@ -129,7 +163,10 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
   async tick() {
-    if (this.running || !mailStatus().configured) return;
+    if (this.running) return;
+    // Confirmaciones de técnicos que Cal.com aún no reflejó: independiente del correo.
+    await retryCalConfirmations().catch(() => console.error('No se pudo sincronizar con Cal.com'));
+    if (!mailStatus().configured) return;
     this.running = true;
     try {
       // Un proceso interrumpido durante el envío queda en revisión: no se reenvía a ciegas.

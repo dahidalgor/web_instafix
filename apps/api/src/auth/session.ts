@@ -11,6 +11,7 @@ export const safeUser = {
   email: true,
   phone: true,
   role: true,
+  active: true,
   phoneVerifiedAt: true,
   emailVerifiedAt: true,
 } as const;
@@ -41,6 +42,8 @@ export async function authenticated(req: Request, admin = false) {
     include: { user: { select: safeUser } },
   });
   if (!session || session.expiresAt <= new Date()) throw new UnauthorizedException('Inicia sesión');
+  // Una cuenta desactivada pierde el acceso aunque conserve una sesión abierta.
+  if (!session.user.active) throw new UnauthorizedException('Tu acceso está desactivado');
   if (admin && session.user.role !== 'ADMIN') throw new ForbiddenException('Acceso restringido');
   // Una cuenta de cliente solo está activa después de demostrar que controla su WhatsApp.
   // Sesiones anteriores a este requisito vuelven al inicio de sesión para verificarse.
@@ -65,4 +68,18 @@ export async function issueSession(userId: string, res: Response) {
     path: '/',
     maxAge: 86400000,
   });
+}
+
+export type StaffUser = Awaited<ReturnType<typeof authenticated>> & {
+  role: 'ADMIN' | 'TECHNICIAN';
+};
+/**
+ * Equipo de Instafix (administradores y técnicos). La identidad sale siempre de la sesión:
+ * ningún endpoint del equipo acepta un id de técnico enviado por el navegador.
+ */
+export async function authenticatedStaff(req: Request): Promise<StaffUser> {
+  const user = await authenticated(req);
+  if (user.role !== 'ADMIN' && user.role !== 'TECHNICIAN')
+    throw new ForbiddenException('Acceso restringido');
+  return user as StaffUser;
 }

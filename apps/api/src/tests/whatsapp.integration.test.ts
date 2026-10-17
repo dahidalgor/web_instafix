@@ -7,9 +7,11 @@ import { receiveCustomerMessage } from '../whatsapp/inbound';
 import { processJob } from '../whatsapp/worker';
 import { ProviderError } from '../integrations/provider-error';
 import { receiveDelivery } from '../whatsapp/delivery';
+import type { StaffUser } from '../auth/session';
+import { confirmAppointment } from '../staff/staff-appointments.service';
 
 test(
-  'persistent booking → location → Cal confirmation → reminders; deduplication and cancellation',
+  'persistent booking → location → technician confirmation → reminders; deduplication and cancellation',
   { skip: process.env.INSTAFIX_INTEGRATION !== '1' },
   async (t) => {
     const prefix = `wa-test-${randomUUID()}`;
@@ -17,6 +19,7 @@ test(
     Object.assign(process.env, {
       CAL_EVENT_TYPE_ID: '987654321',
       WHATSAPP_ENABLED: 'false',
+      WHATSAPP_TEMPLATE_CONFIRMED: 'instafix_cita_confirmada',
     });
     const phone = '+593999123456';
     const start = new Date(Date.now() + 4 * 86400000);
@@ -92,34 +95,38 @@ test(
     assert.equal((await appointment(first)).locationReceivedAt, null);
     await receiveCustomerMessage(location('first'));
     await receiveCustomerMessage(location('first'));
-    assert.equal((await appointment(first)).status, 'PENDING_LOCATION');
-    const confirmJob = await db.automationJob.findFirstOrThrow({
-      where: { appointmentId: a.id, kind: 'CAL_CONFIRM' },
-    });
-    await processJob(confirmJob.id, {
-      ...providers,
-      confirm: async () => {
-        throw new ProviderError('Cal no responde', 'RETRY');
-      },
-    });
-    assert.equal((await appointment(first)).status, 'PENDING_LOCATION');
+    // La ubicación solo informa al técnico: no confirma la visita ni la reserva de Cal.com.
+    const located = await appointment(first);
+    assert.equal(located.status, 'PENDING_LOCATION');
+    assert.ok(located.locationReceivedAt);
     assert.equal(
-      await db.automationJob.count({ where: { appointmentId: a.id, kind: 'CONFIRMED' } }),
+      await db.automationJob.count({ where: { appointmentId: a.id, kind: 'CAL_CONFIRM' } }),
       0,
     );
-    await processJob(confirmJob.id, providers, new Date(Date.now() + 300000));
-    assert.equal(confirms, 1);
-    assert.equal((await appointment(first)).status, 'CONFIRMED');
+    // Un técnico confirma: la cita queda asignada y se encolan confirmación y recordatorios.
+    const technician = await db.user.create({
+      data: {
+        name: 'Técnico WhatsApp',
+        phone: `${prefix}:tech`,
+        passwordHash: 'sin-login',
+        role: 'TECHNICIAN',
+      },
+    });
+    t.after(() => db.user.deleteMany({ where: { id: technician.id } }).then(() => undefined));
+    await confirmAppointment(technician as StaffUser, a.id);
+    const confirmed = await appointment(first);
+    assert.equal(confirmed.status, 'CONFIRMED');
+    assert.equal(confirmed.assignedTechnicianId, technician.id);
     const jobs = await db.automationJob.findMany({ where: { appointmentId: a.id } });
     assert.deepEqual(
       jobs.map((j) => j.kind).sort(),
-      ['INITIAL', 'CAL_CONFIRM', 'CONFIRMED', 'DAY_BEFORE', 'SAME_DAY'].sort(),
+      ['INITIAL', 'CONFIRMED', 'DAY_BEFORE', 'SAME_DAY'].sort(),
     );
     for (const kind of ['DAY_BEFORE', 'SAME_DAY'])
       assert.equal(jobs.find((j) => j.kind === kind)?.dueAt.getUTCHours(), 13);
     await receiveCalWebhook(event(first, 'BOOKING_CREATED', { status: 'ACCEPTED' }));
     assert.equal((await appointment(first)).status, 'CONFIRMED');
-    assert.equal(await db.automationJob.count({ where: { appointmentId: a.id } }), 5);
+    assert.equal(await db.automationJob.count({ where: { appointmentId: a.id } }), 4);
     await receiveCalWebhook(event(first, 'BOOKING_CANCELLED'));
     await receiveCalWebhook(event(first));
     assert.equal((await appointment(first)).status, 'CANCELLED');

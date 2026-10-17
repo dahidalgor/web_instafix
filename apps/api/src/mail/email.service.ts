@@ -25,8 +25,16 @@ export function mailStatus() {
   };
 }
 
-/** Los avisos de citas se activan después de desactivar los correos de Cal.com al cliente. */
-export const appointmentEmailsEnabled = () => process.env.APPOINTMENT_EMAILS_ENABLED === 'true';
+/**
+ * Avisos de citas por correo. Explícito: «true»/«false». Sin valor, se activan solo si Cal.com
+ * ya no puede escribir al cliente (CAL_ATTENDEE_RELAY_EMAIL), para no duplicar correos.
+ */
+export const appointmentEmailsEnabled = () => {
+  const value = process.env.APPOINTMENT_EMAILS_ENABLED?.trim().toLowerCase();
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return Boolean(process.env.CAL_ATTENDEE_RELAY_EMAIL?.trim());
+};
 
 const providerName = () =>
   /brevo|sendinblue/i.test(process.env.SMTP_HOST || '') ? 'BREVO' : 'SMTP';

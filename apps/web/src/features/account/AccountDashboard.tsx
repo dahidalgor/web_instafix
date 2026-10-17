@@ -9,6 +9,7 @@ import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
 import { AccountSecurity } from './AccountSecurity';
 import { AppointmentActions } from './AppointmentActions';
+import { AppointmentCard } from '../../components/appointments/AppointmentCard';
 import { Login } from './Login';
 
 // Enlaces de correo: #restablecer?token=… y #verificar-correo?token=…
@@ -168,6 +169,16 @@ export function AccountDashboard() {
     appointmentFilter === 'upcoming'
       ? upcoming
       : appointments.filter((item) => !upcoming.includes(item)).reverse();
+  // Visitas completadas con servicios registrados por el técnico, sin contar dos veces las
+  // que además tienen un trabajo con garantía registrado en administración.
+  const servicesDone =
+    jobs.length +
+    appointments.filter(
+      (item) =>
+        item.status === 'COMPLETED' &&
+        item.services?.length &&
+        !jobs.some((job) => job.appointmentId === item.id),
+    ).length;
   const activeWarranties = jobs.filter(
     (job) => job.warrantyEndsAt && new Date(job.warrantyEndsAt).getTime() > now,
   ).length;
@@ -183,7 +194,7 @@ export function AccountDashboard() {
           <h1>Hola, {user.name}</h1>
           <p>{user.phone}</p>
         </div>
-        <button className="text-button" disabled={loggingOut} onClick={logout}>
+        <button className="btn btn-ghost btn-small" disabled={loggingOut} onClick={logout}>
           {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
         </button>
       </div>
@@ -198,7 +209,7 @@ export function AccountDashboard() {
           <span>Citas próximas</span>
         </div>
         <div>
-          <strong>{loading || error ? '—' : jobs.length}</strong>
+          <strong>{loading || error ? '—' : servicesDone}</strong>
           <span>Servicios realizados</span>
         </div>
         <div>
@@ -265,55 +276,61 @@ export function AccountDashboard() {
               </a>
             </div>
           )}
-          {shown.map((item) => (
-            <article className="history-card" key={item.id}>
-              <span className="badge">{appointmentLabels[item.status]}</span>
-              <p className="eyebrow">Solicitud</p>
-              <h2>“{item.title}”</h2>
-              {item.bookingIdentityIssue && (
-                <p role="status" className="calendar-account-note">
-                  Tu reserva está pendiente de revisión porque sus datos de contacto no coinciden
-                  con tu cuenta. Contacta con InstaFix para corregirlos antes de confirmar la
-                  visita.
-                </p>
-              )}
-              <dl className="appointment-details">
-                <div>
-                  <dt>Servicio asignado por el técnico</dt>
-                  <dd>
-                    {item.assignedService
-                      ? `${item.assignedService.device} · ${item.assignedService.title}`
-                      : 'Pendiente de diagnóstico'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Fecha y hora estimada</dt>
-                  <dd>{format(item.startsAt, item.timeZone)}</dd>
-                </div>
-                <div>
-                  <dt>Fin estimado</dt>
-                  <dd>{format(item.endsAt, item.timeZone)}</dd>
-                </div>
-                <div>
-                  <dt>Zona horaria</dt>
-                  <dd>{item.timeZone}</dd>
-                </div>
-                <div>
-                  <dt>Técnico</dt>
-                  <dd>{item.technician || 'Por asignar'}</dd>
-                </div>
-                <div>
-                  <dt>Dirección</dt>
-                  <dd>{item.address || 'Pendiente de ubicación'}</dd>
-                </div>
-              </dl>
-              <p className="small">Referencia: {item.id}</p>
-              <AppointmentActions appointment={item} onChanged={() => void load()} />
-              <a className="text-button" href="#solicitud">
-                Consultar sobre mi cita →
-              </a>
-            </article>
-          ))}
+          <div className="appt-list">
+            {shown.map((item) => (
+              <AppointmentCard
+                key={item.id}
+                status={item.status}
+                startsAt={item.startsAt}
+                timeZone={item.timeZone}
+                request={item.title}
+                technician={item.assignedTechnician?.name || item.technician || null}
+                details={
+                  <>
+                    <div>
+                      <dt>Ubicación</dt>
+                      <dd>
+                        {item.address ||
+                          (item.locationReceivedAt ? 'Recibida' : 'Pendiente por WhatsApp')}
+                      </dd>
+                    </div>
+                    {!!item.services?.length && (
+                      <div className="appt-meta-wide">
+                        <dt>Servicios realizados</dt>
+                        <dd>
+                          <ul className="performed-list">
+                            {item.services.map((service) => (
+                              <li key={service.id}>
+                                {service.nameSnapshot}
+                                {service.quantity > 1 ? ` ×${service.quantity}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        </dd>
+                      </div>
+                    )}
+                  </>
+                }
+              >
+                {item.status === 'PENDING_LOCATION' && (
+                  <p className="appt-hint">
+                    Recibimos tu solicitud. Te avisaremos cuando un técnico confirme tu visita.
+                  </p>
+                )}
+                {item.bookingIdentityIssue && (
+                  <p role="status" className="calendar-account-note">
+                    Tu reserva está pendiente de revisión porque sus datos de contacto no coinciden
+                    con tu cuenta. Contacta con InstaFix para corregirlos antes de confirmar la
+                    visita.
+                  </p>
+                )}
+                <AppointmentActions appointment={item} onChanged={() => void load()} />
+                <a className="btn btn-ghost" href="#solicitud">
+                  Consultar sobre mi cita
+                </a>
+              </AppointmentCard>
+            ))}
+          </div>
         </>
       ) : (
         <>
@@ -324,8 +341,8 @@ export function AccountDashboard() {
                 Cuando finalice un trabajo vinculado a tu cuenta, verás aquí su importe y las
                 condiciones de garantía.
               </p>
-              <a className="text-button" href="#servicios">
-                Explorar servicios →
+              <a className="btn btn-secondary" href="#servicios">
+                Explorar servicios
               </a>
             </div>
           )}
@@ -350,8 +367,8 @@ export function AccountDashboard() {
                 <p className="service-description">
                   {job.warrantyTerms || 'Consulta las condiciones con Instafix.'}
                 </p>
-                <a className="text-button" href="#garantia">
-                  Políticas de garantía →
+                <a className="btn btn-ghost" href="#garantia">
+                  Políticas de garantía
                 </a>
               </article>
             );

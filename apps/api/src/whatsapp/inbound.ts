@@ -1,6 +1,6 @@
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { db } from '../database/client';
-import { lockAppointment, queueJob, queueReminders } from './queue';
+import { lockAppointment } from './queue';
 
 // Entrada normalizada: únicamente mensajes nuevos del cliente, nunca ecos ni historial.
 export async function receiveCustomerMessage(message: {
@@ -25,7 +25,8 @@ export async function receiveCustomerMessage(message: {
         where: {
           contactPhone: phone,
           bookingIdentityIssue: null,
-          status: 'PENDING_LOCATION',
+          status: { in: ['PENDING_LOCATION', 'CONFIRMED'] },
+          locationReceivedAt: null,
           whatsappConsentAt: { not: null },
           startsAt: { gt: new Date() },
           createdAt: { lte: new Date(receivedAt.getTime() + 1000) },
@@ -52,7 +53,7 @@ export async function receiveCustomerMessage(message: {
         });
         if (
           !current.bookingIdentityIssue &&
-          current.status === 'PENDING_LOCATION' &&
+          ['PENDING_LOCATION', 'CONFIRMED'].includes(current.status) &&
           !current.locationReceivedAt &&
           current.automationRevision === candidate.automationRevision
         ) {
@@ -67,7 +68,6 @@ export async function receiveCustomerMessage(message: {
                 `${message.location.latitude}, ${message.location.longitude}`,
               locationReceivedAt: receivedAt,
               automationIssue: null,
-              ...(!current.calUid ? { status: 'CONFIRMED' } : {}),
             },
           });
           await tx.automationJob.updateMany({
@@ -78,11 +78,7 @@ export async function receiveCustomerMessage(message: {
             },
             data: { status: 'CANCELLED' },
           });
-          if (updated.calUid) await queueJob(tx, updated, 'CAL_CONFIRM', new Date());
-          else {
-            await queueJob(tx, updated, 'CONFIRMED', new Date());
-            await queueReminders(tx, updated);
-          }
+          // La ubicación solo informa al técnico; la confirmación la hace el técnico.
           outcome = 'LOCATION_ACCEPTED';
         }
       } else if (candidates.length > 1) {

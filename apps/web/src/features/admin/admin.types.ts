@@ -11,4 +11,5 @@ export const emptyService: ServiceDraft = {
   warrantyDays: 0,
   availability: 'UNAVAILABLE',
   media: [],
+  cover: null,
 };

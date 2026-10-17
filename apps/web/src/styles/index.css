@@ -4,6 +4,7 @@
 @import './forms.css';
 @import './controls.css';
 @import './layout.css';
+@import './appointments.css';
 @import '../features/home/home.css';
 @import '../features/about/about.css';
 @import '../features/catalog/catalog.css';
@@ -13,6 +14,7 @@
 @import '../features/how-it-works/how-it-works.css';
 @import '../features/media/media-carousel.css';
 @import '../features/admin/admin.css';
+@import '../features/technician/technician.css';
 @import '../features/media/media-editor.css';
 @import '../features/contact/contact.css';
 @import './typography.css';

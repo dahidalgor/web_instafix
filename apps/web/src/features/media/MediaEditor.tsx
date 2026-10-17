@@ -1,4 +1,4 @@
-import type { Offering } from '@instafix/contracts';
+import { MAX_VIDEOS, mediaProblem, type Offering } from '@instafix/contracts';
 import { useState } from 'react';
 import { uploadMedia } from './upload-media';
 type Media = Offering['media'];
@@ -20,6 +20,12 @@ export function MediaEditor({
     if (!files?.length || busy) return;
     if (value.length + files.length > maxFiles) {
       setStatus(`Puedes añadir hasta ${maxFiles} archivos.`);
+      return;
+    }
+    const videos = value.filter((item) => item.type === 'video').length;
+    const incoming = Array.from(files).filter((file) => file.type.startsWith('video/')).length;
+    if (videos + incoming > MAX_VIDEOS) {
+      setStatus(`Cada servicio admite como máximo ${MAX_VIDEOS} videos.`);
       return;
     }
     setBusy(true);
@@ -45,7 +51,8 @@ export function MediaEditor({
         next = [...next, media];
         onChange(next);
       }
-      setStatus('Archivos preparados. Guarda los cambios para publicarlos.');
+      // Un video nuevo justo después de otro se avisa: hay que intercalar una imagen.
+      setStatus(mediaProblem(next) || 'Archivos preparados. Guarda los cambios para publicarlos.');
     } catch (error: any) {
       setStatus(error.message);
     } finally {
@@ -56,14 +63,22 @@ export function MediaEditor({
   function move(index: number, offset: number) {
     const copy = [...value];
     [copy[index], copy[index + offset]] = [copy[index + offset], copy[index]];
+    // Reordenar no puede dejar dos videos seguidos.
+    const problem = mediaProblem(copy);
+    if (problem && !mediaProblem(value)) {
+      setStatus(problem);
+      return;
+    }
+    setStatus(problem || '');
     onChange(copy);
   }
+  const problem = maxFiles > 1 ? mediaProblem(value) : null;
   return (
     <section className="media-editor">
       <h3>Fotos y videos del trabajo</h3>
       <p className="small">
         Hasta {maxFiles} archivos. Fotos: 20 MB. Videos: 100 MB y 60 segundos; se publican sin
-        sonido. El primer archivo encabeza la galería.
+        sonido.{maxFiles > 1 && ` Máximo ${MAX_VIDEOS} videos, separados por al menos una imagen.`}
       </p>
       <label className="media-upload">
         Subir desde mi dispositivo
@@ -79,6 +94,11 @@ export function MediaEditor({
         />
       </label>
       {busy && <progress value={progress} max={100} aria-label="Progreso de subida" />}
+      {problem && (
+        <p role="alert" className="error">
+          {problem}
+        </p>
+      )}
       {status && <p role="status">{status}</p>}
       <div className="media-editor-grid">
         {value.map((media, i) => (

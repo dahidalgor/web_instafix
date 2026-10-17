@@ -48,7 +48,7 @@ export function brandedEmail(input: {
   ]
     .filter(Boolean)
     .join('\n\n');
-  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escape(input.subject)}</title></head><body style="margin:0;padding:0;background:#f4f1f7;color:#181632;font-family:Arial,Helvetica,sans-serif"><div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escape(input.badge || input.intro)}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1f7"><tr><td align="center" style="padding:24px 12px"><!--[if mso]><table role="presentation" width="600"><tr><td><![endif]--><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e4deeb;border-radius:20px"><tr><td style="padding:26px 28px;background:#17142f;border-radius:20px 20px 0 0"><img src="${assetSite}/images/instafix-logo.png" width="52" height="52" alt="Logo Instafix" style="display:inline-block;vertical-align:middle;border:0;border-radius:50%"><span style="display:inline-block;vertical-align:middle;padding-left:14px;color:#ffffff;font-size:26px;font-weight:bold">Insta<span style="color:#f0a6d2">Fix</span></span></td></tr><tr><td style="padding:30px 26px">${input.badge ? `<p style="margin:0 0 10px;color:#1b7a4b;font-size:15px;font-weight:bold">${escape(input.badge)}</p>` : ''}<h1 style="font-size:25px;line-height:1.3;margin:0 0 20px;color:#17142f">${escape(input.intro)}</h1>${input.paragraphs.map(p).join('')}${details ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:6px 0 22px;background:#f8f5fa;border:1px solid #ece6f1;border-radius:12px">${details}</table>` : ''}${input.note ? `<p style="margin:0 0 22px;padding:14px 16px;background:#fff8e6;border-left:3px solid #d9a21b;border-radius:0 8px 8px 0;font-size:14px;line-height:1.6;color:#4d4436">${escape(input.note)}</p>` : ''}${button}${input.secondary ? `<p style="font-size:14px;line-height:1.6;color:#4d4560;margin:16px 0 0">${escape(input.secondary)}</p>` : ''}<p style="font-size:13px;line-height:1.6;color:#625970;margin:24px 0 0">¿Necesitas ayuda? <a href="https://wa.me/593984703819" style="color:#88115f">Escríbenos por WhatsApp</a>: +593 98 470 3819.</p></td></tr><tr><td style="padding:22px 26px;border-top:1px solid #e4deeb;color:#625970;font-size:12px;line-height:1.7"><strong style="color:#17142f">Instafix</strong><br>Servicio técnico a domicilio · Ecuador<br><a href="${site}/#contacto" style="color:#88115f">Contacto</a> · <a href="${site}/#garantia" style="color:#88115f">Políticas de garantía</a></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>`;
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escape(input.subject)}</title></head><body style="margin:0;padding:0;background:#f4f1f7;color:#181632;font-family:Arial,Helvetica,sans-serif"><div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escape(input.badge || input.intro)}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1f7"><tr><td align="center" style="padding:24px 12px"><!--[if mso]><table role="presentation" width="600"><tr><td><![endif]--><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e4deeb;border-radius:20px"><tr><td style="padding:26px 28px;background:#17142f;border-radius:20px 20px 0 0"><img src="${assetSite}/images/instafix-logo-128.png" width="52" height="52" alt="Logo Instafix" style="display:inline-block;vertical-align:middle;border:0;border-radius:50%"><span style="display:inline-block;vertical-align:middle;padding-left:14px;color:#ffffff;font-size:26px;font-weight:bold">Insta<span style="color:#f0a6d2">Fix</span></span></td></tr><tr><td style="padding:30px 26px">${input.badge ? `<p style="margin:0 0 10px;color:#1b7a4b;font-size:15px;font-weight:bold">${escape(input.badge)}</p>` : ''}<h1 style="font-size:25px;line-height:1.3;margin:0 0 20px;color:#17142f">${escape(input.intro)}</h1>${input.paragraphs.map(p).join('')}${details ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:6px 0 22px;background:#f8f5fa;border:1px solid #ece6f1;border-radius:12px">${details}</table>` : ''}${input.note ? `<p style="margin:0 0 22px;padding:14px 16px;background:#fff8e6;border-left:3px solid #d9a21b;border-radius:0 8px 8px 0;font-size:14px;line-height:1.6;color:#4d4436">${escape(input.note)}</p>` : ''}${button}${input.secondary ? `<p style="font-size:14px;line-height:1.6;color:#4d4560;margin:16px 0 0">${escape(input.secondary)}</p>` : ''}<p style="font-size:13px;line-height:1.6;color:#625970;margin:24px 0 0">¿Necesitas ayuda? <a href="https://wa.me/593984703819" style="color:#88115f">Escríbenos por WhatsApp</a>: +593 98 470 3819.</p></td></tr><tr><td style="padding:22px 26px;border-top:1px solid #e4deeb;color:#625970;font-size:12px;line-height:1.7"><strong style="color:#17142f">Instafix</strong><br>Servicio técnico a domicilio · Ecuador<br><a href="${site}/#contacto" style="color:#88115f">Contacto</a> · <a href="${site}/#garantia" style="color:#88115f">Políticas de garantía</a></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>`;
   return { subject: input.subject, text, html };
 }
 
@@ -102,8 +102,9 @@ export type AppointmentEmailData = {
   startsAt: string;
   timeZone: string;
   request: string;
-  /** false mientras la visita espera la ubicación por WhatsApp. */
+  /** Obsoleto: el correo de creación ya no anuncia confirmación. */
   confirmed?: boolean;
+  technicianName?: string | null;
   guest: boolean;
   previousStartsAt?: string | null;
 };
@@ -140,23 +141,40 @@ function requestDetails(data: AppointmentEmailData, previous = false): Detail[] 
   ];
 }
 
+/** Al agendar: la visita queda pendiente hasta que un técnico la confirme. Nunca dice «confirmada». */
 export function appointmentCreatedEmail(data: AppointmentEmailData) {
-  const confirmed = data.confirmed !== false;
   return brandedEmail({
-    subject: confirmed ? 'Tu cita con Instafix está confirmada' : 'Recibimos tu cita con Instafix',
-    badge: confirmed ? '✓ Tu cita está confirmada' : '✓ Tu cita fue agendada',
-    intro: `Hola ${firstName(data.name)},`,
+    subject: 'Recibimos tu solicitud de visita · Instafix',
+    badge: '✓ Solicitud recibida',
+    intro: `Hola ${firstName(data.name)}, recibimos tu solicitud de visita`,
     paragraphs: [
       data.guest
-        ? 'Tu cita ha sido creada correctamente.'
-        : 'Tu visita con Instafix ha sido agendada correctamente.',
-      ...(confirmed
-        ? []
-        : [
-            'Para confirmar la visita te escribiremos por WhatsApp y te pediremos la ubicación donde debe llegar el técnico.',
-          ]),
+        ? 'Tu solicitud de visita fue creada correctamente y está pendiente de confirmación.'
+        : 'Tu solicitud quedó agendada y está pendiente de confirmación.',
+      'Un técnico de Instafix revisará tu solicitud y te avisaremos cuando confirme la visita. También te escribiremos por WhatsApp para pedirte la ubicación donde debe llegar.',
     ],
-    details: requestDetails(data),
+    details: [...requestDetails(data), { label: 'Estado', value: 'Pendiente de confirmación' }],
+    note: visitNote,
+    ...appointmentAccess(data.guest),
+  });
+}
+
+/** Un técnico confirmó la visita y quedó asignado. */
+export function appointmentConfirmedEmail(data: AppointmentEmailData) {
+  return brandedEmail({
+    subject: 'Tu visita está confirmada ✓ · Instafix',
+    badge: '✓ Tu visita está confirmada',
+    intro: `Hola ${firstName(data.name)}, tu visita está confirmada`,
+    paragraphs: [
+      data.technicianName
+        ? `${data.technicianName} será tu técnico y irá hasta tu domicilio en el horario agendado.`
+        : 'Un técnico de Instafix irá hasta tu domicilio en el horario agendado.',
+    ],
+    details: [
+      ...requestDetails(data).slice(0, 2),
+      ...(data.technicianName ? [{ label: 'Técnico asignado', value: data.technicianName }] : []),
+      ...requestDetails(data).slice(2),
+    ],
     note: `Tu técnico se pondrá en contacto contigo antes de llegar. ${visitNote}`,
     ...appointmentAccess(data.guest),
   });

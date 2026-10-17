@@ -18,9 +18,14 @@ type Providers = {
 export function kindStillValid(kind: string, appointment: Appointment) {
   switch (kind) {
     case 'INITIAL':
-      return appointment.status === 'PENDING_LOCATION' && !appointment.locationReceivedAt;
+      // La ubicación se pide hasta recibirla, aunque un técnico ya haya confirmado.
+      return (
+        ['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status) &&
+        !appointment.locationReceivedAt
+      );
     case 'CAL_CONFIRM':
-      return appointment.status === 'PENDING_LOCATION' && Boolean(appointment.locationReceivedAt);
+      // Obsoleto: la ubicación ya no confirma la visita; la confirma un técnico.
+      return false;
     case 'CANCELLED':
       return appointment.status === 'CANCELLED';
     case 'RESCHEDULED':

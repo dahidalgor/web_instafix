@@ -10,6 +10,7 @@ import {
   Req,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
 import { randomUUID } from 'node:crypto';
 import { authenticated, checkOrigin } from '../auth/session';
@@ -59,7 +60,14 @@ export class CatalogController {
     if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
     const equipment = await db.equipment.findUnique({ where: { id: parsed.data.equipmentId } });
     if (!equipment) throw new BadRequestException('Equipo no válido');
-    return { ...parsed.data, device: equipment.name, category: equipment.category };
+    const { cover, ...data } = parsed.data;
+    return {
+      ...data,
+      // undefined = no tocar la portada; null = quitarla (los servicios antiguos usan la 1.ª foto).
+      ...(cover === undefined ? {} : { cover: cover ?? Prisma.DbNull }),
+      device: equipment.name,
+      category: equipment.category,
+    };
   }
 
   @Post('admin/services') async addService(@Body() body: unknown, @Req() req: Request) {

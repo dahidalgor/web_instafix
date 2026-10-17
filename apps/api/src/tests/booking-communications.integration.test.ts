@@ -136,7 +136,7 @@ test(
       assert.equal(appointment.contactPhone, phone);
       assert.equal(result.email.status, 'SENT');
       assert.equal(result.account, 'GUEST');
-      assert.equal(sentTo(email, /Recibimos tu cita/), 1);
+      assert.equal(sentTo(email, /Recibimos tu solicitud/), 1);
       // BOOKING_CREATED/REQUESTED repetidos no generan otro correo.
       await receiveCalWebhook(
         webhook('BOOKING_CREATED', uid, start, phone, { status: 'ACCEPTED' }),
@@ -234,7 +234,9 @@ test(
       });
       assert.equal(appointment.userId, user.id);
       assert.equal(appointment.contactPhone, phone);
-      assert.equal(sentTo(email, /está confirmada/), 1);
+      assert.equal(sentTo(email, /Recibimos tu solicitud/), 1);
+      // Agendada ≠ confirmada: ningún correo de confirmación hasta que un técnico la confirme.
+      assert.equal(sentTo(email, /confirmada/), 0);
 
       await controller.reschedule(appointment.id, { start: moved.toISOString() }, req(cookie));
       const after = await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
@@ -251,11 +253,12 @@ test(
       assert.equal(sentTo(email, /reprogramada/), 1);
       assert.equal(await db.appointment.count({ where: { userId: user.id } }), 1);
 
-      // Cancelación fallida en Cal.com: ni cambio de estado ni correo.
+      // Cancelación fallida en Cal.com: ni cambio de estado ni correo. Aunque Cal.com aceptó la
+      // reserva, sigue pendiente hasta que un técnico la confirme.
       await assert.rejects(controller.cancel(appointment.id, req(cookie)));
       assert.equal(
         (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status,
-        'CONFIRMED',
+        'PENDING_LOCATION',
       );
       assert.equal(sentTo(email, /cancelada/), 0);
 
