@@ -1,6 +1,6 @@
 import type { AccountUser, VerificationTicket } from '@instafix/contracts';
 import { type CountryCode, normalizePhone } from '@instafix/contracts/src/phone';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { PhoneField } from './PhoneField';
 import { PhoneVerification } from './PhoneVerification';
@@ -35,6 +35,13 @@ export function Login({
   const [error, setError] = useState<ReactNode>('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  // Segundos hasta poder pedir otro código (límite de 60 s por número).
+  const [wait, setWait] = useState(0);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const timer = window.setTimeout(() => setWait((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [wait]);
   const changeMode = (next: Mode) => {
     setMode(next);
     setError('');
@@ -149,6 +156,13 @@ export function Login({
         setNotice('Contraseña actualizada. Ya puedes iniciar sesión.');
       }
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'OTP_RATE_LIMIT') {
+        setWait(Number(e.body?.retryAfter) || 60);
+        setError(
+          'Ya pediste un código para este número hace muy poco. Si tu WhatsApp está verificado, revisa tus mensajes; si no, podrás pedir otro cuando termine la cuenta atrás.',
+        );
+        return;
+      }
       setError(e instanceof Error ? e.message : 'No se pudo completar la solicitud.');
     } finally {
       setBusy(false);
@@ -351,8 +365,8 @@ export function Login({
                 </p>
               )}
               <div className="auth-actions">
-                <button className="button" disabled={busy}>
-                  {busy ? 'Procesando…' : labels[mode]}
+                <button className="button" disabled={busy || wait > 0}>
+                  {busy ? 'Procesando…' : wait > 0 ? `Espera ${wait} s` : labels[mode]}
                 </button>
               </div>
             </form>
