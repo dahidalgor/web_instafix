@@ -145,7 +145,7 @@ test(
     assert.equal((await appointment(third)).locationReceivedAt, null);
     const fourth = `${prefix}:fourth`;
     await receiveCalWebhook(event(fourth, 'BOOKING_RESCHEDULED', { rescheduleUid: third }));
-    assert.equal((await appointment(third)).status, 'CANCELLED');
+    assert.equal((await appointment(third)).status, 'RESCHEDULED');
     assert.equal((await appointment(fourth)).status, 'PENDING_LOCATION');
     const fourthJob = await db.automationJob.findFirstOrThrow({
       where: { appointmentId: (await appointment(fourth)).id },

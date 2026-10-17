@@ -8,6 +8,10 @@ La web presenta datos y llama a la API. El servidor valida y persiste. PostgreSQ
 
 El catálogo relaciona `Offering` con `Equipment`. Cada servicio conserva también categoría y equipo descriptivos. Las cuentas usan `User` y `Session`; las citas internas usan `Appointment`, y los trabajos finalizados y sus garantías, `CompletedJob`. Los medios optimizados se guardan en disco o R2 y sus referencias permanecen en el catálogo.
 
+## Reserva
+
+La web propia consulta horarios y crea, cancela o reprograma reservas a través de NestJS, que llama a Cal.com API v2. Cada cita se guarda en `Appointment` con su `customerRequest` (lo que pide el cliente), separada del trabajo realizado (`CompletedJob`). Los cambios escriben eventos en `AppointmentEvent` para la mensajería. Detalles en [Reserva propia con Cal.com API v2](booking.md).
+
 ## Confirmación y mensajería
 
 `WhatsAppModule` reúne el transporte único: lógica de negocio → `WhatsAppService` → `WasapFlowClient` → WasapFlow Bridge. La conexión se realiza con Embedded Signup alojado y exige Coexistence. `WhatsAppConnection` conserva la WABA verificada; `BridgeWebhook` es la bandeja durable; `WhatsAppMessage` y `WhatsAppContact` sincronizan mensajes/contactos sin mezclar su identidad con la de cuentas web.

@@ -1,13 +1,9 @@
-import {
-  appointmentLabels,
-  type AccountUser,
-  type Appointment,
-  type CompletedJob,
-} from '@instafix/contracts';
+import { type AccountUser, type CompletedJob } from '@instafix/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
 import { Login } from './Login';
+import { MyAppointments, type MyAppointmentsData } from './MyAppointments';
 
 export function AccountDashboard() {
   const loadRevision = useRef(0);
@@ -16,10 +12,12 @@ export function AccountDashboard() {
   const [sessionError, setSessionError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<MyAppointmentsData>({
+    upcoming: [],
+    history: [],
+  });
   const [jobs, setJobs] = useState<CompletedJob[]>([]);
   const [section, setSection] = useState<'appointments' | 'jobs'>('appointments');
-  const [appointmentFilter, setAppointmentFilter] = useState('upcoming');
   const [loggingOut, setLoggingOut] = useState(false);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -42,14 +40,16 @@ export function AccountDashboard() {
     void loadSession();
   }, [loadSession]);
   const load = useCallback(
-    async (signal?: AbortSignal) => {
+    async (signal?: AbortSignal, silent = false) => {
       if (!user) return;
       const revision = ++loadRevision.current;
-      setLoading(true);
+      // Tras cancelar o reprogramar se actualiza sin ocultar la lista.
+      if (!silent) setLoading(true);
       setError('');
       try {
         const [nextAppointments, nextJobs] = await Promise.all([
-          api<Appointment[]>('my/appointments', { signal }),
+          // Citas del usuario de la sesión, ya separadas por el servidor.
+          api<MyAppointmentsData>('appointments/me', { signal }),
           api<CompletedJob[]>('my/jobs', { signal }),
         ]);
         if (!signal?.aborted && revision === loadRevision.current) {
@@ -60,7 +60,7 @@ export function AccountDashboard() {
         if (signal?.aborted || revision !== loadRevision.current) return;
         if (e instanceof ApiError && e.status === 401) {
           setUser(null);
-          setAppointments([]);
+          setAppointments({ upcoming: [], history: [] });
           setJobs([]);
         } else setError('No pudimos cargar tus citas y servicios. Puedes volver a intentarlo.');
       } finally {
@@ -80,7 +80,7 @@ export function AccountDashboard() {
   useEffect(() => {
     if (!user) return;
     const refresh = () => {
-      if (document.visibilityState === 'visible') void load();
+      if (document.visibilityState === 'visible') void load(undefined, true);
     };
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
@@ -96,7 +96,7 @@ export function AccountDashboard() {
       await api('auth/logout', { method: 'POST' });
       loadRevision.current++;
       setUser(null);
-      setAppointments([]);
+      setAppointments({ upcoming: [], history: [] });
       setJobs([]);
     } catch {
       setError('No se pudo cerrar la sesión. Inténtalo nuevamente.');
@@ -117,15 +117,22 @@ export function AccountDashboard() {
         <button onClick={loadSession}>Reintentar</button>
       </section>
     );
-  if (!user) return <Login onLogin={setUser} />;
-  const upcoming = appointments.filter(
-    (item) =>
-      !['CANCELLED', 'COMPLETED'].includes(item.status) && new Date(item.endsAt).getTime() >= now,
-  );
-  const shown =
-    appointmentFilter === 'upcoming'
-      ? upcoming
-      : appointments.filter((item) => !upcoming.includes(item)).reverse();
+  if (!user)
+    return (
+      <Login
+        onLogin={(next) => {
+          setUser(next);
+          // Si el inicio de sesión vino desde la agenda, se vuelve a ella con el borrador.
+          try {
+            const target = sessionStorage.getItem('instafix:return-to');
+            sessionStorage.removeItem('instafix:return-to');
+            if (target === '#agenda') window.location.hash = target;
+          } catch {
+            // Sin almacenamiento: el usuario permanece en Mi cuenta.
+          }
+        }}
+      />
+    );
   const activeWarranties = jobs.filter(
     (job) => job.warrantyEndsAt && new Date(job.warrantyEndsAt).getTime() > now,
   ).length;
@@ -147,7 +154,7 @@ export function AccountDashboard() {
       </div>
       <div className="account-summary">
         <div>
-          <strong>{loading || error ? '—' : upcoming.length}</strong>
+          <strong>{loading || error ? '—' : appointments.upcoming.length}</strong>
           <span>Citas próximas</span>
         </div>
         <div>
@@ -180,88 +187,7 @@ export function AccountDashboard() {
           {error} <button onClick={() => void load()}>Reintentar</button>
         </p>
       ) : section === 'appointments' ? (
-        <>
-          <div className="filters">
-            <button
-              aria-pressed={appointmentFilter === 'upcoming'}
-              className={appointmentFilter === 'upcoming' ? 'active' : ''}
-              onClick={() => setAppointmentFilter('upcoming')}
-            >
-              Próximas
-            </button>
-            <button
-              aria-pressed={appointmentFilter === 'past'}
-              className={appointmentFilter === 'past' ? 'active' : ''}
-              onClick={() => setAppointmentFilter('past')}
-            >
-              Historial
-            </button>
-          </div>
-          {!shown.length && (
-            <div className="empty-account">
-              <h2>
-                {appointmentFilter === 'upcoming'
-                  ? 'No tienes citas próximas'
-                  : 'Tu historial comienza aquí'}
-              </h2>
-              <p>
-                Aquí aparecerán las citas que Instafix haya vinculado a tu cuenta. Si reservaste
-                como invitado, solicita la vinculación a nuestro equipo.
-              </p>
-              <a className="button" href="#agenda">
-                Consultar horarios ↗
-              </a>
-            </div>
-          )}
-          {shown.map((item) => (
-            <article className="history-card" key={item.id}>
-              <span className="badge">{appointmentLabels[item.status]}</span>
-              <p className="eyebrow">{item.device}</p>
-              <h2>{item.title}</h2>
-              {item.bookingIdentityIssue && (
-                <p role="status" className="calendar-account-note">
-                  Tu reserva está pendiente de revisión porque sus datos de contacto no coinciden
-                  con tu cuenta. Contacta con InstaFix para corregirlos antes de confirmar la
-                  visita.
-                </p>
-              )}
-              <dl className="appointment-details">
-                <div>
-                  <dt>Servicio asignado por el técnico</dt>
-                  <dd>
-                    {item.assignedService
-                      ? `${item.assignedService.device} · ${item.assignedService.title}`
-                      : 'Pendiente de diagnóstico'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Inicio</dt>
-                  <dd>{format(item.startsAt, item.timeZone)}</dd>
-                </div>
-                <div>
-                  <dt>Fin estimado</dt>
-                  <dd>{format(item.endsAt, item.timeZone)}</dd>
-                </div>
-                <div>
-                  <dt>Zona horaria</dt>
-                  <dd>{item.timeZone}</dd>
-                </div>
-                <div>
-                  <dt>Técnico</dt>
-                  <dd>{item.technician || 'Por asignar'}</dd>
-                </div>
-                <div>
-                  <dt>Dirección</dt>
-                  <dd>{item.address || 'Pendiente de ubicación'}</dd>
-                </div>
-              </dl>
-              <p className="small">Referencia: {item.id}</p>
-              <a className="text-button" href="#solicitud">
-                Consultar sobre mi cita →
-              </a>
-            </article>
-          ))}
-        </>
+        <MyAppointments data={appointments} onChanged={() => load(undefined, true)} />
       ) : (
         <>
           {!jobs.length && (

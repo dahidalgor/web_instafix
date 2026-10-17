@@ -13,7 +13,7 @@ export function normalizePersonName(value: string) {
     .replace(/\s+/g, ' ')
     .replace(/(^|[\s’'\-])\p{L}/gu, (letter) => letter.toLocaleUpperCase('es'));
 }
-const personName = z
+export const personNameSchema = z
   .string()
   .trim()
   .min(2)
@@ -22,8 +22,8 @@ const personName = z
   .transform(normalizePersonName);
 export const registrationSchema = z
   .object({
-    firstName: personName,
-    lastName: personName,
+    firstName: personNameSchema,
+    lastName: personNameSchema,
     email: emailSchema,
     phone: z.string().regex(/^\+[1-9]\d{7,14}$/),
     password: z.string().min(12, 'Usa al menos 12 caracteres').max(128),

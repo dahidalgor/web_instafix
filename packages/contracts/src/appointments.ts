@@ -1,17 +1,32 @@
 import { z } from 'zod';
+// Estados que administración puede asignar manualmente a una cita.
 export const appointmentStatuses = [
   'PENDING_LOCATION',
   'CONFIRMED',
   'IN_PROGRESS',
   'COMPLETED',
   'CANCELLED',
+  'NO_SHOW',
 ] as const;
-export const appointmentLabels = {
-  PENDING_LOCATION: 'Pendiente de ubicación',
+// Estados de la CITA. CREATING y FAILED son internos de la creación en Cal.com;
+// RESCHEDULED marca la reserva sustituida por otra. Ninguno describe la reparación.
+export const allAppointmentStatuses = [
+  'CREATING',
+  'FAILED',
+  ...appointmentStatuses,
+  'RESCHEDULED',
+] as const;
+export type AppointmentStatus = (typeof allAppointmentStatuses)[number];
+export const appointmentLabels: Record<AppointmentStatus, string> = {
+  CREATING: 'Procesando',
+  FAILED: 'No completada',
+  PENDING_LOCATION: 'Pendiente de confirmación',
   CONFIRMED: 'Confirmada',
   IN_PROGRESS: 'En servicio',
   COMPLETED: 'Completada',
   CANCELLED: 'Cancelada',
+  NO_SHOW: 'No asistida',
+  RESCHEDULED: 'Reprogramada',
 };
 export const appointmentSchema = z
   .object({
@@ -43,8 +58,11 @@ export const appointmentSchema = z
     (value) => new Date(value.endsAt) > new Date(value.startsAt),
     'El fin debe ser posterior al inicio',
   );
-export type Appointment = z.infer<typeof appointmentSchema> & {
+export type Appointment = Omit<z.infer<typeof appointmentSchema>, 'status'> & {
   id: string;
+  status: AppointmentStatus;
+  customerRequest?: string;
+  source?: string;
   bookingIdentityIssue?: string | null;
   assignedService?: { title: string; device: string } | null;
 };

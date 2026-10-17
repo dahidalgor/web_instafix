@@ -12,7 +12,7 @@ apps/web/src/
 │   ├── about/                # Quiénes somos y slideshow servido por la API
 │   ├── catalog/              # Servicios, fichas y disponibilidad
 │   ├── account/              # Acceso, citas e historial del cliente
-│   ├── booking/              # Calendario Cal.com
+│   ├── booking/              # Reserva propia: calendario, horarios, resumen (y formulario anterior)
 │   ├── contact/              # Página pública de contacto
 │   ├── analytics/            # Tiempo visible y visitas sin identidad
 │   ├── help/                 # Solicitud de asesoría
@@ -48,7 +48,7 @@ Los estados se expresan con clases o atributos; el JSX no declara estilos visual
 - `auth/session.ts` verifica origen, sesión y permisos. La cuenta del cliente se obtiene siempre de la sesión.
 - `media/media.controller.ts` autoriza las subidas y sirve archivos locales; `media-processor.ts` valida y convierte; `media-storage.ts` guarda en disco o R2.
 - `whatsapp/` contiene el módulo de WasapFlow, onboarding Coexistence, cola y recepción; `integrations/` mantiene Cal.com y la verificación de firmas. Consulta [la guía](whatsapp-setup.md).
-- `booking/` genera referencias de cuenta para Cal; `site/` administra diapositivas; `analytics/` recibe y agrega métricas públicas.
+- `booking/` contiene la reserva propia (`booking.service.ts`: disponibilidad, creación idempotente, cancelación y reprogramación; `booking-errors.ts`: códigos estables) y las referencias del formulario anterior. `appointments/my-appointments.controller.ts` expone Mis citas y `appointment-events.ts` el outbox de eventos. `integrations/cal-api.ts` es el único cliente de Cal.com API v2. `dev/` contiene el simulador local de Cal.com y la comprobación real controlada. `site/` administra diapositivas; `analytics/` recibe y agrega métricas públicas.
 - `scripts/` contiene tareas manuales para crear el administrador y cargar el catálogo.
 - `tests/` contiene las pruebas unitarias y de integración.
 

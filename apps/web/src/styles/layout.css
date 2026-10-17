@@ -236,6 +236,10 @@ header nav a[aria-current='page'] {
   .mobile-booking:focus-visible {
     outline: 3px solid var(--accent);
   }
+  /* En la propia agenda el botón flotante tapaba el formulario. */
+  .mobile-booking[aria-current='page'] {
+    display: none;
+  }
 }
 
 /* Menú móvil desplegable: todos los destinos visibles, sin desplazamiento horizontal. */

@@ -150,12 +150,18 @@ model SitePolicy {
   updatedAt DateTime @updatedAt
 }
 
+// Estado de la CITA (agenda). No representa el estado técnico de la reparación,
+// que vive en CompletedJob. CREATING/FAILED son estados internos de la creación en Cal.com.
 enum AppointmentStatus {
+  CREATING
+  FAILED
   PENDING_LOCATION
   CONFIRMED
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  RESCHEDULED
+  NO_SHOW
 }
 model Appointment {
   id String @id @default(uuid())
@@ -163,9 +169,25 @@ model Appointment {
   offering Offering? @relation(fields: [offeringId], references: [id], onDelete: SetNull)
   completedJob CompletedJob?
   userId String?
-  user User? @relation(fields: [userId], references: [id])
+  // Coincide con la migración original (RESTRICT): no se borra una cuenta con citas.
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
   contactName String @default("")
+  // E.164 normalizado. Para cuentas se copia del usuario autenticado, nunca del navegador.
   contactPhone String @default("")
+  contactEmail String?
+  // Lo que el cliente describe al reservar. El trabajo realizado se registra en CompletedJob.
+  customerRequest String @default("")
+  // CAL_EMBED (formulario antiguo), INSTAFIX (reserva propia vía API) o ADMIN.
+  source String @default("CAL_EMBED")
+  // Idempotencia del botón «Confirmar cita»: una clave por intento del cliente.
+  bookingKey String? @unique
+  bookingError String?
+  cancellationReason String?
+  calSyncedAt DateTime?
+  rescheduledFromId String? @unique
+  rescheduledFrom Appointment? @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo Appointment? @relation("AppointmentReschedule")
+  events AppointmentEvent[]
   whatsappConsentAt DateTime?
   calUid String? @unique
   calStatus String?
@@ -189,6 +211,21 @@ model Appointment {
   updatedAt DateTime @updatedAt
   @@index([userId, startsAt])
   @@index([contactPhone, status])
+  @@index([status, createdAt])
+}
+
+// Bandeja de eventos de dominio (outbox). Se escribe en la misma transacción que el cambio
+// de la cita; la mensajería (WasapFlow) los consumirá en el siguiente bloque.
+model AppointmentEvent {
+  id String @id @default(uuid())
+  dedupeKey String @unique
+  appointmentId String
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  type String
+  payload Json @default("{}")
+  occurredAt DateTime @default(now())
+  processedAt DateTime?
+  @@index([processedAt, occurredAt])
 }
 
 // Cola persistente: el reinicio de la API no pierde recordatorios.
