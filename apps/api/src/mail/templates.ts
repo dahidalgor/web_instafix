@@ -143,9 +143,7 @@ function requestDetails(data: AppointmentEmailData, previous = false): Detail[] 
 export function appointmentCreatedEmail(data: AppointmentEmailData) {
   const confirmed = data.confirmed !== false;
   return brandedEmail({
-    subject: confirmed
-      ? 'Tu cita con Instafix está confirmada'
-      : 'Recibimos tu cita con Instafix',
+    subject: confirmed ? 'Tu cita con Instafix está confirmada' : 'Recibimos tu cita con Instafix',
     badge: confirmed ? '✓ Tu cita está confirmada' : '✓ Tu cita fue agendada',
     intro: `Hola ${firstName(data.name)},`,
     paragraphs: [

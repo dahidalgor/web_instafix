@@ -41,6 +41,7 @@ test(
             email: `test-${randomUUID()}@example.com`,
             emailVerifiedAt: new Date(),
             passwordHash: 'no-login',
+            phoneVerifiedAt: new Date(),
             role,
           },
         });

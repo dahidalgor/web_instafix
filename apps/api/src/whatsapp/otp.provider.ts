@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { ProviderError } from '../integrations/provider-error';
 import { requireConnectedWaba } from './connection';
 import { WasapFlowClient } from './wasapflow.client';
@@ -33,11 +33,10 @@ const devConsoleAllowed = () =>
 @Injectable()
 export class WasapFlowOtpProvider implements WhatsAppOtpProvider {
   readonly name = 'WASAPFLOW';
-  constructor(private readonly bridge: WasapFlowClient) {}
+  constructor(@Inject(WasapFlowClient) private readonly bridge: WasapFlowClient) {}
   async sendAuthenticationCode(to: string, code: string) {
     const config = otpConfiguration();
-    if (!config.enabled)
-      throw new ProviderError('Verificación por WhatsApp desactivada', 'FAILED');
+    if (!config.enabled) throw new ProviderError('Verificación por WhatsApp desactivada', 'FAILED');
     if (!config.template) throw new ProviderError('Falta la plantilla OTP aprobada', 'FAILED');
     const wabaId = await requireConnectedWaba();
     const messageId = await this.bridge.sendAuthenticationTemplate(
@@ -54,7 +53,8 @@ export class WasapFlowOtpProvider implements WhatsAppOtpProvider {
 export class ConsoleOtpProvider implements WhatsAppOtpProvider {
   readonly name = 'CONSOLE_DEV';
   async sendAuthenticationCode(to: string, code: string) {
-    if (!devConsoleAllowed()) throw new ProviderError('Proveedor de desarrollo no permitido', 'FAILED');
+    if (!devConsoleAllowed())
+      throw new ProviderError('Proveedor de desarrollo no permitido', 'FAILED');
     console.log(`[desarrollo] OTP para ${to.slice(0, 4)}…${to.slice(-2)}: ${code}`);
     return { messageId: `dev-${Date.now()}` };
   }

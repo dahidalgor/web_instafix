@@ -113,7 +113,10 @@ export async function receiveCalWebhook(body: unknown) {
       return { ok: true };
     }
     if (event.payload.rescheduleUid && event.payload.rescheduleUid !== uid) {
-      const moved = existing?.source === 'INSTAFIX_API' ? existing : await tx.appointment.findUnique({ where: { calUid: event.payload.rescheduleUid } });
+      const moved =
+        existing?.source === 'INSTAFIX_API'
+          ? existing
+          : await tx.appointment.findUnique({ where: { calUid: event.payload.rescheduleUid } });
       if (moved?.source === 'INSTAFIX_API') {
         await lockAppointment(tx, moved.id);
         const current = await tx.appointment.findUniqueOrThrow({ where: { id: moved.id } });

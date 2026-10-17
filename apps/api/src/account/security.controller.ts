@@ -14,6 +14,7 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
@@ -38,7 +39,7 @@ async function requirePassword(userId: string, password: string) {
 
 @Controller('api/v1/my')
 export class SecurityController {
-  constructor(private readonly verification: VerificationService) {}
+  constructor(@Inject(VerificationService) private readonly verification: VerificationService) {}
 
   /** Verificación opcional del correo: Instafix → Brevo → enlace de un solo uso. */
   @Post('email/verification')

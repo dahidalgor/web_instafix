@@ -21,14 +21,20 @@ async function main() {
     throw new Error('Indica --to con tu teléfono de prueba, distinto al número empresarial');
   if (values.otp) {
     // Prueba de la plantilla AUTHENTICATION: código aleatorio que no valida ninguna cuenta.
-    console.log(`Destinatario de prueba: ${phone}\nPlantilla OTP: ${process.env.WHATSAPP_TEMPLATE_OTP || '(sin configurar)'}`);
+    console.log(
+      `Destinatario de prueba: ${phone}\nPlantilla OTP: ${process.env.WHATSAPP_TEMPLATE_OTP || '(sin configurar)'}`,
+    );
     if (!values.send) {
       console.log('Simulación: no se envió nada. Añade --send con WHATSAPP_OTP_ENABLED=true.');
       return;
     }
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-    const { messageId } = await new WasapFlowOtpProvider(new WasapFlowClient()).sendAuthenticationCode(phone, code);
-    console.log(`WasapFlow aceptó la plantilla OTP: ${messageId}. Comprueba la recepción en el teléfono y el estado en el panel.`);
+    const { messageId } = await new WasapFlowOtpProvider(
+      new WasapFlowClient(),
+    ).sendAuthenticationCode(phone, code);
+    console.log(
+      `WasapFlow aceptó la plantilla OTP: ${messageId}. Comprueba la recepción en el teléfono y el estado en el panel.`,
+    );
     return;
   }
   const text = 'Prueba de integración de InstaFix ✅ Este mensaje no corresponde a una cita real.';

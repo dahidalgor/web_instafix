@@ -41,6 +41,10 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     HealthController,
     WebhooksController,
   ],
-  providers: [VerificationService, NotificationWorker, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    VerificationService,
+    NotificationWorker,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

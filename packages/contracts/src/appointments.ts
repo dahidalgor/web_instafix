@@ -60,9 +60,7 @@ export const bookingRequestSchema = z
     whatsappConsent: z.boolean(),
   })
   .strict();
-export const rescheduleSchema = z
-  .object({ start: z.string().datetime({ offset: true }) })
-  .strict();
+export const rescheduleSchema = z.object({ start: z.string().datetime({ offset: true }) }).strict();
 export type BookingResult = {
   appointmentId: string;
   startsAt: string;

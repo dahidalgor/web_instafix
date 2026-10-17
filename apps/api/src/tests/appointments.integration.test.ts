@@ -32,6 +32,7 @@ test(
             name: 'Prueba aislada de citas',
             phone: `test-${randomUUID()}`,
             passwordHash: 'no-login-test',
+            phoneVerifiedAt: new Date(),
             role,
           },
         });

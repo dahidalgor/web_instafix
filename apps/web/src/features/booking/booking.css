@@ -78,6 +78,8 @@
   max-width: 760px;
 }
 .booking-form fieldset {
+  /* Un fieldset no se encoge por defecto: sin esto la fila de días ensancha la página. */
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 22px;
@@ -164,4 +166,28 @@
   .booking-form fieldset {
     padding: 16px;
   }
+}
+.booking-form .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.booking-form .checkbox-label input {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+}
+.slot-state button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  padding: 10px 14px;
+}
+
+/* En la propia agenda, el acceso flotante taparía el formulario. */
+.mobile-booking[aria-current='page'] {
+  display: none;
 }

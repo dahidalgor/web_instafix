@@ -41,10 +41,7 @@ export type VerificationTicket = {
 
 export class OtpDeliveryError extends HttpException {
   constructor() {
-    super(
-      'No pudimos enviar el código por WhatsApp. Inténtalo de nuevo en unos minutos.',
-      503,
-    );
+    super('No pudimos enviar el código por WhatsApp. Inténtalo de nuevo en unos minutos.', 503);
   }
 }
 export class OtpRateLimitError extends HttpException {

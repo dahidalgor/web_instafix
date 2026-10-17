@@ -95,7 +95,12 @@ export async function deliverNotification(id: string, now = new Date()): Promise
     });
     await db.notification.update({
       where: { id },
-      data: { status: 'SENT', providerMessageId: result.messageId, sentAt: new Date(), lastError: null },
+      data: {
+        status: 'SENT',
+        providerMessageId: result.messageId,
+        sentAt: new Date(),
+        lastError: null,
+      },
     });
     return 'SENT';
   } catch {
@@ -130,7 +135,10 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
       // Un proceso interrumpido durante el envío queda en revisión: no se reenvía a ciegas.
       await db.notification.updateMany({
         where: { status: 'SENDING', updatedAt: { lt: new Date(Date.now() - 300000) } },
-        data: { status: 'REVIEW', lastError: 'Envío interrumpido; revisar en Brevo antes de repetir' },
+        data: {
+          status: 'REVIEW',
+          lastError: 'Envío interrumpido; revisar en Brevo antes de repetir',
+        },
       });
       const due = await db.notification.findMany({
         where: { status: { in: ['PENDING', 'RETRY'] }, dueAt: { lte: new Date() } },

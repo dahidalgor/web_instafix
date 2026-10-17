@@ -257,8 +257,8 @@ export function AccountDashboard() {
                   : 'Tu historial comienza aquí'}
               </h2>
               <p>
-                Aquí aparecerán tus citas. Las reservas hechas como invitado con este mismo
-                WhatsApp se añaden automáticamente al verificar tu número.
+                Aquí aparecerán tus citas. Las reservas hechas como invitado con este mismo WhatsApp
+                se añaden automáticamente al verificar tu número.
               </p>
               <a className="button" href="#agenda">
                 Consultar horarios ↗

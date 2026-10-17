@@ -22,6 +22,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -66,7 +67,7 @@ export function serverPhone(value: string) {
 
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(private readonly verification: VerificationService) {}
+  constructor(@Inject(VerificationService) private readonly verification: VerificationService) {}
 
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -348,8 +349,7 @@ export class AuthController {
       });
       return true;
     });
-    if (!ok)
-      throw new BadRequestException('El enlace caducó o ya se utilizó. Solicita uno nuevo.');
+    if (!ok) throw new BadRequestException('El enlace caducó o ya se utilizó. Solicita uno nuevo.');
     return { ok: true };
   }
 
@@ -390,4 +390,3 @@ export class AuthController {
     return { ok: true };
   }
 }
-

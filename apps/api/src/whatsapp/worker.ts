@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, type OnModuleInit, type OnModuleDestroy, Inject } from '@nestjs/common';
 import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
 import { whatsappConfiguration, calConfiguration } from './config';
@@ -122,7 +122,7 @@ export async function processJob(id: string, providers: Providers, now = new Dat
 
 @Injectable()
 export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
-  constructor(private readonly whatsapp: WhatsAppService) {}
+  constructor(@Inject(WhatsAppService) private readonly whatsapp: WhatsAppService) {}
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
   onModuleInit() {

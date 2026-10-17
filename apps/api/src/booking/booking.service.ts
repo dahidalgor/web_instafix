@@ -157,7 +157,10 @@ export async function createBooking(
               device: 'Por especificar',
               address: '',
               technician: '',
-              status: booking.status === 'accepted' && !input.whatsappConsent ? 'CONFIRMED' : 'PENDING_LOCATION',
+              status:
+                booking.status === 'accepted' && !input.whatsappConsent
+                  ? 'CONFIRMED'
+                  : 'PENDING_LOCATION',
               timeZone: 'America/Guayaquil',
               locationRequestedAt: now,
             },
@@ -172,13 +175,18 @@ export async function createBooking(
       await markCalEvent(tx, booking.uid, 'CREATED_BY_API', now);
       return {
         appointment: saved,
-        notifications: await publishAppointmentEvent(tx, saved, { type: 'appointment.created' }, now),
+        notifications: await publishAppointmentEvent(
+          tx,
+          saved,
+          { type: 'appointment.created' },
+          now,
+        ),
       };
     }));
   } catch (error) {
     // La reserva existe en Cal.com pero no en Instafix: se libera para no dejar un hueco.
-    await cancelCalBooking(booking.uid, 'No se pudo registrar la reserva en Instafix').catch(
-      () => console.error('Reserva Cal.com sin registrar: revisar manualmente'),
+    await cancelCalBooking(booking.uid, 'No se pudo registrar la reserva en Instafix').catch(() =>
+      console.error('Reserva Cal.com sin registrar: revisar manualmente'),
     );
     if (error instanceof HttpException) throw error;
     throw new ServiceUnavailableException('No pudimos registrar tu cita. Inténtalo de nuevo.');
@@ -206,7 +214,9 @@ async function ownedChangeable(userId: string, id: string) {
     !['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status) ||
     appointment.startsAt <= new Date()
   )
-    throw new BadRequestException('Esta cita ya no puede modificarse desde aquí. Escríbenos por WhatsApp.');
+    throw new BadRequestException(
+      'Esta cita ya no puede modificarse desde aquí. Escríbenos por WhatsApp.',
+    );
   return appointment as Appointment & { calUid: string };
 }
 
@@ -270,7 +280,10 @@ export async function rescheduleBooking(userId: string, id: string, startValue: 
         startsAt: booking.start,
         endsAt: booking.end,
         automationRevision: { increment: 1 },
-        status: accepted && (hasLocation || !appointment.whatsappConsentAt) ? 'CONFIRMED' : 'PENDING_LOCATION',
+        status:
+          accepted && (hasLocation || !appointment.whatsappConsentAt)
+            ? 'CONFIRMED'
+            : 'PENDING_LOCATION',
         locationRequestedAt: now,
       },
     });

@@ -57,14 +57,17 @@ export class BookingController {
       throw new BadRequestException('El rango máximo es de 35 días');
     const key = `${from}:${to}`;
     const cached = slotCache.get(key);
-    if (cached && cached.at > Date.now() - 30000) return { timeZone: 'America/Guayaquil', days: cached.value };
+    if (cached && cached.at > Date.now() - 30000)
+      return { timeZone: 'America/Guayaquil', days: cached.value };
     try {
       const value = await getCalSlots(from, to, 'America/Guayaquil');
       slotCache.set(key, { at: Date.now(), value });
       if (slotCache.size > 50) slotCache.delete(slotCache.keys().next().value!);
       return { timeZone: 'America/Guayaquil', days: value };
     } catch {
-      throw new ServiceUnavailableException('No pudimos consultar los horarios. Inténtalo de nuevo.');
+      throw new ServiceUnavailableException(
+        'No pudimos consultar los horarios. Inténtalo de nuevo.',
+      );
     }
   }
 
