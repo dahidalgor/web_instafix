@@ -1,18 +1,30 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, type OnModuleInit } from '@nestjs/common';
 import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
-import { requireConnectedWaba } from './connection';
+import { adoptConfiguredWaba, connectedWaba, requireConnectedWaba } from './connection';
 import { messageContent, templateFor, type MessageKind } from './messages';
 import { WasapFlowClient } from './wasapflow.client';
 
 @Injectable()
-export class WhatsAppService {
+export class WhatsAppService implements OnModuleInit {
   constructor(@Inject(WasapFlowClient) private readonly bridge: WasapFlowClient) {}
+  /** Al arrancar, adopta WASAPFLOW_WABA_ID si WasapFlow la confirma (no impide arrancar). */
+  async onModuleInit() {
+    if (!process.env.WASAPFLOW_PARTNER_KEY || !process.env.WASAPFLOW_WABA_ID) return;
+    if (await connectedWaba().catch(() => null)) return;
+    await adoptConfiguredWaba(this.bridge)
+      .then(() => console.log('WhatsApp: WABA configurada verificada en WasapFlow'))
+      .catch((e) => console.error(`WhatsApp: no se pudo verificar la WABA (${e.message})`));
+  }
+  /** WABA operativa o null; intenta adoptar WASAPFLOW_WABA_ID si aún no está guardada. */
+  async ensureConnection() {
+    return requireConnectedWaba(this.bridge).catch(() => null);
+  }
   private async sendingWaba() {
     if (process.env.WHATSAPP_ENABLED !== 'true')
       throw new ProviderError('Envíos de WhatsApp desactivados', 'FAILED');
-    return requireConnectedWaba();
+    return requireConnectedWaba(this.bridge);
   }
   async sendAppointmentMessage(appointment: Appointment, kind: MessageKind) {
     if (!appointment.whatsappConsentAt)

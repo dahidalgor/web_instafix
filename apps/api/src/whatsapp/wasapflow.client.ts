@@ -5,20 +5,46 @@ import { ProviderError } from '../integrations/provider-error';
 export const BRIDGE_BASE = 'https://officialapi.wasapflow.com/bridge/v1';
 export const BRIDGE_ORIGIN = 'https://officialapi.wasapflow.com';
 
+/**
+ * Error legible a partir de la respuesta de Bridge ({ error: { code, message, meta_code } }).
+ * Nunca incluye la Partner Key; el texto del proveedor se recorta.
+ */
+export function describeBridgeError(status: number, result: unknown, key = '') {
+  const error = (result as { error?: Record<string, unknown> } | null)?.error;
+  const text = (value: unknown) =>
+    typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  const parts = [`WasapFlow HTTP ${status}`];
+  if (error && typeof error === 'object') {
+    if (text(error.code)) parts.push(text(error.code));
+    if (text(error.meta_code))
+      parts.push(
+        `Meta ${text(error.meta_code)}${text(error.meta_subcode) ? `/${text(error.meta_subcode)}` : ''}`,
+      );
+    const message = text(error.message).replace(/\s+/g, ' ').slice(0, 200);
+    if (message) parts.push(message);
+  } else if (typeof (result as { message?: unknown })?.message === 'string')
+    parts.push(String((result as { message: string }).message).slice(0, 200));
+  const out = parts.join(' · ');
+  return key ? out.split(key).join('[clave]') : out;
+}
+
 @Injectable()
 export class WasapFlowClient {
   // Solo este cliente construye las peticiones Bridge. Sin redirecciones que filtren la clave.
   private async request(path: string, body?: unknown, wabaId?: string) {
-    const base = process.env.WASAPFLOW_BASE_URL || BRIDGE_BASE;
-    if (base !== BRIDGE_BASE || !process.env.WASAPFLOW_PARTNER_KEY)
-      throw new ProviderError('Configura WasapFlow con su URL oficial y Partner Key', 'FAILED');
+    // Una barra final en el .env es habitual; no debe bloquear los envíos.
+    const base = (process.env.WASAPFLOW_BASE_URL || BRIDGE_BASE).trim().replace(/\/+$/, '');
+    const key = process.env.WASAPFLOW_PARTNER_KEY?.trim();
+    if (base !== BRIDGE_BASE)
+      throw new ProviderError(`WASAPFLOW_BASE_URL debe ser ${BRIDGE_BASE}`, 'FAILED');
+    if (!key) throw new ProviderError('Falta WASAPFLOW_PARTNER_KEY', 'FAILED');
     let response: Response;
     try {
       response = await fetch(`${base}${path}`, {
         method: body === undefined ? 'GET' : 'POST',
         redirect: 'error',
         headers: {
-          'x-partner-key': process.env.WASAPFLOW_PARTNER_KEY,
+          'x-partner-key': key,
           'Content-Type': 'application/json',
           ...(wabaId ? { 'x-waba-id': wabaId } : {}),
         },
@@ -26,12 +52,15 @@ export class WasapFlowClient {
         signal: AbortSignal.timeout(12000),
       });
     } catch {
-      throw new ProviderError('Resultado WasapFlow incierto; revisar antes de repetir', 'REVIEW');
+      throw new ProviderError(
+        'Sin respuesta de WasapFlow (red o tiempo agotado); revisar antes de repetir',
+        'REVIEW',
+      );
     }
     const result = await response.json().catch(() => null);
     if (!response.ok || result?.success !== true)
       throw new ProviderError(
-        `WasapFlow HTTP ${response.status}; consulta el panel del proveedor`,
+        describeBridgeError(response.status, result, key),
         response.status === 429
           ? 'RETRY'
           : response.status >= 500 || response.ok
@@ -39,6 +68,29 @@ export class WasapFlowClient {
             : 'FAILED',
       );
     return result;
+  }
+  /** Clientes (WABAs) registrados en la cuenta de partner, con su estado. */
+  async listClients() {
+    const all: { waba_id: string; status: string; connection_mode?: string }[] = [];
+    for (let offset = 0; offset < 10000; offset += 100) {
+      const result = z
+        .object({
+          clients: z.array(
+            z
+              .object({
+                waba_id: z.coerce.string(),
+                status: z.string(),
+                connection_mode: z.string().optional(),
+              })
+              .passthrough(),
+          ),
+          total: z.number(),
+        })
+        .parse(await this.request(`/clients?limit=100&offset=${offset}`));
+      all.push(...result.clients);
+      if (offset + 100 >= result.total) break;
+    }
+    return all;
   }
   async createConnectSession(state: string) {
     // El hosting se encarga de Embedded Signup y Coexistence; no se manejan tokens Meta.

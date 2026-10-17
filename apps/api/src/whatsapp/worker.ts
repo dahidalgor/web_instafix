@@ -8,7 +8,6 @@ import { ProviderError } from '../integrations/provider-error';
 import { WhatsAppService } from './whatsapp.service';
 import { lockAppointment, queueJob, queueReminders } from './queue';
 import { deliveryState } from './delivery';
-import { connectedWaba } from './connection';
 
 type Providers = {
   send: (appointment: Appointment, kind: MessageKind) => Promise<string>;
@@ -141,7 +140,7 @@ export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
       return;
     this.running = true;
     try {
-      if (!(await connectedWaba())) return;
+      if (!(await this.whatsapp.ensureConnection())) return;
       await db.automationJob.updateMany({
         where: { status: 'SENDING', startedAt: { lt: new Date(Date.now() - 300000) } },
         data: {
