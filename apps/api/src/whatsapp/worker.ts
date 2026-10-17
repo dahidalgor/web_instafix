@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, type OnModuleInit, type OnModuleDestroy, Inject } from '@nestjs/common';
 import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
 import { whatsappConfiguration, calConfiguration } from './config';
@@ -8,12 +8,30 @@ import { ProviderError } from '../integrations/provider-error';
 import { WhatsAppService } from './whatsapp.service';
 import { lockAppointment, queueJob, queueReminders } from './queue';
 import { deliveryState } from './delivery';
-import { connectedWaba } from './connection';
 
 type Providers = {
   send: (appointment: Appointment, kind: MessageKind) => Promise<string>;
   confirm: (uid: string) => Promise<void>;
 };
+
+/** Cada aviso solo es pertinente en ciertos estados; los obsoletos se cancelan sin enviar. */
+export function kindStillValid(kind: string, appointment: Appointment) {
+  switch (kind) {
+    case 'INITIAL':
+      return appointment.status === 'PENDING_LOCATION' && !appointment.locationReceivedAt;
+    case 'CAL_CONFIRM':
+      return appointment.status === 'PENDING_LOCATION' && Boolean(appointment.locationReceivedAt);
+    case 'CANCELLED':
+      return appointment.status === 'CANCELLED';
+    case 'RESCHEDULED':
+      return ['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status);
+    case 'TECHNICIAN_ASSIGNED':
+    case 'TECHNICIAN_ON_THE_WAY':
+      return ['CONFIRMED', 'IN_PROGRESS'].includes(appointment.status);
+    default:
+      return appointment.status === 'CONFIRMED';
+  }
+}
 
 export async function processJob(id: string, providers: Providers, now = new Date()) {
   const claimed = await db.automationJob.updateMany({
@@ -29,7 +47,6 @@ export async function processJob(id: string, providers: Providers, now = new Dat
         const appointment = await tx.appointment.findUniqueOrThrow({
           where: { id: job.appointmentId },
         });
-        const isInitial = job.kind === 'INITIAL';
         const isConfirm = job.kind === 'CAL_CONFIRM';
         const invalid =
           Boolean(appointment.bookingIdentityIssue) ||
@@ -37,12 +54,9 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           !appointment.whatsappConsentAt ||
           !appointment.contactPhone ||
           job.expiresAt <= now ||
-          appointment.startsAt <= now ||
-          (isInitial
-            ? appointment.status !== 'PENDING_LOCATION' || Boolean(appointment.locationReceivedAt)
-            : isConfirm
-              ? appointment.status !== 'PENDING_LOCATION' || !appointment.locationReceivedAt
-              : appointment.status !== 'CONFIRMED');
+          // «En camino» puede llegar después de la hora estimada; su límite es expiresAt.
+          (job.kind !== 'TECHNICIAN_ON_THE_WAY' && appointment.startsAt <= now) ||
+          !kindStillValid(job.kind, appointment);
         if (invalid) {
           await tx.automationJob.update({ where: { id }, data: { status: 'CANCELLED' } });
           return;
@@ -107,7 +121,7 @@ export async function processJob(id: string, providers: Providers, now = new Dat
 
 @Injectable()
 export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
-  constructor(private readonly whatsapp: WhatsAppService) {}
+  constructor(@Inject(WhatsAppService) private readonly whatsapp: WhatsAppService) {}
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
   onModuleInit() {
@@ -126,7 +140,7 @@ export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
       return;
     this.running = true;
     try {
-      if (!(await connectedWaba())) return;
+      if (!(await this.whatsapp.ensureConnection())) return;
       await db.automationJob.updateMany({
         where: { status: 'SENDING', startedAt: { lt: new Date(Date.now() - 300000) } },
         data: {
