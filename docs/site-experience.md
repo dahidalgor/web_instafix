@@ -45,12 +45,14 @@ El cliente comunica el contador acumulado cada 15 segundos, al ocultar la pesta�
 
 Los registros mayores de 90 días se purgan al recibir nuevas visitas. El resumen solo es accesible con rol ADMIN.
 
-## Verificación por correo: configuración pendiente
+## Verificación por correo con Brevo
 
-Comprar `instafix.ec` no incluye necesariamente un servicio de correo. Hace falta un proveedor SMTP: puede ser el correo incluido en el alojamiento o un servicio de envío transaccional. El proveedor entrega las credenciales y los registros DNS exactos para autorizar el dominio. No crear registros SPF/DKIM inventados ni publicar contraseñas en DNS.
+Brevo es el proveedor elegido. El propietario confirmó el 16 de octubre de 2026 que los correos están activados y se reciben correctamente. Las credenciales no se guardan en el repositorio; cada entorno debe configurarlas por separado. La comprobación local realizada en esta sesión todavía encuentra vacías las variables SMTP de `.env`.
 
-1. Elegir el proveedor y verificar el dominio con los registros que indique.
-2. Autorizar una dirección remitente, por ejemplo `cuentas@instafix.ec` **solo después de configurarla**. No se ha creado ni habilitado esa dirección.
+Los siguientes pasos permiten reproducir la configuración en otro entorno. Usar los datos y registros DNS entregados por Brevo; no inventar registros SPF/DKIM ni publicar contraseñas en DNS.
+
+1. Usar la cuenta de Brevo y verificar el dominio con los registros que indique.
+2. Usar la dirección remitente ya autorizada en Brevo. No asumir que cualquier dirección del dominio está habilitada.
 3. Completar únicamente en `.env` local o en los secretos del servidor:
 
 ```dotenv

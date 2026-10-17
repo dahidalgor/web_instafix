@@ -32,6 +32,7 @@ export async function processJob(id: string, providers: Providers, now = new Dat
         const isInitial = job.kind === 'INITIAL';
         const isConfirm = job.kind === 'CAL_CONFIRM';
         const invalid =
+          Boolean(appointment.bookingIdentityIssue) ||
           job.revision !== appointment.automationRevision ||
           !appointment.whatsappConsentAt ||
           !appointment.contactPhone ||

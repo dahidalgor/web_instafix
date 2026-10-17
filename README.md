@@ -83,7 +83,7 @@ Consultar `docs/architecture.md` para las reglas del flujo.
 
 ## Contacto, presentaciones y estadísticas
 
-La web incluye Contacto en el footer y menú móvil desplegable. Administración permite editar las diapositivas, asignar servicios a citas, registrar trabajos y consultar visitas/tiempo visible por página. El cliente sigue describiendo su necesidad al reservar; el técnico elige el servicio después. Consulta [la guía de funcionamiento y configuración SMTP](docs/site-experience.md). El envío real de correo queda pendiente de elegir y configurar un proveedor.
+La web incluye Contacto en el footer y menú móvil desplegable. Administración permite editar las diapositivas, asignar servicios a citas, registrar trabajos y consultar visitas/tiempo visible por página. El cliente sigue describiendo su necesidad al reservar; el técnico elige el servicio después. Consulta [la guía de funcionamiento y configuración SMTP](docs/site-experience.md). El proveedor elegido es Brevo; el propietario confirmó la recepción de correos el 16 de octubre de 2026. Cada entorno necesita sus variables SMTP privadas.
 
 ## Agenda Cal.com integrada
 

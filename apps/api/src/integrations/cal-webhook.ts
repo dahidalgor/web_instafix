@@ -1,7 +1,7 @@
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { normalizePhone } from '@instafix/contracts/src/phone';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { bookingIdentity, bookingIdentityMessage } from '../booking/booking-identity';
 import { tokenHash } from '../auth/security';
 import { db } from '../database/client';
 import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue';
@@ -70,7 +70,8 @@ export async function receiveCalWebhook(body: unknown) {
       tx.integrationEvent.create({
         data: { id, provider: 'CAL', sourceId: uid, occurredAt, outcome },
       });
-    const existing = await tx.appointment.findUnique({ where: { calUid: uid } });
+    const existing = await tx.appointment.findUnique({ where: { calUid: uid }, include: { user: true } });
+    let rescheduledFrom: typeof existing = null;
     if (cancelled) {
       if (existing) {
         await lockAppointment(tx, existing.id);
@@ -90,7 +91,9 @@ export async function receiveCalWebhook(body: unknown) {
     if (event.payload.rescheduleUid && event.payload.rescheduleUid !== uid) {
       const old = await tx.appointment.findUnique({
         where: { calUid: event.payload.rescheduleUid },
+        include: { user: true },
       });
+      rescheduledFrom = old;
       if (old) {
         await lockAppointment(tx, old.id);
         await tx.appointment.update({
@@ -122,31 +125,31 @@ export async function receiveCalWebhook(body: unknown) {
       end = new Date(p.endTime);
     if (end <= start) throw new BadRequestException('Horario inválido');
     const phoneValue = p.responses.attendeePhoneNumber?.value ?? p.attendees[0].phoneNumber;
-    const phone = typeof phoneValue === 'string' ? normalizePhone(phoneValue, 'EC') : null;
     const reference = p.metadata.instafixReference;
-    const intent =
-      typeof reference === 'string' && reference.length <= 200
-        ? await tx.bookingIntent.findUnique({
-            where: { tokenHash: tokenHash(reference) },
-            include: { user: true },
-          })
+    const hasReference = reference !== undefined && reference !== null && reference !== '';
+    const intent = typeof reference === 'string' && reference.length <= 200
+      ? await tx.bookingIntent.findUnique({ where: { tokenHash: tokenHash(reference) }, include: { user: true } })
+      : !hasReference
+        ? await tx.bookingIntent.findUnique({ where: { calUid: uid }, include: { user: true } })
         : null;
-    // Un token sirve una sola reserva; las reprogramaciones firmadas conservan la relación.
-    const validIntent =
-      intent &&
-      (intent.calUid
-        ? intent.calUid === uid || intent.calUid === event.payload.rescheduleUid
-        : intent.expiresAt >= occurredAt);
+    const validIntent = intent && (intent.calUid
+      ? intent.calUid === uid || intent.calUid === event.payload.rescheduleUid
+      : intent.createdAt.getTime() <= occurredAt.getTime() + 300000 && intent.expiresAt >= occurredAt);
     const selected = validIntent ? intent : null;
-    const owner = selected?.user;
-    const ownerMatches =
-      owner?.emailVerifiedAt &&
-      owner.email === p.attendees[0].email?.trim().toLowerCase() &&
-      owner.phone === phone;
+    // La relación ya establecida sobrevive eventos sin metadata y reprogramaciones.
+    const previousOwner = existing?.user || rescheduledFrom?.user || null;
+    const owner = previousOwner || selected?.user || null;
+    const identity = bookingIdentity({
+      owner,
+      invalidReference: hasReference && !validIntent,
+      ownerConflict: Boolean(previousOwner && selected?.user && previousOwner.id !== selected.user.id),
+      phone: phoneValue, email: p.attendees[0].email, name: p.attendees[0].name,
+    });
+    const phone = identity.contactPhone;
     const service = p.responses.servicio?.value;
     const consent = p.responses.whatsappConsent?.value === true;
     const title = typeof service === 'string' && service.trim() ? service.trim().slice(0, 150) : '';
-    const issue = !phone
+    const issue = identity.bookingIdentityIssue ? bookingIdentityMessage : !phone
       ? 'Falta un teléfono válido en Cal.com'
       : !consent
         ? 'Falta autorización de WhatsApp en Cal.com'
@@ -156,11 +159,17 @@ export async function receiveCalWebhook(body: unknown) {
     const calStatus = (
       p.status || (event.triggerEvent === 'BOOKING_REQUESTED' ? 'PENDING' : 'ACCEPTED')
     ).toLowerCase();
+    if (selected && identity.bookingIdentityIssue !== 'OWNER_CONFLICT') {
+      await tx.bookingIntent.update({ where: { tokenHash: selected.tokenHash }, data: { calUid: uid } });
+    }
     if (existing) {
       await lockAppointment(tx, existing.id);
       // BOOKING_CREATED tras confirmar no debe volver a pedir la ubicación.
       const current = await tx.appointment.findUniqueOrThrow({ where: { id: existing.id } });
-      if (current.status === 'CANCELLED') {
+      if (['CANCELLED', 'COMPLETED', 'IN_PROGRESS'].includes(current.status)) {
+        // No reabrir trabajos terminados ni perder un vínculo recuperado.
+        if (!current.userId && identity.userId)
+          await tx.appointment.update({ where: { id: current.id }, data: { userId: identity.userId } });
         await saveEvent('IGNORED_CANCELLED');
         return { ok: true };
       }
@@ -170,9 +179,10 @@ export async function receiveCalWebhook(body: unknown) {
         (phone || '') !== current.contactPhone ||
         (title || 'Trabajo pendiente de especificar') !== current.title ||
         consent !== Boolean(current.whatsappConsentAt) ||
-        current.contactName !== p.attendees[0].name;
+        current.contactName !== identity.contactName ||
+        current.bookingIdentityIssue !== identity.bookingIdentityIssue;
       if (!changed) {
-        await tx.appointment.update({ where: { id: current.id }, data: { calStatus } });
+        await tx.appointment.update({ where: { id: current.id }, data: { calStatus, userId: identity.userId } });
         await saveEvent('UPDATED');
         return { ok: true };
       }
@@ -180,16 +190,15 @@ export async function receiveCalWebhook(body: unknown) {
     }
     // Las reservas de invitados no se vinculan a una cuenta solo por conocer su teléfono.
     const dataToSave = {
-      contactName: p.attendees[0].name,
-      contactPhone: phone || '',
+      ...identity,
       title: title || 'Trabajo pendiente de especificar',
       startsAt: start,
       endsAt: end,
       timeZone: 'America/Guayaquil',
-      device: existing?.device || 'Por especificar',
-      ...(selected?.userId ? { userId: ownerMatches ? owner.id : null } : {}),
-      address: '',
-      technician: '',
+      device: existing?.device || rescheduledFrom?.device || 'Por especificar',
+      offeringId: existing?.offeringId || rescheduledFrom?.offeringId || null,
+      address: existing?.address || rescheduledFrom?.address || '',
+      technician: existing?.technician || rescheduledFrom?.technician || '',
       status: 'PENDING_LOCATION' as const,
       whatsappConsentAt: consent ? occurredAt : null,
       calStatus,
@@ -205,11 +214,6 @@ export async function receiveCalWebhook(body: unknown) {
           data: { ...dataToSave, automationRevision: { increment: 1 } },
         })
       : await tx.appointment.create({ data: { ...dataToSave, calUid: uid } });
-    if (selected)
-      await tx.bookingIntent.update({
-        where: { tokenHash: selected.tokenHash },
-        data: { calUid: uid },
-      });
     if (!issue) await queueJob(tx, appointment, 'INITIAL', new Date());
     await saveEvent(issue ? 'NEEDS_REVIEW' : 'IMPORTED');
     return { ok: true };

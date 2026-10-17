@@ -24,6 +24,7 @@ export async function receiveCustomerMessage(message: {
       const candidates = await tx.appointment.findMany({
         where: {
           contactPhone: phone,
+          bookingIdentityIssue: null,
           status: 'PENDING_LOCATION',
           whatsappConsentAt: { not: null },
           startsAt: { gt: new Date() },
@@ -50,6 +51,7 @@ export async function receiveCustomerMessage(message: {
           where: { id: candidate.id },
         });
         if (
+          !current.bookingIdentityIssue &&
           current.status === 'PENDING_LOCATION' &&
           !current.locationReceivedAt &&
           current.automationRevision === candidate.automationRevision

@@ -8,7 +8,7 @@ export async function queueJob(
   dueAt: Date,
   expiresAt = appointment.startsAt,
 ) {
-  if (expiresAt <= dueAt) return;
+  if (appointment.bookingIdentityIssue || expiresAt <= dueAt) return;
   const dedupeKey = `${appointment.id}:${appointment.automationRevision}:${kind}`;
   await tx.automationJob.upsert({
     where: { dedupeKey },
@@ -29,6 +29,7 @@ export async function queueReminders(
   now = new Date(),
 ) {
   if (
+    appointment.bookingIdentityIssue ||
     !appointment.whatsappConsentAt ||
     !appointment.contactPhone ||
     appointment.status !== 'CONFIRMED'

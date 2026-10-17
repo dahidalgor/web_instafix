@@ -109,8 +109,8 @@ export function App() {
         {page === 'como' && <HowItWorks />}
       </main>
       <footer>
-        <Brand />
-        <span>Tecnología que sigue contigo.</span>
+        <span>© 2026 InstaFix. Todos los derechos reservados.</span>
+        <span>Servicios a domicilio.</span>
         <div className="footer-links">
           <a className="footer-policy" href="#contacto">
             Contacto
