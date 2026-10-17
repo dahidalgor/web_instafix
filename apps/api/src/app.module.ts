@@ -1,3 +1,4 @@
+import { BookingAdminController } from './booking/booking-admin.controller';
 import { EmailAdminController } from './auth/email-admin.controller';
 import { SiteController } from './site/site.controller';
 import { AnalyticsController } from './analytics/analytics.controller';
@@ -20,6 +21,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 @Module({
   imports: [WhatsAppModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])],
   controllers: [
+    BookingAdminController,
     EmailAdminController,
     SiteController,
     AnalyticsController,

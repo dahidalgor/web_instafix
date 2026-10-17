@@ -219,7 +219,7 @@ export function Login({
                   name="phone"
                   type="tel"
                   autoComplete="username"
-                  placeholder="984703819"
+                  placeholder="987654321"
                   required
                   maxLength={30}
                 />

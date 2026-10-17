@@ -45,5 +45,6 @@ export const appointmentSchema = z
   );
 export type Appointment = z.infer<typeof appointmentSchema> & {
   id: string;
+  bookingIdentityIssue?: string | null;
   assignedService?: { title: string; device: string } | null;
 };

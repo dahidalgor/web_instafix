@@ -107,7 +107,12 @@ test(
       assert.equal(
         (await db.appointment.findUniqueOrThrow({ where: { calUid: mismatch.payload.uid } }))
           .userId,
-        null,
+        ids[0],
+      );
+      assert.equal(
+        (await db.appointment.findUniqueOrThrow({ where: { calUid: mismatch.payload.uid } }))
+          .bookingIdentityIssue,
+        'EMAIL_MISMATCH',
       );
       const offering = await db.offering.create({
         data: {

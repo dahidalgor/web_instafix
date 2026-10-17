@@ -60,13 +60,12 @@ export class AuthController {
       throw new BadRequestException(
         'Revisa nombre, correo, teléfono y contraseña (mínimo 12 caracteres)',
       );
-    const existing = await db.user.findFirst({
-      where: { OR: [{ phone: data.data.phone }, { email: data.data.email }] },
-    });
-    if (existing)
-      throw new BadRequestException(
-        'No se pudo crear la cuenta con estos datos. Prueba iniciar sesión.',
-      );
+    data.data.phone = normalizePhone(data.data.phone, 'EC')!;
+    // El teléfono normalizado tiene prioridad, incluso si también coincide el correo.
+    if (await db.user.findUnique({ where: { phone: data.data.phone } }))
+      throw new BadRequestException('Ya existe una cuenta asociada a este número.');
+    if (await db.user.findUnique({ where: { email: data.data.email } }))
+      throw new BadRequestException('Ya existe una cuenta asociada a este correo.');
     return createChallenge({
       purpose: 'REGISTER',
       name: `${data.data.firstName} ${data.data.lastName}`,
@@ -112,7 +111,9 @@ export class AuthController {
     } catch (e: any) {
       if (e.code === 'P2002')
         throw new BadRequestException(
-          'Estos datos ya están asociados a una cuenta. Inicia sesión.',
+          Array.isArray(e.meta?.target) && e.meta.target.includes('phone')
+            ? 'Ya existe una cuenta asociada a este número.'
+            : 'Ya existe una cuenta asociada a este correo.',
         );
       throw e;
     }

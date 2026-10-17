@@ -1,5 +1,6 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import nodemailer from 'nodemailer';
+import { codeEmail } from '../mail/templates';
 
 export function mailStatus() {
   const required = ['SMTP_HOST', 'SMTP_FROM', 'SMTP_USER', 'SMTP_PASSWORD'] as const;
@@ -59,11 +60,8 @@ export async function sendCode(email: string, code: string, purpose: string) {
     await transport.sendMail({
       from: process.env.SMTP_FROM,
       to: email,
-      subject:
-        purpose === 'REGISTER'
-          ? 'Verifica tu cuenta de InstaFix'
-          : 'Recupera tu contraseña de InstaFix',
-      text: `Tu código de InstaFix es: ${code}\n\nCaduca en 10 minutos y solo puede usarse una vez. Si no solicitaste este código, ignora este correo.`,
+      replyTo: process.env.SMTP_REPLY_TO?.trim() || undefined,
+      ...codeEmail(code, purpose),
     });
   } catch {
     throw new ServiceUnavailableException(

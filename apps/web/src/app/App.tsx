@@ -1,3 +1,4 @@
+import { AccountLink } from '../components/layout/AccountLink';
 import { Contact } from '../features/contact/Contact';
 import { usePageAnalytics } from '../features/analytics/usePageAnalytics';
 import { useEffect, useRef, useState } from 'react';
@@ -84,18 +85,21 @@ export function App() {
           className={menuOpen ? 'is-open' : ''}
           aria-label="Navegación principal"
         >
-          {links.map(([id, label]) => (
-            <a
-              key={id}
-              href={'#' + id}
-              onClick={() => setMenuOpen(false)}
-              aria-current={page === id ? 'page' : undefined}
-              className={id === 'agenda' ? 'nav-cta' : undefined}
-            >
-              {label}
-            </a>
-          ))}
+          {links
+            .filter(([id]) => id !== 'cuenta')
+            .map(([id, label]) => (
+              <a
+                key={id}
+                href={'#' + id}
+                onClick={() => setMenuOpen(false)}
+                aria-current={page === id ? 'page' : undefined}
+                className={id === 'agenda' ? 'nav-cta' : undefined}
+              >
+                {label}
+              </a>
+            ))}
         </nav>
+        <AccountLink active={page === 'cuenta'} onNavigate={() => setMenuOpen(false)} />
       </header>
       <main key={page} id="contenido" ref={main} tabIndex={-1} className="page-content">
         {page === 'contacto' && <Contact />}

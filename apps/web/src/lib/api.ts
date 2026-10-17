@@ -12,6 +12,13 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
+  // El encabezado se sincroniza tras cambios de sesión y sesiones caducadas.
+  if (
+    (response.ok &&
+      ['auth/login', 'auth/verify-email', 'auth/logout', 'auth/reset-password'].includes(path)) ||
+    response.status === 401
+  )
+    window.dispatchEvent(new Event('instafix:session-change'));
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new ApiError(

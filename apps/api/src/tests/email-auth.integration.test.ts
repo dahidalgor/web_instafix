@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import type { Request, Response } from 'express';
+import { normalizePhone } from '@instafix/contracts/src/phone';
 import { registrationSchema, loginSchema } from '@instafix/contracts';
 import { AuthController } from '../auth/auth.controller';
 import { createChallenge, consumeChallenge } from '../auth/email-challenges';
@@ -152,6 +153,67 @@ test(
     } finally {
       await db.emailChallenge.deleteMany({ where: { email } });
       await db.user.deleteMany({ where: { phone } });
+      await db.$disconnect();
+    }
+  },
+);
+
+test(
+  'duplicate phones return the specific message and PostgreSQL prevents verification races',
+  { skip: process.env.INSTAFIX_INTEGRATION !== '1' },
+  async () => {
+    const marker = randomUUID();
+    const emails = [`duplicate-${marker}@example.com`, `pending-${marker}@example.com`];
+    const phone = '+593990003333';
+    const req = { headers: { origin: 'http://localhost:5173' } } as Request;
+    const controller = new AuthController();
+    let userId: string | undefined;
+    let code = '';
+    const duplicateMessage = { message: 'Ya existe una cuenta asociada a este número.' };
+    try {
+      const pending = await createChallenge(
+        { email: emails[1], phone, name: 'Prueba', passwordHash: 'unused', purpose: 'REGISTER' },
+        true,
+        async (_email, value) => {
+          code = value;
+        },
+      );
+      const user = await db.user.create({
+        data: { name: 'Prueba', phone, email: emails[0], passwordHash: 'unused' },
+      });
+      userId = user.id;
+      for (const number of [phone, '0990003333', '990003333']) {
+        await assert.rejects(
+          controller.register(
+            {
+              firstName: 'Prueba',
+              lastName: 'Registro',
+              phone: normalizePhone(number, 'EC'),
+              email: emails[1],
+              password: 'password-test-123',
+            },
+            req,
+          ),
+          duplicateMessage,
+        );
+      }
+      // Bypassing the controller still cannot create a second row with this phone.
+      await assert.rejects(
+        db.user.create({
+          data: { name: 'Duplicado', phone, email: emails[1], passwordHash: 'unused' },
+        }),
+        { code: 'P2002' },
+      );
+      await assert.rejects(
+        controller.verifyEmail({ challengeId: pending.challengeId, code }, req, {
+          cookie: () => {},
+        } as unknown as Response),
+        duplicateMessage,
+      );
+      assert.equal(await db.user.count({ where: { phone } }), 1);
+    } finally {
+      await db.emailChallenge.deleteMany({ where: { email: { in: emails } } });
+      if (userId) await db.user.delete({ where: { id: userId } });
       await db.$disconnect();
     }
   },

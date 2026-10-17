@@ -25,7 +25,7 @@ const details = z.object({
       z.object({
         name: z.string().min(1).max(100),
         phoneNumber: z.string().nullable().optional(),
-        email: z.string().optional(),
+        email: z.string().nullish(),
       }),
     )
     .min(1),
@@ -70,7 +70,10 @@ export async function receiveCalWebhook(body: unknown) {
       tx.integrationEvent.create({
         data: { id, provider: 'CAL', sourceId: uid, occurredAt, outcome },
       });
-    const existing = await tx.appointment.findUnique({ where: { calUid: uid }, include: { user: true } });
+    const existing = await tx.appointment.findUnique({
+      where: { calUid: uid },
+      include: { user: true },
+    });
     let rescheduledFrom: typeof existing = null;
     if (cancelled) {
       if (existing) {
@@ -127,14 +130,21 @@ export async function receiveCalWebhook(body: unknown) {
     const phoneValue = p.responses.attendeePhoneNumber?.value ?? p.attendees[0].phoneNumber;
     const reference = p.metadata.instafixReference;
     const hasReference = reference !== undefined && reference !== null && reference !== '';
-    const intent = typeof reference === 'string' && reference.length <= 200
-      ? await tx.bookingIntent.findUnique({ where: { tokenHash: tokenHash(reference) }, include: { user: true } })
-      : !hasReference
-        ? await tx.bookingIntent.findUnique({ where: { calUid: uid }, include: { user: true } })
-        : null;
-    const validIntent = intent && (intent.calUid
-      ? intent.calUid === uid || intent.calUid === event.payload.rescheduleUid
-      : intent.createdAt.getTime() <= occurredAt.getTime() + 300000 && intent.expiresAt >= occurredAt);
+    const intent =
+      typeof reference === 'string' && reference.length <= 200
+        ? await tx.bookingIntent.findUnique({
+            where: { tokenHash: tokenHash(reference) },
+            include: { user: true },
+          })
+        : !hasReference
+          ? await tx.bookingIntent.findUnique({ where: { calUid: uid }, include: { user: true } })
+          : null;
+    const validIntent =
+      intent &&
+      (intent.calUid
+        ? intent.calUid === uid || intent.calUid === event.payload.rescheduleUid
+        : intent.createdAt.getTime() <= occurredAt.getTime() + 300000 &&
+          intent.expiresAt >= occurredAt);
     const selected = validIntent ? intent : null;
     // La relación ya establecida sobrevive eventos sin metadata y reprogramaciones.
     const previousOwner = existing?.user || rescheduledFrom?.user || null;
@@ -142,25 +152,34 @@ export async function receiveCalWebhook(body: unknown) {
     const identity = bookingIdentity({
       owner,
       invalidReference: hasReference && !validIntent,
-      ownerConflict: Boolean(previousOwner && selected?.user && previousOwner.id !== selected.user.id),
-      phone: phoneValue, email: p.attendees[0].email, name: p.attendees[0].name,
+      ownerConflict: Boolean(
+        previousOwner && selected?.user && previousOwner.id !== selected.user.id,
+      ),
+      phone: phoneValue,
+      email: p.attendees[0].email ?? undefined,
+      name: p.attendees[0].name,
     });
     const phone = identity.contactPhone;
     const service = p.responses.servicio?.value;
     const consent = p.responses.whatsappConsent?.value === true;
     const title = typeof service === 'string' && service.trim() ? service.trim().slice(0, 150) : '';
-    const issue = identity.bookingIdentityIssue ? bookingIdentityMessage : !phone
-      ? 'Falta un teléfono válido en Cal.com'
-      : !consent
-        ? 'Falta autorización de WhatsApp en Cal.com'
-        : !title
-          ? 'Falta la descripción del trabajo (campo servicio)'
-          : null;
+    const issue = identity.bookingIdentityIssue
+      ? bookingIdentityMessage
+      : !phone
+        ? 'Falta un teléfono válido en Cal.com'
+        : !consent
+          ? 'Falta autorización de WhatsApp en Cal.com'
+          : !title
+            ? 'Falta la descripción del trabajo (campo servicio)'
+            : null;
     const calStatus = (
       p.status || (event.triggerEvent === 'BOOKING_REQUESTED' ? 'PENDING' : 'ACCEPTED')
     ).toLowerCase();
     if (selected && identity.bookingIdentityIssue !== 'OWNER_CONFLICT') {
-      await tx.bookingIntent.update({ where: { tokenHash: selected.tokenHash }, data: { calUid: uid } });
+      await tx.bookingIntent.update({
+        where: { tokenHash: selected.tokenHash },
+        data: { calUid: uid },
+      });
     }
     if (existing) {
       await lockAppointment(tx, existing.id);
@@ -169,8 +188,11 @@ export async function receiveCalWebhook(body: unknown) {
       if (['CANCELLED', 'COMPLETED', 'IN_PROGRESS'].includes(current.status)) {
         // No reabrir trabajos terminados ni perder un vínculo recuperado.
         if (!current.userId && identity.userId)
-          await tx.appointment.update({ where: { id: current.id }, data: { userId: identity.userId } });
-        await saveEvent('IGNORED_CANCELLED');
+          await tx.appointment.update({
+            where: { id: current.id },
+            data: { userId: identity.userId },
+          });
+        await saveEvent('IGNORED_TERMINAL');
         return { ok: true };
       }
       const changed =
@@ -182,7 +204,10 @@ export async function receiveCalWebhook(body: unknown) {
         current.contactName !== identity.contactName ||
         current.bookingIdentityIssue !== identity.bookingIdentityIssue;
       if (!changed) {
-        await tx.appointment.update({ where: { id: current.id }, data: { calStatus, userId: identity.userId } });
+        await tx.appointment.update({
+          where: { id: current.id },
+          data: { calStatus, userId: identity.userId },
+        });
         await saveEvent('UPDATED');
         return { ok: true };
       }

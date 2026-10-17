@@ -288,3 +288,75 @@ header nav a[aria-current='page'] {
     white-space: normal;
   }
 }
+
+/* Cuenta fuera del menú: conserva su espacio y estado en todos los tamaños. */
+.public-header nav {
+  margin-left: auto;
+}
+.account-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  background: var(--surface);
+  transition:
+    background-color 180ms,
+    border-color 180ms;
+}
+.account-link > svg {
+  width: 24px;
+  height: 24px;
+}
+.account-link:hover,
+.account-link[aria-current='page'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-soft);
+}
+.account-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.account-session-check {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: #15803d;
+  color: white;
+}
+.account-session-check svg {
+  width: 13px;
+  height: 13px;
+}
+@media (max-width: 760px) {
+  .public-header {
+    column-gap: 8px;
+  }
+  .public-header .brand {
+    margin-right: auto;
+  }
+  .public-header .mobile-menu-toggle {
+    order: 2;
+    padding: 8px;
+  }
+  .public-header .account-link {
+    order: 1;
+  }
+  .public-header nav {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}

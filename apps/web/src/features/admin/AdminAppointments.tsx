@@ -34,6 +34,9 @@ const localDate = (value: string) => {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
 export function AdminAppointments({ services }: { services: Offering[] }) {
+  const [linkUserId, setLinkUserId] = useState('');
+  const [identityVerified, setIdentityVerified] = useState(false);
+  const [recoverable, setRecoverable] = useState(0);
   const [assignedService, setAssignedService] = useState('');
   const [items, setItems] = useState<AdminAppointment[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string; phone: string }[]>([]);
@@ -47,6 +50,8 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
       api('admin/users'),
     ]);
     setItems(next);
+    const links = await api<{ recoverable: number }>('admin/booking-links');
+    setRecoverable(links.recoverable);
     setUsers(customers.filter((u: { role: string }) => u.role === 'CUSTOMER'));
   }
   useEffect(() => {
@@ -54,6 +59,8 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
   }, []);
   function edit(item: AdminAppointment) {
     setId(item.id);
+    setLinkUserId('');
+    setIdentityVerified(false);
     setAssignedService(item.offeringId || '');
     setDraft({
       userId: item.userId || '',
@@ -112,6 +119,41 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
       setBusy(false);
     }
   }
+  async function recoverLinks() {
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await api<{ recovered: number }>('admin/booking-links/recover', {
+        method: 'POST',
+      });
+      await load();
+      setMessage(`Vínculos recuperados: ${result.recovered}.`);
+      setId(null);
+      setDraft({ ...empty });
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo recuperar');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function linkAccount() {
+    if (!id || !linkUserId || !identityVerified) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await api<AdminAppointment>(`admin/booking-links/${id}`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: linkUserId, identityVerified }),
+      });
+      await load();
+      edit(result);
+      setMessage('Cita vinculada a la cuenta verificada.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo vincular');
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section>
       <h2>Citas de clientes</h2>
@@ -123,6 +165,14 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
         Las reservas de Cal.com se sincronizan automáticamente al activar la integración. Reprograma
         o cancela esas reservas en Cal.com.
       </p>
+      {recoverable > 0 && (
+        <p>
+          {recoverable} citas tienen una referencia de cuenta comprobable.{' '}
+          <button type="button" disabled={busy} onClick={recoverLinks}>
+            Recuperar vínculos
+          </button>
+        </p>
+      )}
       {message && <p role="status">{message}</p>}
       <div className="admin-layout">
         <div>
@@ -148,6 +198,43 @@ export function AdminAppointments({ services }: { services: Offering[] }) {
         </div>
         <form onSubmit={save} className="editor">
           <h3>{id ? 'Editar cita' : 'Nueva cita'}</h3>
+          {id && !draft.userId && (
+            <fieldset>
+              <legend>Vincular cita existente a una cuenta</legend>
+              <label>
+                Cuenta del cliente
+                <select
+                  value={linkUserId}
+                  onChange={(e) => {
+                    setLinkUserId(e.target.value);
+                    setIdentityVerified(false);
+                  }}
+                >
+                  <option value="">Selecciona la cuenta verificada</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} · {user.phone}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={identityVerified}
+                  onChange={(e) => setIdentityVerified(e.target.checked)}
+                />
+                He comprobado que esta cita pertenece a este cliente.
+              </label>
+              <button
+                type="button"
+                disabled={busy || !linkUserId || !identityVerified}
+                onClick={linkAccount}
+              >
+                Vincular a Mi cuenta
+              </button>
+            </fieldset>
+          )}
           {id && (
             <fieldset>
               <legend>Servicio asignado por el técnico</legend>

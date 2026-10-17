@@ -27,7 +27,7 @@ Al abrir Agenda, la web solicita `POST /api/v1/booking/context`. Para invitados 
 
 El embed recibe `name`, `email`, `attendeePhoneNumber` y `metadata[instafixReference]`. Es el mecanismo documentado de [prefill y metadata de Cal.com](https://cal.com/help/embedding/prefill-booking-form-embed). Los campos existentes de Cal.com no se cambian. No se premarca el consentimiento de WhatsApp.
 
-El webhook firmado vincula la reserva solo si la referencia es válida y el correo verificado y teléfono coinciden con la cuenta. La referencia se consume para una reserva; acepta reintentos y reprogramaciones de esa reserva. Una referencia manipulada o reutilizada en otra cita no concede acceso al historial.
+El webhook firmado obtiene el propietario de la referencia de sesión y conserva ese vínculo en actualizaciones y reprogramaciones. Los campos editables de Cal.com nunca cambian el propietario ni el destinatario de automatizaciones. Si el teléfono o correo recibido difiere de la cuenta, la cita mantiene su propietario y queda en revisión, sin mensajes ni confirmación automática. Un correo opcional ausente no elimina el vínculo. La referencia se consume para una reserva; una referencia manipulada o reutilizada en otra cita no concede acceso al historial.
 
 Se requiere mantener el webhook Cal.com configurado según `whatsapp-setup.md`. Sin ese webhook, el formulario se rellena pero la cita no puede aparecer automáticamente en PostgreSQL. Las reservas antiguas o realizadas fuera de la web no contienen esta referencia.
 
@@ -79,3 +79,17 @@ INSTAFIX_INTEGRATION=1 pnpm --filter @instafix/api exec tsx --test --test-concur
 ```
 
 Usar una base de desarrollo y mantener `WHATSAPP_ENABLED=false`. Estas pruebas crean y limpian sus datos temporales, simulan el correo y no contactan clientes reales.
+
+## Recuperación de citas y confirmación por correo
+
+Aplicar también `20261016140000_booking_identity` antes de iniciar la API actualizada.
+
+En Administración → Citas, «Recuperar vínculos» aparece si existen reservas sin propietario con una referencia de sesión consumida y teléfono coincidente. No vincula por teléfono solamente. Las reservas de invitados pueden vincularse individualmente después de comprobar su identidad; la acción exige administrador y queda registrada. No permite reasignar citas que ya tienen propietario. No envía mensajes ni cambia horarios.
+
+Mi cuenta vuelve a consultar las citas al recuperar el foco o volver a la pestaña. Muestra futuras e históricas exclusivamente por el usuario autenticado. Las discrepancias de contacto aparecen como pendientes de revisión.
+
+**Responsabilidad de correo:** Cal.com debe enviar la confirmación de reserva; Brevo sigue enviando verificación y recuperación de cuenta. No se añadió un segundo correo de confirmación desde InstaFix. Si el evento requiere confirmación, comprobar primero si la reserva sigue pendiente de ubicación/aprobación. Después revisar en Cal.com el correo del asistente, la opción de confirmación y los workflows para evitar duplicados. La configuración real y la entrega todavía deben comprobarse en el entorno afectado.
+
+El teléfono mostrado por InstaFix es de solo lectura y el backend valida los datos recibidos. Esto **no bloquea el campo dentro del iframe de Cal.com**. Revisar la posibilidad de bloquear el campo prerrellenado requiere inspeccionar la configuración real del evento. No realizar cambios externos sin autorización del propietario.
+
+La base local revisada no contenía citas ni credenciales de Cal.com: estos cambios no recuperan reservas que nunca hayan llegado a esa base. Para comprobar las citas reales hay que revisar el entorno donde está desplegada la API y su recepción de webhooks.

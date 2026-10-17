@@ -28,7 +28,10 @@ export function Calendar() {
       })
       .catch((e) => {
         if (!active) return;
-        if (e instanceof ApiError && e.status === 401) setContext({ token: null, user: null });
+        if (e instanceof ApiError && e.status === 401)
+          setError(
+            'Tu sesión caducó. Inicia sesión de nuevo para vincular la reserva a tu cuenta.',
+          );
         else setError('No pudimos cargar tus datos. Puedes reintentar o continuar como invitado.');
       });
     return () => {
@@ -61,14 +64,23 @@ export function Calendar() {
         </p>
       </div>
       {context?.user && (
-        <p className="calendar-account-note">
-          Usaremos los datos de tu cuenta para rellenar la reserva. Revisa que sean correctos antes
-          de confirmar.
-        </p>
+        <div className="calendar-account-note">
+          <label>
+            Teléfono de tu cuenta
+            <input type="tel" value={context.user.phone} readOnly aria-readonly="true" />
+          </label>
+          <p>
+            La reserva se vinculará a tu cuenta y usará este número. Si los datos de contacto se
+            modifican en Cal.com, la reserva quedará pendiente de revisión en InstaFix.
+          </p>
+        </div>
       )}
       {error && (
         <div role="alert">
           <p>{error}</p>
+          <a href="#cuenta" className="text-button">
+            Ir a Mi cuenta
+          </a>
           <button
             onClick={() => {
               setError('');

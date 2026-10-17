@@ -1,7 +1,8 @@
 import { normalizePhone } from '@instafix/contracts/src/phone';
 
 export type BookingOwner = { id: string; name: string; phone: string; email: string | null };
-export type IdentityIssue = 'INVALID_REFERENCE' | 'OWNER_CONFLICT' | 'PHONE_MISMATCH' | 'EMAIL_MISMATCH';
+export type IdentityIssue =
+  'INVALID_REFERENCE' | 'OWNER_CONFLICT' | 'PHONE_MISMATCH' | 'EMAIL_MISMATCH';
 
 /** El contexto procede de una sesión; los campos editables de Cal no deciden el propietario. */
 export function bookingIdentity(input: {
@@ -18,8 +19,14 @@ export function bookingIdentity(input: {
   let issue: IdentityIssue | null = null;
   if (input.invalidReference) issue = 'INVALID_REFERENCE';
   else if (input.ownerConflict) issue = 'OWNER_CONFLICT';
-  else if (input.owner && input.phone != null && input.phone !== '' && suppliedPhone !== ownerPhone) issue = 'PHONE_MISMATCH';
-  else if (input.owner && suppliedEmail && suppliedEmail !== input.owner.email?.trim().toLowerCase()) issue = 'EMAIL_MISMATCH';
+  else if (input.owner && input.phone != null && input.phone !== '' && suppliedPhone !== ownerPhone)
+    issue = 'PHONE_MISMATCH';
+  else if (
+    input.owner &&
+    suppliedEmail &&
+    suppliedEmail !== input.owner.email?.trim().toLowerCase()
+  )
+    issue = 'EMAIL_MISMATCH';
   return {
     userId: input.owner?.id ?? null,
     contactName: input.owner?.name ?? input.name,

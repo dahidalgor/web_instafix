@@ -4,12 +4,13 @@ import {
   type Appointment,
   type CompletedJob,
 } from '@instafix/contracts';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
 import { Login } from './Login';
 
 export function AccountDashboard() {
+  const loadRevision = useRef(0);
   const [user, setUser] = useState<AccountUser | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [sessionError, setSessionError] = useState('');
@@ -43,6 +44,7 @@ export function AccountDashboard() {
   const load = useCallback(
     async (signal?: AbortSignal) => {
       if (!user) return;
+      const revision = ++loadRevision.current;
       setLoading(true);
       setError('');
       try {
@@ -50,19 +52,19 @@ export function AccountDashboard() {
           api<Appointment[]>('my/appointments', { signal }),
           api<CompletedJob[]>('my/jobs', { signal }),
         ]);
-        if (!signal?.aborted) {
+        if (!signal?.aborted && revision === loadRevision.current) {
           setAppointments(nextAppointments);
           setJobs(nextJobs);
         }
       } catch (e) {
-        if (signal?.aborted) return;
+        if (signal?.aborted || revision !== loadRevision.current) return;
         if (e instanceof ApiError && e.status === 401) {
           setUser(null);
           setAppointments([]);
           setJobs([]);
         } else setError('No pudimos cargar tus citas y servicios. Puedes volver a intentarlo.');
       } finally {
-        if (!signal?.aborted) setLoading(false);
+        if (!signal?.aborted && revision === loadRevision.current) setLoading(false);
       }
     },
     [user],
@@ -70,13 +72,29 @@ export function AccountDashboard() {
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      loadRevision.current++;
+    };
   }, [load]);
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [user, load]);
   async function logout() {
     setLoggingOut(true);
     setError('');
     try {
       await api('auth/logout', { method: 'POST' });
+      loadRevision.current++;
       setUser(null);
       setAppointments([]);
       setJobs([]);
@@ -200,6 +218,13 @@ export function AccountDashboard() {
               <span className="badge">{appointmentLabels[item.status]}</span>
               <p className="eyebrow">{item.device}</p>
               <h2>{item.title}</h2>
+              {item.bookingIdentityIssue && (
+                <p role="status" className="calendar-account-note">
+                  Tu reserva está pendiente de revisión porque sus datos de contacto no coinciden
+                  con tu cuenta. Contacta con InstaFix para corregirlos antes de confirmar la
+                  visita.
+                </p>
+              )}
               <dl className="appointment-details">
                 <div>
                   <dt>Servicio asignado por el técnico</dt>
