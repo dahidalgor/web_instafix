@@ -85,9 +85,15 @@ Consultar `docs/architecture.md` para las reglas del flujo.
 
 La web incluye Contacto en el footer y menú móvil desplegable. Administración permite editar las diapositivas, asignar servicios a citas, registrar trabajos y consultar visitas/tiempo visible por página. El cliente sigue describiendo su necesidad al reservar; el técnico elige el servicio después. Consulta [la guía de funcionamiento y configuración SMTP](docs/site-experience.md). El proveedor elegido es Brevo; el propietario confirmó la recepción de correos el 16 de octubre de 2026. Cada entorno necesita sus variables SMTP privadas.
 
-## Agenda Cal.com integrada
+## Agenda propia con Cal.com API v2 (17 de octubre de 2026)
 
-La sección `#agenda` muestra el evento real `instafix/agenda-tu-cita-con-instafix` mediante su vista incrustada en un iframe. Conserva `overlayCalendar=true` y omite la fecha fija del enlace original. No se cambian los ajustes de la cuenta de Cal.com.
+La sección `#agenda` es un flujo de reserva propio: calendario, horarios, solicitud, contacto, resumen y confirmación. Cal.com funciona solo como motor de disponibilidad y reservas a través del backend. PostgreSQL es la fuente de verdad de qué cita pertenece a quién. Mi cuenta muestra Próximas e Historial y permite cancelar o reprogramar. Consulta [la guía de reserva](docs/booking.md) para la arquitectura, la API, la seguridad, las pruebas y las variables.
+
+Si el servidor no tiene `CAL_API_KEY` y `CAL_EVENT_TYPE_ID` (o `BOOKING_MODE=legacy`), la agenda vuelve temporalmente al formulario incrustado anterior, descrito a continuación.
+
+### Formulario anterior (modo legacy)
+
+Muestra el evento real `instafix/agenda-tu-cita-con-instafix` mediante su vista incrustada en un iframe. Conserva `overlayCalendar=true` y omite la fecha fija del enlace original. No se cambian los ajustes de la cuenta de Cal.com.
 
 La sincronización con PostgreSQL y la confirmación por ubicación requieren activar los webhooks y configurar el evento como pendiente de confirmación según [la guía de WhatsApp](docs/whatsapp-setup.md). No hacer reservas ficticias en la agenda real para probarla.
 

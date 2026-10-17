@@ -8,6 +8,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountController } from './account/account.controller';
 import { AppointmentsController } from './appointments/appointments.controller';
+import { MyAppointmentsController } from './appointments/my-appointments.controller';
 import { AuthController } from './auth/auth.controller';
 import { CatalogController } from './catalog/catalog.controller';
 import { HealthController } from './health/health.controller';
@@ -19,7 +20,15 @@ import { WebhooksController } from './integrations/webhooks.controller';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 
 @Module({
-  imports: [WhatsAppModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])],
+  imports: [
+    WhatsAppModule,
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 20 }],
+      // Solo las pruebas locales pueden desactivarlo; en producción siempre se aplica.
+      skipIf: () =>
+        process.env.NODE_ENV !== 'production' && process.env.INSTAFIX_TEST_DISABLE_THROTTLE === '1',
+    }),
+  ],
   controllers: [
     BookingAdminController,
     EmailAdminController,
@@ -30,6 +39,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     AccountController,
     CatalogController,
     AppointmentsController,
+    MyAppointmentsController,
     JobsController,
     WarrantiesController,
     RequestsController,

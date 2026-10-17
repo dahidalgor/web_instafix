@@ -48,11 +48,11 @@ export class JobsController {
         if (
           !appointment ||
           appointment.userId !== user.id ||
-          appointment.status === 'CANCELLED' ||
+          ['CANCELLED', 'FAILED', 'CREATING', 'RESCHEDULED'].includes(appointment.status) ||
           appointment.completedJob
         )
           throw new BadRequestException(
-            'La cita no corresponde al cliente, está cancelada o ya tiene un trabajo registrado',
+            'La cita no corresponde al cliente, no está activa o ya tiene un trabajo registrado',
           );
         await tx.appointment.update({
           where: { id: appointment.id },

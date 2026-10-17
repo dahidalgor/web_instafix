@@ -12,3 +12,6 @@ storage/
 .env.*
 !.env.example
 !**/.env.example
+
+# Ejecutor local de sesiones asistidas
+.agent-runner/

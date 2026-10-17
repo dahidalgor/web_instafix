@@ -106,7 +106,8 @@ test(
       });
       mine = await account.appointments(customer);
       assert.equal(mine.length, 2);
-      assert.equal(mine.find((a) => a.id === id)?.status, 'CANCELLED');
+      // La reserva sustituida queda RESCHEDULED (antes CANCELLED), distinta de una cancelación.
+      assert.equal(mine.find((a) => a.id === id)?.status, 'RESCHEDULED');
       assert.equal(mine.find((a) => a.calUid === rescheduled.payload.uid)?.userId, userIds[0]);
       // Datos alterados: se conserva la cuenta, se usa su teléfono y no se inicia automatización.
       const alteredContext = await booking.context(customer);

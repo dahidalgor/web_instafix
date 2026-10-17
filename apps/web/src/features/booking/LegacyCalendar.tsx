@@ -1,0 +1,102 @@
+import Cal from '@calcom/embed-react';
+import type { AccountUser } from '@instafix/contracts';
+import { api, ApiError } from '../../lib/api';
+import { useEffect, useState } from 'react';
+
+// Formulario anterior de Cal.com (iframe). Solo se usa si la API no está configurada
+// (BOOKING_MODE=legacy o faltan CAL_API_KEY/CAL_EVENT_TYPE_ID). Retirar tras validar el flujo propio.
+export function LegacyCalendar() {
+  const [context, setContext] = useState<{ token: string | null; user: AccountUser | null } | null>(
+    null,
+  );
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    const change = () => setTheme(query.matches ? 'dark' : 'light');
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    setError('');
+    setContext(null);
+    api<{ token: string | null; user: AccountUser | null }>('booking/context', { method: 'POST' })
+      .then((result) => {
+        if (active) setContext(result);
+      })
+      .catch((e) => {
+        if (!active) return;
+        if (e instanceof ApiError && e.status === 401)
+          setError(
+            'Tu sesión caducó. Inicia sesión de nuevo para vincular la reserva a tu cuenta.',
+          );
+        else setError('No pudimos cargar tus datos. Puedes reintentar o continuar como invitado.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+  const prefill = context?.user
+    ? {
+        name: context.user.name,
+        email: context.user.email || '',
+        attendeePhoneNumber: context.user.phone,
+        ...(context.token ? { 'metadata[instafixReference]': context.token } : {}),
+      }
+    : {};
+  return (
+    <div className="legacy-calendar">
+      {context?.user && (
+        <div className="calendar-account-note">
+          <label>
+            Teléfono de tu cuenta
+            <input type="tel" value={context.user.phone} readOnly aria-readonly="true" />
+          </label>
+          <p>
+            La reserva se vinculará a tu cuenta y usará este número. Si los datos de contacto se
+            modifican en Cal.com, la reserva quedará pendiente de revisión en InstaFix.
+          </p>
+        </div>
+      )}
+      {error && (
+        <div role="alert">
+          <p>{error}</p>
+          <a href="#cuenta" className="text-button">
+            Ir a Mi cuenta
+          </a>
+          <button
+            onClick={() => {
+              setError('');
+              setContext({ token: null, user: null });
+            }}
+          >
+            Continuar como invitado
+          </button>
+        </div>
+      )}
+      {!context && !error && <p role="status">Preparando tu agenda…</p>}
+      {context && (
+        <div className="calendar-container">
+          <Cal
+            key={`${attempt}-${theme}`}
+            namespace={`instafix-${attempt}-${theme}`}
+            calLink="instafix/agenda-tu-cita-con-instafix"
+            calOrigin="https://cal.com"
+            config={{ overlayCalendar: 'true', layout: 'month_view', theme, ...prefill }}
+            className="calendar-embed"
+          />
+        </div>
+      )}
+      <div className="calendar-retry">
+        <span>¿El calendario tarda en aparecer?</span>
+        <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+          Volver a cargar aquí
+        </button>
+      </div>
+    </div>
+  );
+}

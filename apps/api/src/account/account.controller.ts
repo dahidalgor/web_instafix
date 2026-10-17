@@ -14,10 +14,11 @@ export class AccountController {
     });
   }
 
+  // Compatibilidad: la web usa GET /appointments/me (próximas e historial separados).
   @Get('my/appointments') async appointments(@Req() req: Request) {
     const user = await authenticated(req);
     const appointments = await db.appointment.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, status: { not: 'FAILED' } },
       orderBy: { startsAt: 'asc' },
       include: { offering: { select: { title: true, device: true } } },
     });

@@ -245,8 +245,102 @@
 .history-card h2 {
   font-size: 26px;
 }
+/* Mis citas: próximas, historial y detalle */
+.appointment-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 6px;
+}
+.appointment-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px 24px;
+  min-width: 0;
+}
+.appointment-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.appointment-card-head .eyebrow {
+  font-size: 11px;
+  margin: 0;
+}
+.appointment-card h2 {
+  font-family: Manrope, sans-serif;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+  margin: 12px 0 8px;
+}
+.appointment-request {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.status-pill {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 20px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.status-pill.tone-ok {
+  background: #e6f4ef;
+  color: #205d46;
+}
+.status-pill.tone-pending {
+  background: #fff4e0;
+  color: #6b4a00;
+}
+.status-pill.tone-off {
+  background: #f3e9e9;
+  color: #803737;
+}
+.appointment-dialog article {
+  max-width: 760px;
+}
+.appointment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin-top: 20px;
+}
+.appointment-actions .button {
+  margin: 0;
+}
+.button.danger {
+  background: #a3261f;
+}
+.text-button.danger {
+  color: #a3261f;
+}
+.appointment-confirm p {
+  line-height: 1.7;
+}
+.appointment-reschedule .schedule {
+  grid-template-columns: 1fr;
+}
+.appointment-reschedule .slot-panel {
+  border-left: 0;
+  border-top: 1px solid var(--border);
+  padding: 20px 0 0;
+}
+.appointment-reschedule .slot-grid {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+
 /* Ajustes adaptables y preferencias del sistema */
 @media (max-width: 760px) {
+  .appointment-list {
+    grid-template-columns: 1fr;
+  }
   .account-panel {
     margin: 35px auto;
   }

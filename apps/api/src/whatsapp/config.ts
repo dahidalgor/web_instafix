@@ -16,11 +16,9 @@ export function whatsappConfiguration() {
   };
 }
 export function calConfiguration() {
-  const missing = [
-    'CAL_WEBHOOK_SECRET',
-    'CAL_API_KEY',
-    'CAL_API_VERSION',
-    'CAL_EVENT_TYPE_ID',
-  ].filter((key) => !process.env[key]);
+  // Las versiones de cada endpoint de Cal.com están fijadas en integrations/cal-api.ts.
+  const missing = ['CAL_WEBHOOK_SECRET', 'CAL_API_KEY', 'CAL_EVENT_TYPE_ID'].filter(
+    (key) => !process.env[key],
+  );
   return { configured: !missing.length, missing };
 }

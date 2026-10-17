@@ -5,6 +5,7 @@ import { bookingIdentity, bookingIdentityMessage } from '../booking/booking-iden
 import { tokenHash } from '../auth/security';
 import { db } from '../database/client';
 import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue';
+import { instafixReference, syncInstafixBooking, syncNoShow } from './cal-webhook-instafix';
 
 const envelope = z.object({
   triggerEvent: z.string(),
@@ -34,7 +35,39 @@ const details = z.object({
   metadata: z.record(z.unknown()).default({}),
 });
 
+const noShowEnvelope = z.object({
+  triggerEvent: z.literal('BOOKING_NO_SHOW_UPDATED'),
+  createdAt: z.string().datetime({ offset: true }),
+  payload: z.object({ bookingUid: z.string().min(1).max(200) }).passthrough(),
+});
+
 export async function receiveCalWebhook(body: unknown) {
+  const noShow = noShowEnvelope.safeParse(body);
+  if (noShow.success) {
+    const { payload, createdAt } = noShow.data;
+    const id =
+      'cal:' +
+      createHash('sha256')
+        .update(
+          `BOOKING_NO_SHOW_UPDATED:${payload.bookingUid}:${createdAt}:${JSON.stringify(payload.attendees ?? [])}`,
+        )
+        .digest('hex');
+    return db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('cal-webhooks'))`;
+      if (await tx.integrationEvent.findUnique({ where: { id } })) return { duplicate: true };
+      return syncNoShow(tx, payload, (outcome) =>
+        tx.integrationEvent.create({
+          data: {
+            id,
+            provider: 'CAL',
+            sourceId: `${payload.bookingUid}:no-show`,
+            occurredAt: new Date(createdAt),
+            outcome,
+          },
+        }),
+      );
+    });
+  }
   const parsed = envelope.safeParse(body);
   if (!parsed.success) throw new BadRequestException('Evento Cal inválido');
   if (!process.env.CAL_EVENT_TYPE_ID)
@@ -74,6 +107,42 @@ export async function receiveCalWebhook(body: unknown) {
       where: { calUid: uid },
       include: { user: true },
     });
+    // Reservas creadas por la web propia (API v2): se sincronizan sin leer datos de contacto.
+    const instafixId = instafixReference(event.payload.metadata);
+    const linked =
+      !existing && instafixId
+        ? await tx.appointment.findFirst({ where: { id: instafixId, source: 'INSTAFIX' } })
+        : null;
+    const previousBooking =
+      event.payload.rescheduleUid && event.payload.rescheduleUid !== uid
+        ? await tx.appointment.findUnique({ where: { calUid: event.payload.rescheduleUid } })
+        : null;
+    const target = existing ?? linked;
+    if (target?.source === 'INSTAFIX' || (!target && previousBooking?.source === 'INSTAFIX')) {
+      let start: Date | undefined;
+      let end: Date | undefined;
+      let calStatus = event.triggerEvent === 'BOOKING_REQUESTED' ? 'pending' : 'accepted';
+      if (!cancelled) {
+        const booking = details.safeParse(event.payload);
+        if (!booking.success) throw new BadRequestException('Faltan datos de la reserva');
+        start = new Date(booking.data.startTime);
+        end = new Date(booking.data.endTime);
+        if (end <= start) throw new BadRequestException('Horario inválido');
+        if (booking.data.status) calStatus = booking.data.status.toLowerCase();
+      }
+      return syncInstafixBooking(tx, {
+        trigger: event.triggerEvent,
+        uid,
+        cancelled,
+        target,
+        previous: previousBooking,
+        payload: event.payload,
+        start,
+        end,
+        calStatus,
+        saveEvent,
+      });
+    }
     let rescheduledFrom: typeof existing = null;
     if (cancelled) {
       if (existing) {
@@ -102,7 +171,7 @@ export async function receiveCalWebhook(body: unknown) {
         await tx.appointment.update({
           where: { id: old.id },
           data: {
-            status: 'CANCELLED',
+            status: 'RESCHEDULED',
             calStatus: 'rescheduled',
             automationRevision: { increment: 1 },
           },
@@ -185,7 +254,9 @@ export async function receiveCalWebhook(body: unknown) {
       await lockAppointment(tx, existing.id);
       // BOOKING_CREATED tras confirmar no debe volver a pedir la ubicación.
       const current = await tx.appointment.findUniqueOrThrow({ where: { id: existing.id } });
-      if (['CANCELLED', 'COMPLETED', 'IN_PROGRESS'].includes(current.status)) {
+      if (
+        ['CANCELLED', 'COMPLETED', 'IN_PROGRESS', 'RESCHEDULED', 'NO_SHOW'].includes(current.status)
+      ) {
         // No reabrir trabajos terminados ni perder un vínculo recuperado.
         if (!current.userId && identity.userId)
           await tx.appointment.update({
@@ -217,6 +288,7 @@ export async function receiveCalWebhook(body: unknown) {
     const dataToSave = {
       ...identity,
       title: title || 'Trabajo pendiente de especificar',
+      customerRequest: title,
       startsAt: start,
       endsAt: end,
       timeZone: 'America/Guayaquil',

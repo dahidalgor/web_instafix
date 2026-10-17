@@ -56,6 +56,8 @@ La hora estimada de llegada y la explicación de trabajos anteriores/traslados c
 
 ## Cal.com: conservar el flujo de citas
 
+> **Actualización 17/10/2026:** la web reserva por API ([booking.md](booking.md)). El evento real (ID 7271527) **no** usa los campos `servicio` ni `whatsappConsent`: la solicitud va en `notes` y el consentimiento se guarda en InstaFix. Además, la confirmación está desactivada, así que las reservas quedan aceptadas. Los pasos siguientes describen el diseño original del formulario incrustado.
+
 En el evento `instafix/agenda-tu-cita-con-instafix`:
 
 1. Activa **requiere confirmación**. La reserva debe permanecer pendiente hasta recibir la ubicación; no la confirmes manualmente si quieres mantener este flujo.

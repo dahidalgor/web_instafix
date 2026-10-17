@@ -5,7 +5,7 @@ import {
   normalizePhone,
   type CountryCode,
 } from '@instafix/contracts/src/phone';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
 
 const names = new Intl.DisplayNames(['es'], { type: 'region' });
@@ -15,6 +15,31 @@ const countries = getCountries().sort((a, b) =>
 const flag = (country: string) =>
   [...country].map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0))).join('');
 type Mode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
+type Prefill = { firstName: string; lastName: string; email: string; national: string };
+
+/** Datos de una reserva como invitado para crear la cuenta sin volver a escribirlos. */
+function takeRegisterPrefill(): Prefill | null {
+  try {
+    const raw = sessionStorage.getItem('instafix:register-prefill');
+    if (!raw) return null;
+    const value = JSON.parse(raw) as {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+    };
+    // Solo Ecuador se rellena: otros países requieren elegir el prefijo.
+    const national = value.phone?.startsWith('+593') ? '0' + value.phone.slice(4) : '';
+    return {
+      firstName: value.firstName ?? '',
+      lastName: value.lastName ?? '',
+      email: value.email ?? '',
+      national,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export function Login({
   admin = false,
@@ -23,10 +48,18 @@ export function Login({
   admin?: boolean;
   onLogin: (user: AccountUser) => void;
 }) {
-  const [mode, setMode] = useState<Mode>('login');
+  const [prefill] = useState(() => (admin ? null : takeRegisterPrefill()));
+  const [mode, setMode] = useState<Mode>(prefill ? 'register' : 'login');
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('instafix:register-prefill');
+    } catch {
+      // Sin almacenamiento disponible no hay nada que limpiar.
+    }
+  }, []);
   const [country, setCountry] = useState<CountryCode>('EC');
   const [challengeId, setChallengeId] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(prefill?.email ?? '');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -158,6 +191,7 @@ export function Login({
                 Nombre
                 <input
                   name="firstName"
+                  defaultValue={prefill?.firstName}
                   autoComplete="given-name"
                   required
                   minLength={2}
@@ -168,6 +202,7 @@ export function Login({
                 Apellido
                 <input
                   name="lastName"
+                  defaultValue={prefill?.lastName}
                   autoComplete="family-name"
                   required
                   minLength={2}
@@ -217,6 +252,7 @@ export function Login({
                 <input
                   id="auth-phone"
                   name="phone"
+                  defaultValue={mode === 'register' ? prefill?.national : undefined}
                   type="tel"
                   autoComplete="username"
                   placeholder="987654321"

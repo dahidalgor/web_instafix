@@ -2,6 +2,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    /** Código estable enviado por la API (p. ej. SLOT_TAKEN, ACCOUNT_EXISTS). */
+    public code?: string,
   ) {
     super(message);
   }
@@ -26,6 +28,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
         ? body.message
         : 'No pudimos completar la operación. Revisa los datos o la conexión.',
       response.status,
+      typeof body?.code === 'string' ? body.code : undefined,
     );
   }
   return response.json();
