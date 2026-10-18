@@ -40,12 +40,27 @@ async function call(path: string, version: string, init: RequestInit = {}, uncer
   if (!response.ok)
     throw Object.assign(
       new ProviderError(`Cal.com HTTP ${response.status}`, disposition(response.status)),
-      {
-        httpStatus: response.status,
-      },
+      { httpStatus: response.status, providerMessage: providerMessage(body) },
     );
   return body;
 }
+
+/**
+ * Motivo que da Cal.com al rechazar, para diagnóstico. Se recorta y se ocultan correos y
+ * teléfonos: nunca se registran datos del cliente ni credenciales.
+ */
+function providerMessage(body: unknown) {
+  const b = body as { error?: { code?: unknown; message?: unknown }; message?: unknown } | null;
+  const raw = [b?.error?.code, b?.error?.message, b?.message]
+    .filter((v) => typeof v === 'string' || Array.isArray(v))
+    .map((v) => (Array.isArray(v) ? v.join('; ') : v))
+    .join(' · ');
+  return raw
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[correo]')
+    .replace(/\+?\d[\d\s-]{7,}\d/g, '[teléfono]')
+    .slice(0, 300);
+}
+export type CalHttpError = ProviderError & { httpStatus?: number; providerMessage?: string };
 
 const booking = z
   .object({
@@ -173,4 +188,22 @@ export async function confirmCalBooking(uid: string): Promise<void> {
       throw new ProviderError('Verificar confirmación Cal.com en el siguiente intento', 'RETRY');
     throw error;
   }
+}
+
+const dayIn = (instant: Date, timeZone: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone }).format(instant);
+
+/**
+ * Revalida un horario contra la disponibilidad actual de Cal.com (sin caché). Compara
+ * instantes, no textos: «16:45-05:00» y «21:45:00.000Z» son el mismo horario.
+ */
+export async function isCalSlotAvailable(start: Date, timeZone = 'America/Guayaquil') {
+  const day = dayIn(start, timeZone);
+  const days = await getCalSlots(day, day, timeZone);
+  const offered = Object.values(days).flat();
+  return {
+    available: offered.some((slot) => new Date(slot).getTime() === start.getTime()),
+    day,
+    offered: offered.length,
+  };
 }

@@ -75,7 +75,11 @@ export function AdminEmail() {
               : 'DESACTIVADOS: ningún cliente recibe correos de sus citas. Pon APPOINTMENT_EMAILS_ENABLED=true en el servidor (con CAL_ATTENDEE_RELAY_EMAIL configurado para que Cal.com no duplique).'}
             .
           </p>
-          <button disabled={busy || !status.configured} onClick={() => run('admin/email/verify')}>
+          <button
+            className="btn btn-secondary"
+            disabled={busy || !status.configured}
+            onClick={() => run('admin/email/verify')}
+          >
             {busy ? 'Comprobando…' : 'Comprobar conexión sin enviar correo'}
           </button>
           <form
@@ -88,7 +92,9 @@ export function AdminEmail() {
               Enviar correo de prueba a un buzón propio
               <input type="email" required value={to} onChange={(e) => setTo(e.target.value)} />
             </label>
-            <button disabled={busy || !status.configured}>Enviar prueba real</button>
+            <button className="btn btn-primary" disabled={busy || !status.configured}>
+              Enviar prueba real
+            </button>
           </form>
           <p className="small">
             «Aceptado» significa que Brevo recibió el mensaje. La llegada a la bandeja se comprueba

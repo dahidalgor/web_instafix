@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { db } from '../database/client';
@@ -111,12 +111,31 @@ async function main() {
         : fail(
             `Embedded Signup en modo «${String(config.connection_mode ?? 'sin definir')}»: activa Coexistence en WasapFlow para conectar el número sin quitarlo de la app`,
           );
+      // Misma llamada que hace «Conectar WhatsApp Business». La sesión de prueba no se guarda
+      // en Instafix y caduca sola; no se muestra la URL completa.
+      const session = await bridge.createConnectSession(randomBytes(32).toString('hex'));
+      ok(
+        `Sesión de conexión creada (${new URL(session.connect_url).origin}, caduca en ${session.expires_in} s): el botón puede abrir WasapFlow`,
+      );
     } catch (e) {
       fail(
         `No se pudo leer /embedded-signup/config: ${e instanceof ProviderError ? e.message : 'error de red'}`,
       );
     }
   } else info('Omitido: falta Partner Key o URL base');
+
+  console.log('\n4b. Origen del panel de administración');
+  const adminHost = process.env.ADMIN_HOST?.trim();
+  const origins = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''));
+  if (!adminHost) info('ADMIN_HOST no está definido en este entorno (normal en desarrollo)');
+  else if (origins.includes(`https://${adminHost}`))
+    ok(`https://${adminHost} está en ALLOWED_ORIGINS`);
+  else
+    fail(
+      `https://${adminHost} no está en ALLOWED_ORIGINS: el botón recibirá «Origen no permitido»`,
+    );
 
   console.log('\n5. Envío real de la plantilla OTP');
   const phone = normalizePhone(values.to || '', 'EC');

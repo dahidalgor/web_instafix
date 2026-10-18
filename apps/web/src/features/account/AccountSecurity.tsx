@@ -119,15 +119,17 @@ export function AccountSecurity({
         </div>
         <button
           type="button"
-          className="text-button"
+          className={`btn btn-small ${panel === 'phone' ? 'btn-ghost' : 'btn-secondary'}`}
+          aria-expanded={panel === 'phone'}
+          aria-controls="security-phone"
           onClick={() => open(panel === 'phone' ? null : 'phone')}
         >
-          Cambiar número
+          {panel === 'phone' ? 'Cancelar' : 'Cambiar número'}
         </button>
       </article>
       {panel === 'phone' &&
         (ticket ? (
-          <div className="security-panel">
+          <div className="security-panel" id="security-phone">
             <PhoneVerification<AccountUser>
               ticket={ticket}
               title="Verifica tu nuevo WhatsApp"
@@ -142,7 +144,7 @@ export function AccountSecurity({
             />
           </div>
         ) : (
-          <form className="security-panel" onSubmit={startPhone}>
+          <form className="security-panel" id="security-phone" onSubmit={startPhone}>
             <p className="small">
               Tu número actual se mantiene hasta que verifiques el nuevo con el código que te
               enviaremos por WhatsApp.
@@ -157,9 +159,14 @@ export function AccountSecurity({
               Contraseña actual
               <input name="password" type="password" autoComplete="current-password" required />
             </label>
-            <button className="button" disabled={busy}>
-              {busy ? 'Enviando…' : 'Enviar código'}
-            </button>
+            <div className="security-form-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
+                Cancelar
+              </button>
+              <button className="btn btn-primary" disabled={busy} aria-busy={busy}>
+                {busy ? 'Enviando…' : 'Enviar código'}
+              </button>
+            </div>
           </form>
         ))}
 
@@ -175,21 +182,29 @@ export function AccountSecurity({
         </div>
         <div className="security-actions">
           {user.email && !user.emailVerifiedAt && (
-            <button type="button" className="button" disabled={busy} onClick={sendVerification}>
-              Verificar correo
+            <button
+              type="button"
+              className="btn btn-primary btn-small"
+              disabled={busy}
+              aria-busy={busy}
+              onClick={sendVerification}
+            >
+              {busy ? 'Enviando…' : 'Verificar correo'}
             </button>
           )}
           <button
             type="button"
-            className="text-button"
+            className={`btn btn-small ${panel === 'email' ? 'btn-ghost' : 'btn-secondary'}`}
+            aria-expanded={panel === 'email'}
+            aria-controls="security-email"
             onClick={() => open(panel === 'email' ? null : 'email')}
           >
-            Cambiar correo
+            {panel === 'email' ? 'Cancelar' : 'Cambiar correo'}
           </button>
         </div>
       </article>
       {panel === 'email' && (
-        <form className="security-panel" onSubmit={changeEmail}>
+        <form className="security-panel" id="security-email" onSubmit={changeEmail}>
           <label>
             Nuevo correo
             <input name="email" type="email" autoComplete="email" required maxLength={254} />
@@ -198,9 +213,14 @@ export function AccountSecurity({
             Contraseña actual
             <input name="password" type="password" autoComplete="current-password" required />
           </label>
-          <button className="button" disabled={busy}>
-            {busy ? 'Guardando…' : 'Guardar correo'}
-          </button>
+          <div className="security-form-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
+              Cancelar
+            </button>
+            <button className="btn btn-primary" disabled={busy} aria-busy={busy}>
+              {busy ? 'Guardando…' : 'Guardar correo'}
+            </button>
+          </div>
         </form>
       )}
 
@@ -211,14 +231,16 @@ export function AccountSecurity({
         </div>
         <button
           type="button"
-          className="text-button"
+          className={`btn btn-small ${panel === 'password' ? 'btn-ghost' : 'btn-secondary'}`}
+          aria-expanded={panel === 'password'}
+          aria-controls="security-password"
           onClick={() => open(panel === 'password' ? null : 'password')}
         >
-          Cambiar contraseña
+          {panel === 'password' ? 'Cancelar' : 'Cambiar contraseña'}
         </button>
       </article>
       {panel === 'password' && (
-        <form className="security-panel" onSubmit={changePassword}>
+        <form className="security-panel" id="security-password" onSubmit={changePassword}>
           <label>
             Contraseña actual
             <input
@@ -250,9 +272,14 @@ export function AccountSecurity({
               required
             />
           </label>
-          <button className="button" disabled={busy}>
-            {busy ? 'Guardando…' : 'Guardar contraseña'}
-          </button>
+          <div className="security-form-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
+              Cancelar
+            </button>
+            <button className="btn btn-primary" disabled={busy} aria-busy={busy}>
+              {busy ? 'Guardando…' : 'Guardar contraseña'}
+            </button>
+          </div>
         </form>
       )}
       {error && (

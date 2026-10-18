@@ -172,7 +172,9 @@ test('Cal.com failure creates nothing and sends nothing', { skip: !enabled }, as
       },
       req(),
     ),
-    (e: any) => e.getStatus() === 409,
+    // Sin evidencia de que el horario se ocupó (Cal.com también falla al consultar horarios),
+    // no se culpa al horario: es un rechazo de la agenda.
+    (e: any) => e.getStatus() === 502 && e.getResponse().code === 'BOOKING_REJECTED',
   );
   assert.equal(await db.appointment.count({ where: { contactPhone: phone } }), 0);
   assert.equal(emails.filter((e) => e.to === email).length, 0);

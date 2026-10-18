@@ -24,6 +24,7 @@ import {
   UnauthorizedException,
   Inject,
 } from '@nestjs/common';
+import { logEvent } from '../common/log-event';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { claimGuestAppointments } from '../account/guest-appointments';
@@ -33,6 +34,7 @@ import { passwordResetEmail, webUrl } from '../mail/templates';
 import { consumeAuthToken, issueAuthToken } from './auth-tokens';
 import { hashPassword, tokenHash, verifyPassword } from './security';
 import {
+  accountDisabled,
   authenticated,
   checkOrigin,
   cookieName,
@@ -113,9 +115,18 @@ export class AuthController {
       parsed.success ? parsed.data.password : '',
       user?.passwordHash ?? dummyHash,
     );
-    if (!user || !valid) throw new UnauthorizedException('Teléfono o contraseña incorrectos');
-    if (!user.active)
-      throw new ForbiddenException('Tu acceso está desactivado. Contacta con el administrador.');
+    if (!user || !valid) {
+      logEvent('auth.login_failed', { reason: 'INVALID_CREDENTIALS', status: 401 });
+      throw new UnauthorizedException({
+        statusCode: 401,
+        code: 'INVALID_CREDENTIALS',
+        message: 'Teléfono o contraseña incorrectos',
+      });
+    }
+    if (user.active === false) {
+      logEvent('auth.login_failed', { reason: 'ACCOUNT_DISABLED', status: 403 }, 'warn');
+      throw new ForbiddenException(accountDisabled);
+    }
     if (user.role === 'CUSTOMER' && !user.phoneVerifiedAt) {
       // Credenciales correctas, número sin verificar: no se crea otra cuenta ni sesión.
       let verification = null;

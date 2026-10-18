@@ -222,7 +222,7 @@ export function ScheduleStep({
             {monthError}{' '}
             <button
               type="button"
-              className="text-button"
+              className="btn btn-ghost btn-small"
               onClick={() => setMonthAttempt((n) => n + 1)}
             >
               Reintentar
@@ -235,7 +235,7 @@ export function ScheduleStep({
             {month < lastMonth && (
               <button
                 type="button"
-                className="text-button"
+                className="btn btn-secondary btn-small"
                 onClick={() => setMonth(addMonths(month, 1))}
               >
                 Ver el mes siguiente
@@ -269,7 +269,7 @@ export function ScheduleStep({
             {slotsError}{' '}
             <button
               type="button"
-              className="text-button"
+              className="btn btn-ghost btn-small"
               onClick={() => setSlotsAttempt((n) => n + 1)}
             >
               Reintentar

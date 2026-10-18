@@ -151,8 +151,9 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
       setResult(created);
       go('done');
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        // El horario se ocupó mientras confirmabas: vuelve a elegir con datos frescos.
+      if (e instanceof ApiError && e.status === 409 && e.code === 'SLOT_UNAVAILABLE') {
+        // El servidor comprobó en Cal.com que el horario ya no se ofrece: vuelve a elegir
+        // con datos frescos. Otros errores se muestran tal cual, sin culpar al horario.
         setTakenSlot(slot.start);
         setSlot(null);
         setRefreshKey((n) => n + 1);
@@ -290,7 +291,7 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
           </p>
           {errorBox}
           <div className="booking-actions">
-            <button type="button" className="text-button" onClick={() => go('schedule')}>
+            <button type="button" className="btn btn-ghost" onClick={() => go('schedule')}>
               ← Fecha y hora
             </button>
             <button className="button">
@@ -353,7 +354,7 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
           </p>
           {errorBox}
           <div className="booking-actions">
-            <button type="button" className="text-button" onClick={() => go('request')}>
+            <button type="button" className="btn btn-ghost" onClick={() => go('request')}>
               ← Tu solicitud
             </button>
             <button className="button">
@@ -416,7 +417,7 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
           <div className="booking-actions">
             <button
               type="button"
-              className="text-button"
+              className="btn btn-ghost"
               disabled={busy}
               onClick={() => go(user ? 'request' : 'contact')}
             >

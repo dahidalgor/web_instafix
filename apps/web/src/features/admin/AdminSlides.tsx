@@ -132,6 +132,7 @@ export function AdminSlides({ onUploading }: { onUploading: (busy: boolean) => v
           </button>
           <button
             type="button"
+            className="btn btn-secondary"
             disabled={busy || uploading}
             onClick={() => setDraft({ ...empty, id: '' })}
           >
