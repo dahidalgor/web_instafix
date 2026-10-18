@@ -72,7 +72,7 @@ export function AdminEmail() {
             Avisos de citas por correo:{' '}
             {status.appointmentEmails
               ? 'activados («Recibimos tu solicitud» y «Tu visita está confirmada»)'
-              : 'DESACTIVADOS: ningún cliente recibe correos de sus citas. Pon APPOINTMENT_EMAILS_ENABLED=true en el servidor (con CAL_ATTENDEE_RELAY_EMAIL configurado para que Cal.com no duplique).'}
+              : 'DESACTIVADOS con APPOINTMENT_EMAILS_ENABLED=false: ningún cliente recibe correos de sus citas. Quita esa línea o ponla en true en el servidor.'}
             .
           </p>
           <button

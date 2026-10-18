@@ -10,6 +10,35 @@ export function AdminJobs({ users, items, run, busy }: Props) {
   const [appointments, setAppointments] = useState<(Appointment & { offeringId?: string })[]>([]);
   const [error, setError] = useState('');
   const [price, setPrice] = useState('');
+  // Búsqueda de cliente en el servidor (todas las cuentas, por nombre o número).
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<AccountUser[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<AccountUser | null>(null);
+  useEffect(() => {
+    const q = query.trim();
+    const enough = q.replace(/\D/g, '').length >= 3 || q.replace(/[\d\s+()-]/g, '').length >= 2;
+    if (!enough) {
+      setResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      api<AccountUser[]>(`admin/users?role=CUSTOMER&q=${encodeURIComponent(q)}`, {
+        signal: controller.signal,
+      })
+        .then(setResults)
+        .catch((e) => {
+          if (!controller.signal.aborted) setError(e.message);
+        })
+        .finally(() => !controller.signal.aborted && setSearching(false));
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
   const load = () =>
     api<(Appointment & { offeringId?: string })[]>('admin/appointments').then(setAppointments);
   useEffect(() => {
@@ -24,6 +53,10 @@ export function AdminJobs({ users, items, run, busy }: Props) {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
+    if (!userId) {
+      setError('Busca y selecciona el cliente del trabajo.');
+      return;
+    }
     run(async () => {
       await api('admin/jobs', {
         method: 'POST',
@@ -42,6 +75,9 @@ export function AdminJobs({ users, items, run, busy }: Props) {
       form.reset();
       setAppointmentId('');
       choose('');
+      setUserId('');
+      setSelected(null);
+      setQuery('');
       await load();
     });
   }
@@ -53,27 +89,76 @@ export function AdminJobs({ users, items, run, busy }: Props) {
         identidad del cliente antes de vincular el trabajo a su cuenta.
       </p>
       {error && <p role="alert">{error}</p>}
-      <label>
-        Cliente
-        <select
-          required
-          value={userId}
-          onChange={(e) => {
-            setUserId(e.target.value);
-            setAppointmentId('');
-            choose('');
-          }}
-        >
-          <option value="">Seleccionar cuenta</option>
-          {users
-            .filter((u) => u.role === 'CUSTOMER')
-            .map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} · {u.phone}
-              </option>
-            ))}
-        </select>
-      </label>
+      <div className="customer-search">
+        <label htmlFor="job-customer-search">Cliente</label>
+        {selected ? (
+          <div className="customer-chosen">
+            <div>
+              <strong>{selected.name}</strong>
+              <span>
+                {selected.phone}
+                {selected.email ? ` · ${selected.email}` : ''}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-small"
+              onClick={() => {
+                setUserId('');
+                setAppointmentId('');
+                choose('');
+                setQuery('');
+              }}
+            >
+              Cambiar
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              id="job-customer-search"
+              type="search"
+              autoComplete="off"
+              placeholder="Escribe nombre o número (ej.: David o 0991234567)"
+              value={query}
+              aria-describedby="job-customer-help"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <p className="small" id="job-customer-help" role="status">
+              {searching
+                ? 'Buscando…'
+                : query.trim().length < 2
+                  ? 'Escribe al menos 2 letras o 3 números.'
+                  : results.length
+                    ? `${results.length} ${results.length === 1 ? 'cliente encontrado' : 'clientes encontrados'}`
+                    : 'Sin resultados. Revisa el nombre o el número.'}
+            </p>
+            {!!results.length && (
+              <ul className="customer-results">
+                {results.map((u) => (
+                  <li key={u.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserId(u.id);
+                        setSelected(u);
+                        setAppointmentId('');
+                        choose('');
+                      }}
+                    >
+                      <strong>{u.name}</strong>
+                      <span>
+                        {u.phone}
+                        {u.email ? ` · ${u.email}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
       <label>
         Cita relacionada (opcional)
         <select
@@ -135,7 +220,7 @@ export function AdminJobs({ users, items, run, busy }: Props) {
         Condiciones de garantía de este trabajo
         <textarea name="warrantyTerms" required maxLength={5000} />
       </label>
-      <button className="button" disabled={busy}>
+      <button className="btn btn-primary btn-block" disabled={busy || !userId}>
         Registrar trabajo
       </button>
     </form>

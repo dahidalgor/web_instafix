@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { authenticated, checkOrigin, safeUser } from '../auth/session';
@@ -19,9 +19,42 @@ const jobSchema = z
 
 @Controller('api/v1')
 export class JobsController {
-  @Get('admin/users') async users(@Req() req: Request) {
+  /**
+   * Cuentas para administración. Con «q» busca en todas (no solo las 100 recientes): por nombre
+   * sin distinguir tildes ni mayúsculas, o por cualquier parte del número (0991…, +593 99…).
+   */
+  @Get('admin/users') async users(
+    @Req() req: Request,
+    @Query('q') q?: string,
+    @Query('role') role?: string,
+  ) {
     await authenticated(req, true);
-    return db.user.findMany({ select: safeUser, orderBy: { createdAt: 'desc' }, take: 100 });
+    const text = (q || '').trim().slice(0, 100);
+    const digits = text.replace(/\D/g, '').replace(/^0/, '');
+    const roleFilter = role === 'CUSTOMER' ? { role: 'CUSTOMER' as const } : {};
+    if (!text)
+      return db.user.findMany({
+        where: roleFilter,
+        select: safeUser,
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+    const ids = await db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "User"
+      WHERE (${role === 'CUSTOMER'} = false OR role = 'CUSTOMER')
+        AND (
+          translate(lower(name), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower(${text}), 'áéíóúüñ', 'aeiouun') || '%'
+          OR (${digits.length >= 3} AND regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%' || ${digits} || '%')
+          OR lower(coalesce(email, '')) LIKE '%' || lower(${text}) || '%'
+        )
+      ORDER BY "createdAt" DESC
+      LIMIT 20`;
+    if (!ids.length) return [];
+    return db.user.findMany({
+      where: { id: { in: ids.map((row) => row.id) } },
+      select: safeUser,
+      orderBy: { name: 'asc' },
+    });
   }
 
   @Post('admin/jobs') async addJob(@Body() body: unknown, @Req() req: Request) {

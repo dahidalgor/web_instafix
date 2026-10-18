@@ -115,3 +115,96 @@
 .staff-header .brand {
   font-size: 20px;
 }
+
+/* Organizador de citas */
+.appt-filters {
+  margin: 16px 0 6px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.appt-filters .filters {
+  margin: 0 0 12px;
+  gap: 8px;
+}
+.filter-count {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+.filters .active .filter-count {
+  background: rgb(255 255 255 / 20%);
+  color: #fff;
+}
+.appt-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.appt-filter-row label {
+  flex: 1 1 140px;
+  margin: 0;
+}
+.appt-filter-row .appt-filter-search {
+  flex: 2 1 220px;
+}
+
+/* Búsqueda de cliente en «Trabajos» */
+.customer-search {
+  margin-bottom: 18px;
+}
+.customer-search > label {
+  margin-bottom: 0;
+}
+.customer-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  animation: pop-in 180ms ease-out;
+}
+.customer-results li + li {
+  border-top: 1px solid var(--border);
+}
+.customer-results button,
+.customer-chosen {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+.customer-results button {
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 52px;
+}
+.customer-results button:hover,
+.customer-results button:focus-visible {
+  background: var(--surface-soft);
+}
+.customer-results span,
+.customer-chosen span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.customer-chosen {
+  margin-top: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  animation: pop-in 180ms ease-out;
+}

@@ -41,6 +41,23 @@ async function requirePassword(userId: string, password: string) {
 export class SecurityController {
   constructor(@Inject(VerificationService) private readonly verification: VerificationService) {}
 
+  /**
+   * «Verificar WhatsApp»: envía un OTP al número de la propia cuenta (identidad de la sesión).
+   * Se completa con el flujo existente POST auth/phone/verify y auth/phone/resend.
+   */
+  @Post('phone/verification')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async startPhoneVerification(@Req() req: Request) {
+    checkOrigin(req);
+    const user = await authenticated(req);
+    return this.verification.start({
+      purpose: 'PHONE_VERIFICATION',
+      phone: user.phone,
+      userId: user.id,
+    });
+  }
+
   /** Verificación opcional del correo: Instafix → Brevo → enlace de un solo uso. */
   @Post('email/verification')
   @HttpCode(200)
