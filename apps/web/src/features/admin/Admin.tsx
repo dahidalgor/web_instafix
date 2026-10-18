@@ -3,7 +3,7 @@ import { AdminSlides } from './AdminSlides';
 import { AdminAnalytics } from './AdminAnalytics';
 import { offeringSchema, type AccountUser, type Offering } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { Login } from '../account/Login';
 import { emptyService, type Equipment, type ServiceDraft } from './admin.types';
 import { AdminAppointments } from './AdminAppointments';
@@ -40,12 +40,19 @@ export default function Admin() {
     setUsers(customers);
     setPolicy(terms.text);
   }
-  useEffect(() => {
+  const [sessionError, setSessionError] = useState('');
+  const checkSession = () => {
+    setChecking(true);
+    setSessionError('');
     api('auth/me')
       .then(setUser)
-      .catch(() => {})
+      .catch((e) => {
+        // Sin sesión (401) se muestra el inicio de sesión; otros fallos se explican.
+        if (!(e instanceof ApiError && e.status === 401)) setSessionError(e.message);
+      })
       .finally(() => setChecking(false));
-  }, []);
+  };
+  useEffect(checkSession, []);
   useEffect(() => {
     if (user?.role === 'ADMIN') load().catch((e) => setMessage(e.message));
   }, [user]);
@@ -76,6 +83,15 @@ export default function Admin() {
     });
   }
   if (checking) return <main>Cargando…</main>;
+  if (sessionError)
+    return (
+      <main className="account-panel">
+        <p role="alert">{sessionError}</p>
+        <button className="btn btn-primary" onClick={checkSession}>
+          Reintentar
+        </button>
+      </main>
+    );
   if (!user)
     return (
       <main>
@@ -108,6 +124,7 @@ export default function Admin() {
         <h1>Acceso restringido</h1>
         <p>Tu cuenta no tiene permisos de administración.</p>
         <button
+          className="btn btn-secondary"
           onClick={() =>
             run(async () => {
               await api('auth/logout', { method: 'POST' });

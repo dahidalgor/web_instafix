@@ -1,9 +1,12 @@
+import { logEvent } from '../common/log-event';
+import { z } from 'zod';
 import {
   BadRequestException,
   Body,
   Controller,
   Get,
   Header,
+  HttpCode,
   Param,
   Post,
   Req,
@@ -26,12 +29,57 @@ export class WhatsAppAdminController {
   @Post('connect/session') @Header('Cache-Control', 'no-store') async connect(@Req() req: Request) {
     checkOrigin(req);
     const user = await authenticated(req, true);
-    return this.onboarding.start(user.id);
+    try {
+      const session = await this.onboarding.start(user.id);
+      logEvent('whatsapp.connect_started', { connectOrigin: new URL(session.connect_url).origin });
+      return session;
+    } catch (error) {
+      logEvent(
+        'whatsapp.connect_start_failed',
+        { reason: error instanceof Error ? error.message.slice(0, 300) : 'Error inesperado' },
+        'warn',
+      );
+      throw error;
+    }
   }
   @Post('connect/complete') async complete(@Req() req: Request, @Body() body: unknown) {
     checkOrigin(req);
     const user = await authenticated(req, true);
-    return this.onboarding.complete(user.id, body);
+    try {
+      const result = await this.onboarding.complete(user.id, body);
+      logEvent('whatsapp.connect_completed', { connectionMode: result.connectionMode });
+      return result;
+    } catch (error) {
+      logEvent(
+        'whatsapp.connect_complete_failed',
+        { reason: error instanceof Error ? error.message.slice(0, 300) : 'Error inesperado' },
+        'warn',
+      );
+      throw error;
+    }
+  }
+  /** Resultado observado en el navegador (cancelación, cierre sin respuesta…) para diagnóstico. */
+  @Post('connect/event') @HttpCode(204) async connectEvent(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    checkOrigin(req);
+    await authenticated(req, true);
+    const parsed = z
+      .object({
+        outcome: z.enum([
+          'WASAPFLOW_CANCEL',
+          'WASAPFLOW_ERROR',
+          'COMPLETE_FAILED',
+          'POPUP_CLOSED_WITHOUT_RESULT',
+          'SESSION_EXPIRED',
+        ]),
+        detail: z.string().max(300).optional(),
+      })
+      .strict()
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Evento no válido');
+    logEvent('whatsapp.connect_outcome', parsed.data, 'warn');
   }
   @Get() async status(@Req() req: Request) {
     await authenticated(req, true);

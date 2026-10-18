@@ -167,7 +167,12 @@ export function AdminAppointments(_props: { services: Offering[] }) {
       {recoverable > 0 && (
         <p>
           {recoverable} citas tienen una referencia de cuenta comprobable.{' '}
-          <button type="button" disabled={busy} onClick={recoverLinks}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-small"
+            disabled={busy}
+            onClick={recoverLinks}
+          >
             Recuperar vínculos
           </button>
         </p>
@@ -255,6 +260,7 @@ export function AdminAppointments(_props: { services: Offering[] }) {
               </label>
               <button
                 type="button"
+                className="btn btn-secondary"
                 disabled={busy || !linkUserId || !identityVerified}
                 onClick={linkAccount}
               >
@@ -410,7 +416,7 @@ export function AdminAppointments(_props: { services: Offering[] }) {
               </a>
             ))}
           {id && ['CONFIRMED', 'IN_PROGRESS'].includes(draft.status) && (
-            <button type="button" disabled={busy} onClick={onTheWay}>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={onTheWay}>
               Avisar «técnico en camino» por WhatsApp
             </button>
           )}

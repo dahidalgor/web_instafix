@@ -19,7 +19,7 @@ export function AdminAnalytics() {
         Últimos 30 días. El promedio cuenta el tiempo con la página visible, incluyendo visitas
         breves. Las sesiones corresponden a pestañas del navegador, no a personas únicas.
       </p>
-      <button type="button" onClick={load}>
+      <button type="button" className="btn btn-secondary btn-small" onClick={load}>
         Actualizar
       </button>
       {error && <p role="alert">{error}</p>}

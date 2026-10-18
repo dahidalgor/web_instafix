@@ -32,7 +32,11 @@ export function AdminServices({
     <div className="admin-layout">
       <section>
         <h2>Catálogo</h2>
-        <button disabled={uploading} onClick={() => setDraft({ ...emptyService })}>
+        <button
+          className="btn btn-primary"
+          disabled={uploading}
+          onClick={() => setDraft({ ...emptyService })}
+        >
           + Nuevo servicio
         </button>
         {items.map((item) => (

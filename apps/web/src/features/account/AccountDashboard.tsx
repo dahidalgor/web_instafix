@@ -43,8 +43,10 @@ export function AccountDashboard() {
     try {
       setUser(await api<AccountUser>('auth/me'));
     } catch (e) {
+      // 401 = sin sesión (se muestra el inicio de sesión). Cualquier otro fallo se explica tal
+      // cual: sin conexión, error del servidor o cuenta desactivada.
       if (!(e instanceof ApiError && e.status === 401))
-        setSessionError('No pudimos conectar con tu cuenta.');
+        setSessionError(e instanceof Error ? e.message : 'No pudimos conectar con tu cuenta.');
     } finally {
       setSessionLoading(false);
     }
@@ -141,7 +143,9 @@ export function AccountDashboard() {
     return (
       <section className="account-panel">
         <p role="alert">{sessionError}</p>
-        <button onClick={loadSession}>Reintentar</button>
+        <button className="btn btn-primary" onClick={loadSession}>
+          Reintentar
+        </button>
       </section>
     );
   if (resetToken || !user)

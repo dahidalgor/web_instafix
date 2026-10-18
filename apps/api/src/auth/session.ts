@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { isAllowedOrigin } from '../config/environment';
 import { db } from '../database/client';
 import { newToken, tokenHash } from './security';
+import { logEvent } from '../common/log-event';
 export const safeUser = {
   id: true,
   name: true,
@@ -16,6 +17,11 @@ export const safeUser = {
   emailVerifiedAt: true,
 } as const;
 export const phoneUnverifiedMessage = 'Verifica tu WhatsApp para continuar.';
+export const accountDisabled = {
+  statusCode: 403,
+  code: 'ACCOUNT_DISABLED',
+  message: 'Tu acceso está desactivado. Contacta con el administrador.',
+};
 export const cookieName = 'instafix_session';
 // Las operaciones con cookies verifican el origen antes de modificar datos.
 export function checkOrigin(req: Request) {
@@ -42,8 +48,16 @@ export async function authenticated(req: Request, admin = false) {
     include: { user: { select: safeUser } },
   });
   if (!session || session.expiresAt <= new Date()) throw new UnauthorizedException('Inicia sesión');
-  // Una cuenta desactivada pierde el acceso aunque conserve una sesión abierta.
-  if (!session.user.active) throw new UnauthorizedException('Tu acceso está desactivado');
+  // Una cuenta desactivada pierde el acceso aunque conserve una sesión abierta. Solo un
+  // «false» explícito desactiva: un valor ausente es un error de esquema, no una cuenta inactiva.
+  if (session.user.active === false) {
+    logEvent(
+      'auth.denied',
+      { reason: 'ACCOUNT_DISABLED', endpoint: req.path, status: 403 },
+      'warn',
+    );
+    throw new ForbiddenException(accountDisabled);
+  }
   if (admin && session.user.role !== 'ADMIN') throw new ForbiddenException('Acceso restringido');
   // Una cuenta de cliente solo está activa después de demostrar que controla su WhatsApp.
   // Sesiones anteriores a este requisito vuelven al inicio de sesión para verificarse.
