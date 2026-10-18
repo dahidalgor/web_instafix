@@ -7,6 +7,14 @@ import {
 } from '@instafix/contracts';
 import { AppointmentCard } from '../../components/appointments/AppointmentCard';
 import { money } from '../../lib/format';
+import {
+  dateFilters,
+  filterAppointments,
+  matchesStatus,
+  statusFilters,
+  type DateFilter,
+  type StatusFilter,
+} from './appointment-filters';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
 type AdminAppointment = Appointment & {
@@ -44,6 +52,12 @@ export function AdminAppointments(_props: { services: Offering[] }) {
   const [identityVerified, setIdentityVerified] = useState(false);
   const [recoverable, setRecoverable] = useState(0);
   const [items, setItems] = useState<AdminAppointment[]>([]);
+  // Organizador: por defecto solo citas activas, para que las canceladas no estorben.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [query, setQuery] = useState('');
   const [users, setUsers] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [draft, setDraft] = useState({ ...empty });
   const [id, setId] = useState<string | null>(null);
@@ -189,44 +203,150 @@ export function AdminAppointments(_props: { services: Offering[] }) {
           >
             + Nueva cita
           </button>
-          <div className="appt-list admin-appt-list">
-            {items.map((item) => (
-              <AppointmentCard
-                key={item.id}
-                status={item.status}
-                startsAt={item.startsAt}
-                timeZone={item.timeZone}
-                client={item.contactName || item.user?.name || 'Invitado'}
-                request={item.title}
-                technician={item.assignedTechnician?.name || item.technician || null}
-                highlight={item.id === id ? 'Editando' : undefined}
-                details={
-                  <>
-                    {!!item.services?.length && (
-                      <div>
-                        <dt>Servicios realizados</dt>
-                        <dd>
-                          {item.services
-                            .map((s) => s.nameSnapshot + (s.quantity > 1 ? ` ×${s.quantity}` : ''))
-                            .join(', ')}
-                        </dd>
-                      </div>
-                    )}
-                    {item.automationIssue && (
-                      <div>
-                        <dt>Incidencia</dt>
-                        <dd>{item.automationIssue}</dd>
-                      </div>
-                    )}
-                  </>
-                }
-              >
-                <button type="button" className="btn btn-secondary" onClick={() => edit(item)}>
-                  Ver y editar
+          <div className="appt-filters" role="search" aria-label="Filtrar citas">
+            <div className="filters" role="group" aria-label="Estado">
+              {statusFilters.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={statusFilter === option.id}
+                  className={statusFilter === option.id ? 'active' : ''}
+                  onClick={() => setStatusFilter(option.id)}
+                >
+                  {option.label}{' '}
+                  <span className="filter-count">
+                    {items.filter((item) => matchesStatus(item, option.id)).length}
+                  </span>
                 </button>
-              </AppointmentCard>
-            ))}
+              ))}
+            </div>
+            <div className="appt-filter-row">
+              <label>
+                Fecha
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+                >
+                  {dateFilters.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {dateFilter === 'custom' && (
+                <>
+                  <label>
+                    Desde
+                    <input
+                      type="date"
+                      value={from}
+                      max={to || undefined}
+                      onChange={(e) => setFrom(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Hasta
+                    <input
+                      type="date"
+                      value={to}
+                      min={from || undefined}
+                      onChange={(e) => setTo(e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              <label className="appt-filter-search">
+                Buscar
+                <input
+                  type="search"
+                  placeholder="Nombre, teléfono o solicitud"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </label>
+            </div>
           </div>
+          {(() => {
+            const shown = filterAppointments(items, {
+              status: statusFilter,
+              date: dateFilter,
+              from,
+              to,
+              query,
+            });
+            return (
+              <>
+                <p className="small" role="status">
+                  {shown.length === 1 ? '1 cita' : `${shown.length} citas`}
+                  {(statusFilter !== 'all' || dateFilter !== 'all' || query) &&
+                    shown.length !== items.length && (
+                      <>
+                        {' '}
+                        de {items.length} ·{' '}
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-small"
+                          onClick={() => {
+                            setStatusFilter('all');
+                            setDateFilter('all');
+                            setQuery('');
+                          }}
+                        >
+                          Ver todas
+                        </button>
+                      </>
+                    )}
+                </p>
+                {!shown.length && <p className="tech-empty">No hay citas con estos filtros.</p>}
+                <div className="appt-list admin-appt-list">
+                  {shown.map((item) => (
+                    <AppointmentCard
+                      key={item.id}
+                      status={item.status}
+                      startsAt={item.startsAt}
+                      timeZone={item.timeZone}
+                      client={item.contactName || item.user?.name || 'Invitado'}
+                      request={item.title}
+                      technician={item.assignedTechnician?.name || item.technician || null}
+                      highlight={item.id === id ? 'Editando' : undefined}
+                      details={
+                        <>
+                          {!!item.services?.length && (
+                            <div>
+                              <dt>Servicios realizados</dt>
+                              <dd>
+                                {item.services
+                                  .map(
+                                    (s) =>
+                                      s.nameSnapshot + (s.quantity > 1 ? ` ×${s.quantity}` : ''),
+                                  )
+                                  .join(', ')}
+                              </dd>
+                            </div>
+                          )}
+                          {item.automationIssue && (
+                            <div>
+                              <dt>Incidencia</dt>
+                              <dd>{item.automationIssue}</dd>
+                            </div>
+                          )}
+                        </>
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => edit(item)}
+                      >
+                        Ver y editar
+                      </button>
+                    </AppointmentCard>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
         </div>
         <form onSubmit={save} className="editor">
           <h3>{id ? 'Editar cita' : 'Nueva cita'}</h3>

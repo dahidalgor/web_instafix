@@ -3,7 +3,12 @@ import type { Appointment, Prisma } from '@prisma/client';
 import { maskRecipient } from '../communications/log';
 import { retryCalConfirmations } from '../staff/staff-appointments.service';
 import { db } from '../database/client';
-import { appointmentEmailsEnabled, mailStatus, sendEmail } from '../mail/email.service';
+import {
+  appointmentEmailsEnabled,
+  EmailDeliveryError,
+  mailStatus,
+  sendEmail,
+} from '../mail/email.service';
 import {
   appointmentCancelledEmail,
   appointmentConfirmedEmail,
@@ -40,7 +45,7 @@ export function notificationKey(
 /** Motivo por el que una cita no genera correo; se registra para poder diagnosticarlo. */
 export function appointmentEmailSkipReason(appointment: Pick<Appointment, 'contactEmail'>) {
   if (!appointmentEmailsEnabled())
-    return 'Avisos de citas desactivados (APPOINTMENT_EMAILS_ENABLED=false)';
+    return 'Avisos de citas desactivados con APPOINTMENT_EMAILS_ENABLED=false';
   if (!appointment.contactEmail) return 'La cita no tiene correo del cliente';
   return null;
 }
@@ -137,13 +142,18 @@ export async function deliverNotification(id: string, now = new Date()): Promise
       },
     });
     return 'SENT';
-  } catch {
+  } catch (error) {
     const failed = row.attempts >= MAX_ATTEMPTS;
     await db.notification.update({
       where: { id },
       data: {
         status: failed ? 'FAILED' : 'RETRY',
-        lastError: 'El proveedor de correo no aceptó el mensaje',
+        lastError:
+          error instanceof EmailDeliveryError
+            ? `Brevo/SMTP rechazó el mensaje: ${error.reason}`
+            : error instanceof Error
+              ? error.message.slice(0, 300)
+              : 'El proveedor de correo no aceptó el mensaje',
         dueAt: new Date(now.getTime() + Math.min(3600000, 60000 * 2 ** row.attempts)),
       },
     });

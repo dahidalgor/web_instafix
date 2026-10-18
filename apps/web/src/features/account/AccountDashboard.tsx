@@ -234,151 +234,159 @@ export function AccountDashboard() {
         <button aria-pressed={section === 'security'} onClick={() => setSection('security')}>
           Seguridad
         </button>
-        <button className="refresh-account" disabled={loading} onClick={() => void load()}>
-          Actualizar
+        <button
+          className="refresh-account btn btn-ghost btn-small"
+          disabled={loading}
+          aria-busy={loading}
+          onClick={() => void load()}
+        >
+          {loading ? 'Actualizando…' : 'Actualizar'}
         </button>
       </div>
-      {section === 'security' ? (
-        <AccountSecurity user={user} onUser={setUser} />
-      ) : loading ? (
-        <p role="status">Cargando tus datos…</p>
-      ) : error ? (
-        <p role="alert">
-          {error} <button onClick={() => void load()}>Reintentar</button>
-        </p>
-      ) : section === 'appointments' ? (
-        <>
-          <div className="filters">
-            <button
-              aria-pressed={appointmentFilter === 'upcoming'}
-              className={appointmentFilter === 'upcoming' ? 'active' : ''}
-              onClick={() => setAppointmentFilter('upcoming')}
-            >
-              Próximas
-            </button>
-            <button
-              aria-pressed={appointmentFilter === 'past'}
-              className={appointmentFilter === 'past' ? 'active' : ''}
-              onClick={() => setAppointmentFilter('past')}
-            >
-              Historial
-            </button>
-          </div>
-          {!shown.length && (
-            <div className="empty-account">
-              <h2>
-                {appointmentFilter === 'upcoming'
-                  ? 'No tienes citas próximas'
-                  : 'Tu historial comienza aquí'}
-              </h2>
-              <p>
-                Aquí aparecerán tus citas. Las reservas hechas como invitado con este mismo WhatsApp
-                se añaden automáticamente al verificar tu número.
-              </p>
-              <a className="button" href="#agenda">
-                Consultar horarios ↗
-              </a>
+      {/* Cambiar de sección o de filtro anima el contenido, como la navegación de la página. */}
+      <div className="account-section" key={`${section}-${appointmentFilter}`}>
+        {section === 'security' ? (
+          <AccountSecurity user={user} onUser={setUser} />
+        ) : loading ? (
+          <p role="status">Cargando tus datos…</p>
+        ) : error ? (
+          <p role="alert">
+            {error} <button onClick={() => void load()}>Reintentar</button>
+          </p>
+        ) : section === 'appointments' ? (
+          <>
+            <div className="filters">
+              <button
+                aria-pressed={appointmentFilter === 'upcoming'}
+                className={appointmentFilter === 'upcoming' ? 'active' : ''}
+                onClick={() => setAppointmentFilter('upcoming')}
+              >
+                Próximas
+              </button>
+              <button
+                aria-pressed={appointmentFilter === 'past'}
+                className={appointmentFilter === 'past' ? 'active' : ''}
+                onClick={() => setAppointmentFilter('past')}
+              >
+                Historial
+              </button>
             </div>
-          )}
-          <div className="appt-list">
-            {shown.map((item) => (
-              <AppointmentCard
-                key={item.id}
-                status={item.status}
-                startsAt={item.startsAt}
-                timeZone={item.timeZone}
-                request={item.title}
-                technician={item.assignedTechnician?.name || item.technician || null}
-                details={
-                  <>
-                    <div>
-                      <dt>Ubicación</dt>
-                      <dd>
-                        {item.address ||
-                          (item.locationReceivedAt ? 'Recibida' : 'Pendiente por WhatsApp')}
-                      </dd>
-                    </div>
-                    {!!item.services?.length && (
-                      <div className="appt-meta-wide">
-                        <dt>Servicios realizados</dt>
+            {!shown.length && (
+              <div className="empty-account">
+                <h2>
+                  {appointmentFilter === 'upcoming'
+                    ? 'No tienes citas próximas'
+                    : 'Tu historial comienza aquí'}
+                </h2>
+                <p>
+                  Aquí aparecerán tus citas. Las reservas hechas como invitado con este mismo
+                  WhatsApp se añaden automáticamente al verificar tu número.
+                </p>
+                <a className="button" href="#agenda">
+                  Consultar horarios ↗
+                </a>
+              </div>
+            )}
+            <div className="appt-list">
+              {shown.map((item) => (
+                <AppointmentCard
+                  key={item.id}
+                  status={item.status}
+                  startsAt={item.startsAt}
+                  timeZone={item.timeZone}
+                  request={item.title}
+                  technician={item.assignedTechnician?.name || item.technician || null}
+                  details={
+                    <>
+                      <div>
+                        <dt>Ubicación</dt>
                         <dd>
-                          <ul className="performed-list">
-                            {item.services.map((service) => (
-                              <li key={service.id}>
-                                {service.nameSnapshot}
-                                {service.quantity > 1 ? ` ×${service.quantity}` : ''}
-                              </li>
-                            ))}
-                          </ul>
+                          {item.address ||
+                            (item.locationReceivedAt ? 'Recibida' : 'Pendiente por WhatsApp')}
                         </dd>
                       </div>
-                    )}
-                  </>
-                }
-              >
-                {item.status === 'PENDING_LOCATION' && (
-                  <p className="appt-hint">
-                    Recibimos tu solicitud. Te avisaremos cuando un técnico confirme tu visita.
-                  </p>
-                )}
-                {item.bookingIdentityIssue && (
-                  <p role="status" className="calendar-account-note">
-                    Tu reserva está pendiente de revisión porque sus datos de contacto no coinciden
-                    con tu cuenta. Contacta con InstaFix para corregirlos antes de confirmar la
-                    visita.
-                  </p>
-                )}
-                <AppointmentActions appointment={item} onChanged={() => void load()} />
-                <a className="btn btn-ghost" href="#solicitud">
-                  Consultar sobre mi cita
-                </a>
-              </AppointmentCard>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          {!jobs.length && (
-            <div className="empty-account">
-              <h2>Aún no hay servicios realizados</h2>
-              <p>
-                Cuando finalice un trabajo vinculado a tu cuenta, verás aquí su importe y las
-                condiciones de garantía.
-              </p>
-              <a className="btn btn-secondary" href="#servicios">
-                Explorar servicios
-              </a>
+                      {!!item.services?.length && (
+                        <div className="appt-meta-wide">
+                          <dt>Servicios realizados</dt>
+                          <dd>
+                            <ul className="performed-list">
+                              {item.services.map((service) => (
+                                <li key={service.id}>
+                                  {service.nameSnapshot}
+                                  {service.quantity > 1 ? ` ×${service.quantity}` : ''}
+                                </li>
+                              ))}
+                            </ul>
+                          </dd>
+                        </div>
+                      )}
+                    </>
+                  }
+                >
+                  {item.status === 'PENDING_LOCATION' && (
+                    <p className="appt-hint">
+                      Recibimos tu solicitud. Te avisaremos cuando un técnico confirme tu visita.
+                    </p>
+                  )}
+                  {item.bookingIdentityIssue && (
+                    <p role="status" className="calendar-account-note">
+                      Tu reserva está pendiente de revisión porque sus datos de contacto no
+                      coinciden con tu cuenta. Contacta con InstaFix para corregirlos antes de
+                      confirmar la visita.
+                    </p>
+                  )}
+                  <AppointmentActions appointment={item} onChanged={() => void load()} />
+                  <a className="btn btn-ghost" href="#solicitud">
+                    Consultar sobre mi cita
+                  </a>
+                </AppointmentCard>
+              ))}
             </div>
-          )}
-          {jobs.map((job) => {
-            const expires = job.warrantyEndsAt ? new Date(job.warrantyEndsAt).getTime() : null;
-            const days = expires ? Math.max(0, Math.ceil((expires - now) / 86400000)) : 0;
-            return (
-              <article className="history-card" key={job.id}>
-                <p className="eyebrow">{job.device}</p>
-                <h2>{job.title}</h2>
+          </>
+        ) : (
+          <>
+            {!jobs.length && (
+              <div className="empty-account">
+                <h2>Aún no hay servicios realizados</h2>
                 <p>
-                  {format(job.completedAt)} · {money(job.priceMinor)}
+                  Cuando finalice un trabajo vinculado a tu cuenta, verás aquí su importe y las
+                  condiciones de garantía.
                 </p>
-                <strong>
-                  {expires === null
-                    ? 'Sin garantía registrada'
-                    : days
-                      ? `Garantía vigente · ${days} días restantes`
-                      : 'Garantía vencida'}
-                </strong>
-                {job.warrantyEndsAt && <p>Vence: {format(job.warrantyEndsAt)}</p>}
-                <p className="service-description">
-                  {job.warrantyTerms || 'Consulta las condiciones con Instafix.'}
-                </p>
-                <a className="btn btn-ghost" href="#garantia">
-                  Políticas de garantía
+                <a className="btn btn-secondary" href="#servicios">
+                  Explorar servicios
                 </a>
-              </article>
-            );
-          })}
-        </>
-      )}
+              </div>
+            )}
+            {jobs.map((job) => {
+              const expires = job.warrantyEndsAt ? new Date(job.warrantyEndsAt).getTime() : null;
+              const days = expires ? Math.max(0, Math.ceil((expires - now) / 86400000)) : 0;
+              return (
+                <article className="history-card" key={job.id}>
+                  <p className="eyebrow">{job.device}</p>
+                  <h2>{job.title}</h2>
+                  <p>
+                    {format(job.completedAt)} · {money(job.priceMinor)}
+                  </p>
+                  <strong>
+                    {expires === null
+                      ? 'Sin garantía registrada'
+                      : days
+                        ? `Garantía vigente · ${days} días restantes`
+                        : 'Garantía vencida'}
+                  </strong>
+                  {job.warrantyEndsAt && <p>Vence: {format(job.warrantyEndsAt)}</p>}
+                  <p className="service-description">
+                    {job.warrantyTerms || 'Consulta las condiciones con Instafix.'}
+                  </p>
+                  <a className="btn btn-ghost" href="#garantia">
+                    Políticas de garantía
+                  </a>
+                </article>
+              );
+            })}
+          </>
+        )}
+      </div>
     </section>
   );
 }

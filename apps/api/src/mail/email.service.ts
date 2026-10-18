@@ -29,12 +29,10 @@ export function mailStatus() {
  * Avisos de citas por correo. Explícito: «true»/«false». Sin valor, se activan solo si Cal.com
  * ya no puede escribir al cliente (CAL_ATTENDEE_RELAY_EMAIL), para no duplicar correos.
  */
-export const appointmentEmailsEnabled = () => {
-  const value = process.env.APPOINTMENT_EMAILS_ENABLED?.trim().toLowerCase();
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return Boolean(process.env.CAL_ATTENDEE_RELAY_EMAIL?.trim());
-};
+export const appointmentEmailsEnabled = () =>
+  // Activados salvo «false» explícito: Cal.com nunca recibe el correo del cliente (buzón
+  // puente o remitente de Instafix), así que Instafix es el único que le escribe.
+  process.env.APPOINTMENT_EMAILS_ENABLED?.trim().toLowerCase() !== 'false';
 
 const providerName = () =>
   /brevo|sendinblue/i.test(process.env.SMTP_HOST || '') ? 'BREVO' : 'SMTP';
@@ -114,9 +112,18 @@ export async function verifyMailConnection() {
 }
 
 export class EmailDeliveryError extends ServiceUnavailableException {
-  constructor() {
+  constructor(public readonly reason = 'Envío rechazado o sin respuesta') {
     super('No pudimos enviar el correo. Inténtalo de nuevo más tarde.');
   }
+}
+
+/** Motivo SMTP legible (p. ej. «550 sender not verified»), sin direcciones ni credenciales. */
+export function smtpReason(error: unknown) {
+  const e = error as { responseCode?: number; response?: string; code?: string; message?: string };
+  const text = [e?.responseCode, e?.response || e?.message, e?.code].filter(Boolean).join(' · ');
+  return (text || 'Envío rechazado o sin respuesta')
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[correo]')
+    .slice(0, 300);
 }
 
 /**
@@ -143,15 +150,10 @@ export async function sendEmail(input: {
     await logCommunication({ ...base, status: 'ACCEPTED', providerMessageId: result.messageId });
     return result;
   } catch (error) {
-    await logCommunication({
-      ...base,
-      status: 'FAILED',
-      error:
-        error instanceof ServiceUnavailableException
-          ? 'SMTP sin configurar'
-          : 'Envío rechazado o sin respuesta',
-    });
+    const reason =
+      error instanceof ServiceUnavailableException ? 'SMTP sin configurar' : smtpReason(error);
+    await logCommunication({ ...base, status: 'FAILED', error: reason });
     if (error instanceof ServiceUnavailableException) throw error;
-    throw new EmailDeliveryError();
+    throw new EmailDeliveryError(reason);
   }
 }

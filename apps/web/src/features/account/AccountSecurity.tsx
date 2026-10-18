@@ -10,7 +10,7 @@ import { api } from '../../lib/api';
 import { PhoneField } from './PhoneField';
 import { PhoneVerification } from './PhoneVerification';
 
-type Panel = null | 'email' | 'phone' | 'password';
+type Panel = null | 'email' | 'phone' | 'password' | 'verify';
 
 /** Mi cuenta → Seguridad: WhatsApp (obligatorio), correo (opcional) y contraseña. */
 export function AccountSecurity({
@@ -57,6 +57,13 @@ export function AccountSecurity({
           ? 'Tu correo ya está verificado.'
           : `Te enviamos un enlace a ${result.maskedEmail}. Caduca en 24 horas; revisa también spam.`,
       );
+    });
+  /** «Verificar WhatsApp»: envía un código al número de la cuenta y abre el panel del código. */
+  const startWhatsAppVerification = () =>
+    run(async () => {
+      const next = await api<VerificationTicket>('my/phone/verification', { method: 'POST' });
+      setPanel('verify');
+      setTicket(next);
     });
   async function changeEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,16 +124,54 @@ export function AccountSecurity({
             {user.phoneVerifiedAt ? '✓ Verificado' : 'Sin verificar'}
           </span>
         </div>
-        <button
-          type="button"
-          className={`btn btn-small ${panel === 'phone' ? 'btn-ghost' : 'btn-secondary'}`}
-          aria-expanded={panel === 'phone'}
-          aria-controls="security-phone"
-          onClick={() => open(panel === 'phone' ? null : 'phone')}
-        >
-          {panel === 'phone' ? 'Cancelar' : 'Cambiar número'}
-        </button>
+        <div className="security-actions">
+          {panel === 'verify' ? (
+            <button type="button" className="btn btn-ghost btn-small" onClick={() => open(null)}>
+              Cancelar
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`btn btn-small ${user.phoneVerifiedAt ? 'btn-ghost' : 'btn-primary'}`}
+              disabled={busy}
+              aria-busy={busy}
+              aria-controls="security-verify"
+              onClick={startWhatsAppVerification}
+            >
+              {busy
+                ? 'Enviando código…'
+                : user.phoneVerifiedAt
+                  ? 'Verificar de nuevo'
+                  : 'Verificar WhatsApp'}
+            </button>
+          )}
+          <button
+            type="button"
+            className={`btn btn-small ${panel === 'phone' ? 'btn-ghost' : 'btn-secondary'}`}
+            aria-expanded={panel === 'phone'}
+            aria-controls="security-phone"
+            onClick={() => open(panel === 'phone' ? null : 'phone')}
+          >
+            {panel === 'phone' ? 'Cancelar' : 'Cambiar número'}
+          </button>
+        </div>
       </article>
+      {panel === 'verify' && ticket && (
+        <div className="security-panel" id="security-verify">
+          <PhoneVerification<AccountUser>
+            ticket={ticket}
+            title="Verifica tu WhatsApp"
+            verifyPath="auth/phone/verify"
+            resendPath="auth/phone/resend"
+            onVerified={(next) => {
+              onUser(next);
+              setPanel(null);
+              setTicket(null);
+              setMessage('✓ Tu WhatsApp quedó verificado.');
+            }}
+          />
+        </div>
+      )}
       {panel === 'phone' &&
         (ticket ? (
           <div className="security-panel" id="security-phone">

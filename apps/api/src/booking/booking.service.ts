@@ -174,7 +174,9 @@ export async function createBooking(
   const email = (customer ? customer.email : input.email?.trim().toLowerCase()) || null;
   if (!name || !phone) throw new BadRequestException('Revisa tu nombre y tu número de WhatsApp.');
   // El correo del cliente es opcional: sin él solo se coordina por WhatsApp.
-  const attendeeEmail = relayEmail() || email || fallbackAttendeeEmail();
+  // A Cal.com se le entrega siempre un correo propio de Instafix (buzón puente o remitente):
+  // así Cal.com no escribe al cliente y los avisos los envía solo Instafix por Brevo.
+  const attendeeEmail = relayEmail() || fallbackAttendeeEmail() || email;
   if (!attendeeEmail)
     throw coded(
       ServiceUnavailableException,

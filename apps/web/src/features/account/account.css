@@ -435,3 +435,43 @@
     flex: 1 1 140px;
   }
 }
+
+/* Pestañas de Mi cuenta: mismo lenguaje que la navegación principal (subrayado y rebote suave). */
+.account-tabs button {
+  transition:
+    background-color 220ms,
+    color 220ms,
+    border-color 220ms,
+    box-shadow 220ms,
+    transform 180ms;
+}
+.account-tabs button:hover {
+  transform: translateY(-2px);
+}
+.account-tabs button:active {
+  transform: scale(0.96);
+}
+.account-tabs button[aria-pressed='true'] {
+  box-shadow: inset 0 -3px var(--accent);
+  font-weight: 700;
+  animation: tab-arrive 280ms ease-out;
+}
+.account-tabs .refresh-account {
+  border: 0;
+  box-shadow: none;
+}
+.account-section {
+  animation: page-arrive 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-section,
+  .account-tabs button[aria-pressed='true'] {
+    animation: none;
+  }
+  .account-tabs button:hover {
+    transform: none;
+  }
+}
+.security-actions .btn {
+  white-space: nowrap;
+}
