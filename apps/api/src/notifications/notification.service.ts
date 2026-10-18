@@ -184,8 +184,11 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
         select: { id: true },
       });
       for (const { id } of due) await deliverNotification(id);
-    } catch {
-      console.error('No se pudo procesar la bandeja de notificaciones');
+    } catch (error) {
+      console.error(
+        'No se pudo procesar la bandeja de notificaciones:',
+        error instanceof Error ? error.message : error,
+      );
     } finally {
       this.running = false;
     }

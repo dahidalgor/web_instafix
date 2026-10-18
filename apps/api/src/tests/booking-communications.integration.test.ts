@@ -128,7 +128,7 @@ test(
       const create = calCalls.find((c) => c.url.endsWith('/bookings'))!;
       assert.equal(create.body.attendee.email, RELAY);
       assert.equal(JSON.stringify(create.body).includes(email), false);
-      assert.equal(create.body.bookingFieldsResponses.servicio, 'Mi PS5 se apaga');
+      assert.equal(create.body.bookingFieldsResponses.notes, 'Mi PS5 se apaga');
       assert.equal(await db.appointment.count({ where: { calUid: uid } }), 1);
       const appointment = await db.appointment.findUniqueOrThrow({ where: { calUid: uid } });
       assert.equal(appointment.source, 'INSTAFIX_API');

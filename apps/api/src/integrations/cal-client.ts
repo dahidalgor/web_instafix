@@ -136,13 +136,18 @@ export async function createCalBooking(input: {
           phoneNumber: input.phone,
           language: 'es',
         },
+        // Solo campos que existen en el tipo de evento: Cal.com rechaza la reserva si falta uno
+        // obligatorio (`notes` = «¿Qué trabajo requiere?») o si llega uno desconocido.
         bookingFieldsResponses: {
-          servicio: input.request,
-          whatsappConsent: input.whatsappConsent,
+          notes: input.request,
           attendeePhoneNumber: input.phone,
         },
-        // Sin datos personales: solo la referencia opaca y el origen para conciliar el webhook.
-        metadata: { instafixReference: input.reference, instafixSource: 'api' },
+        // Sin datos personales: referencia opaca, origen y autorización para el webhook.
+        metadata: {
+          instafixReference: input.reference,
+          instafixSource: 'api',
+          instafixWhatsappConsent: String(input.whatsappConsent),
+        },
       }),
     },
     true,
