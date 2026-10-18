@@ -236,8 +236,10 @@ export async function receiveCalWebhook(body: unknown) {
       name: p.attendees[0].name,
     });
     const phone = identity.contactPhone;
-    const service = p.responses.servicio?.value;
-    const consent = p.responses.whatsappConsent?.value === true;
+    // Reservas por API: `notes` y la autorización en metadata. Embed antiguo: campos propios.
+    const service = p.responses.servicio?.value ?? p.responses.notes?.value;
+    const consent =
+      p.responses.whatsappConsent?.value === true || p.metadata.instafixWhatsappConsent === 'true';
     const title = typeof service === 'string' && service.trim() ? service.trim().slice(0, 150) : '';
     const issue = identity.bookingIdentityIssue
       ? bookingIdentityMessage

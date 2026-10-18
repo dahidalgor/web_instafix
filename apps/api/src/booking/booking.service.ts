@@ -31,8 +31,17 @@ import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue'
  * el correo real queda solo en PostgreSQL y lo usa Instafix.
  */
 export const relayEmail = () => process.env.CAL_ATTENDEE_RELAY_EMAIL?.trim().toLowerCase() || null;
-export const isRelayEmail = (email?: string | null) =>
-  Boolean(email && relayEmail() && email.trim().toLowerCase() === relayEmail());
+/**
+ * Cal.com exige un correo de asistente. Si no hay buzón puente y el cliente no dio correo,
+ * se usa el remitente de Instafix (SMTP_FROM): la cita se crea sin escribir a terceros.
+ */
+const fallbackAttendeeEmail = () =>
+  process.env.SMTP_FROM?.match(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/)?.[0].toLowerCase() || null;
+/** Correos propios de Instafix entregados a Cal.com: nunca son el correo del cliente. */
+export const isRelayEmail = (email?: string | null) => {
+  const value = email?.trim().toLowerCase();
+  return Boolean(value && (value === relayEmail() || value === fallbackAttendeeEmail()));
+};
 
 /** Al reprogramar, la cita vuelve a «pendiente de confirmación» y sin técnico. */
 export const unassignedForReschedule = {
@@ -164,9 +173,14 @@ export async function createBooking(
   const phone = customer ? customer.phone : normalizePhone(input.phone || '', 'EC');
   const email = (customer ? customer.email : input.email?.trim().toLowerCase()) || null;
   if (!name || !phone) throw new BadRequestException('Revisa tu nombre y tu número de WhatsApp.');
-  const attendeeEmail = relayEmail() || email;
+  // El correo del cliente es opcional: sin él solo se coordina por WhatsApp.
+  const attendeeEmail = relayEmail() || email || fallbackAttendeeEmail();
   if (!attendeeEmail)
-    throw new BadRequestException('Escribe un correo para recibir la confirmación de tu cita.');
+    throw coded(
+      ServiceUnavailableException,
+      'BOOKING_CONFIG',
+      'La agenda no acepta reservas en este momento por un problema de configuración. Escríbenos por WhatsApp y te agendamos.',
+    );
 
   // Referencia opaca para conciliar el webhook si la respuesta de Cal.com se pierde.
   const reference = newToken();

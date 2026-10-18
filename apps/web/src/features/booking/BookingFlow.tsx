@@ -111,8 +111,8 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
       setError('Revisa tu número de WhatsApp y el país seleccionado.');
       return;
     }
-    if (!emailOk(guest.email)) {
-      setError('Escribe un correo válido para enviarte los avisos de tu visita.');
+    if (guest.email.trim() && !emailOk(guest.email)) {
+      setError('Revisa tu correo o déjalo en blanco.');
       return;
     }
     go('review');
@@ -338,7 +338,7 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
             defaultValue={guest.phone}
           />
           <label>
-            Correo electrónico
+            Correo electrónico (opcional)
             <input
               type="email"
               autoComplete="email"
@@ -349,8 +349,8 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
             />
           </label>
           <p className="step-help">
-            Te enviaremos aquí el resumen de tu solicitud y el aviso cuando un técnico confirme la
-            visita.
+            Si lo escribes, te enviaremos aquí el resumen de tu solicitud y el aviso cuando un
+            técnico confirme la visita.
           </p>
           {errorBox}
           <div className="booking-actions">
