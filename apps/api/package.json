@@ -10,11 +10,13 @@
     "db:seed": "tsx src/scripts/seed.ts",
     "admin:create": "tsx src/scripts/create-admin.ts",
     "whatsapp:test": "tsx src/scripts/test-whatsapp.ts",
-    "whatsapp:diagnose": "tsx src/scripts/diagnose-whatsapp.ts"
+    "whatsapp:diagnose": "tsx src/scripts/diagnose-whatsapp.ts",
+    "bird:spike": "tsx src/scripts/bird-spike.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
     "@instafix/contracts": "workspace:*",
+    "@messagebird/sdk": "0.99.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
