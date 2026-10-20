@@ -1,3 +1,4 @@
+import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useState } from 'react';
 import type { AnalyticsSummary } from '@instafix/contracts/src/site';
@@ -8,11 +9,13 @@ export function AdminAnalytics() {
   const [error, setError] = useState('');
   function load() {
     setError('');
-    api<AnalyticsSummary>('admin/analytics')
+    return api<AnalyticsSummary>('admin/analytics')
       .then(setData)
       .catch((e) => setError(e.message));
   }
-  useEffect(load, []);
+  useEffect(() => {
+    void load();
+  }, []);
   return (
     <section className="editor">
       <h2>Visitas de la web</h2>
@@ -20,9 +23,14 @@ export function AdminAnalytics() {
         Últimos 30 días. El promedio cuenta el tiempo con la página visible, incluyendo visitas
         breves. Las sesiones corresponden a pestañas del navegador, no a personas únicas.
       </p>
-      <button type="button" className="btn btn-secondary btn-small" onClick={load}>
+      <BusyButton
+        type="button"
+        className="btn btn-secondary btn-small"
+        busyLabel="Actualizando…"
+        onClick={() => load()}
+      >
         Actualizar
-      </button>
+      </BusyButton>
       {error && <p role="alert">{error}</p>}
       {!data && !error && <ListSkeleton label="Cargando estadísticas…" count={4} />}
       {data && (

@@ -60,7 +60,10 @@ test(
       headers: { origin: 'http://localhost:5173', cookie: `instafix_session=${token}` },
     } as unknown as Request;
     const equipment = await db.equipment.create({
-      data: { name: `Equipo-${randomUUID()}`, category: 'Consolas' },
+      data: {
+        name: `Equipo-${randomUUID()}`,
+        category: { connectOrCreate: { where: { name: 'Pruebas' }, create: { name: 'Pruebas' } } },
+      },
     });
     const base = {
       equipmentId: equipment.id,

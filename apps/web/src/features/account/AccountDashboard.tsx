@@ -7,18 +7,14 @@ import {
 } from '../../components/ui/Skeleton';
 import { type AccountUser, type Appointment, type CompletedJob } from '@instafix/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
-import { AccountSecurity } from './AccountSecurity';
+import { LOGOUT_EVENT } from '../../components/layout/AccountMenu';
+import { linkToken } from './account-links';
 import { AppointmentActions } from './AppointmentActions';
 import { AppointmentCard } from '../../components/appointments/AppointmentCard';
 import { Login } from './Login';
-
-// Enlaces de correo: #restablecer?token=… y #verificar-correo?token=…
-function linkToken(page: string) {
-  const [path, query] = window.location.hash.replace(/^#/, '').split('?');
-  return path === page ? new URLSearchParams(query || '').get('token') || '' : '';
-}
 
 export function AccountDashboard() {
   const loadRevision = useRef(0);
@@ -30,11 +26,9 @@ export function AccountDashboard() {
   const [error, setError] = useState('');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [jobs, setJobs] = useState<CompletedJob[]>([]);
-  const [section, setSection] = useState<'appointments' | 'jobs' | 'security'>('appointments');
+  const [section, setSection] = useState<'appointments' | 'jobs'>('appointments');
   const [resetToken] = useState(() => linkToken('restablecer'));
-  const [emailNotice, setEmailNotice] = useState('');
   const [appointmentFilter, setAppointmentFilter] = useState('upcoming');
-  const [loggingOut, setLoggingOut] = useState(false);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -55,23 +49,7 @@ export function AccountDashboard() {
     }
   }, []);
   useEffect(() => {
-    const token = linkToken('verificar-correo');
-    if (!token) {
-      void loadSession();
-      return;
-    }
-    // El enlace se consume una vez y se retira de la barra de direcciones.
-    history.replaceState(null, '', '#cuenta');
-    api<{ email: string }>('auth/email/verify', {
-      method: 'POST',
-      body: JSON.stringify({ token }),
-    })
-      .then(() => {
-        setEmailNotice('✓ Tu correo quedó verificado.');
-        setSection('security');
-      })
-      .catch((e) => setEmailNotice(e.message))
-      .finally(() => void loadSession());
+    void loadSession();
   }, [loadSession]);
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -121,21 +99,17 @@ export function AccountDashboard() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [user, load]);
-  async function logout() {
-    setLoggingOut(true);
-    setError('');
-    try {
-      await api('auth/logout', { method: 'POST' });
+  // Cierre de sesión desde el menú de usuario del encabezado.
+  useEffect(() => {
+    const signedOut = () => {
       loadRevision.current++;
       setUser(null);
       setAppointments([]);
       setJobs([]);
-    } catch {
-      setError('No se pudo cerrar la sesión. Inténtalo nuevamente.');
-    } finally {
-      setLoggingOut(false);
-    }
-  }
+    };
+    window.addEventListener(LOGOUT_EVENT, signedOut);
+    return () => window.removeEventListener(LOGOUT_EVENT, signedOut);
+  }, []);
   if (sessionLoading)
     return (
       <section className="account-panel wide">
@@ -164,20 +138,13 @@ export function AccountDashboard() {
     );
   if (resetToken || !user)
     return (
-      <>
-        {emailNotice && (
-          <p role="status" className="account-banner">
-            {emailNotice}
-          </p>
-        )}
-        <Login
-          resetToken={resetToken || undefined}
-          onLogin={(next) => {
-            setUser(next);
-            if (resetToken) window.location.hash = '#cuenta';
-          }}
-        />
-      </>
+      <Login
+        resetToken={resetToken || undefined}
+        onLogin={(next) => {
+          setUser(next);
+          if (resetToken) window.location.hash = '#cuenta';
+        }}
+      />
     );
   const upcoming = appointments.filter(
     (item) =>
@@ -212,15 +179,10 @@ export function AccountDashboard() {
           <h1>Hola, {user.name}</h1>
           <p>{user.phone}</p>
         </div>
-        <button className="btn btn-ghost btn-small" disabled={loggingOut} onClick={logout}>
-          {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
-        </button>
+        <a className="btn btn-ghost btn-small" href="#ajustes">
+          Ajustes de la cuenta
+        </a>
       </div>
-      {emailNotice && (
-        <p role="status" className="account-banner">
-          {emailNotice}
-        </p>
-      )}
       <div className="account-summary">
         {loading ? (
           <StatTilesSkeleton />
@@ -251,23 +213,18 @@ export function AccountDashboard() {
         <button aria-pressed={section === 'jobs'} onClick={() => setSection('jobs')}>
           Servicios y garantías
         </button>
-        <button aria-pressed={section === 'security'} onClick={() => setSection('security')}>
-          Seguridad
-        </button>
-        <button
+        <BusyButton
           className="refresh-account btn btn-ghost btn-small"
-          disabled={loading}
-          aria-busy={loading}
+          busy={loading}
+          busyLabel="Actualizando…"
           onClick={() => void load()}
         >
-          {loading ? 'Actualizando…' : 'Actualizar'}
-        </button>
+          Actualizar
+        </BusyButton>
       </div>
       {/* Cambiar de sección o de filtro anima el contenido, como la navegación de la página. */}
       <div className="account-section" key={`${section}-${appointmentFilter}`}>
-        {section === 'security' ? (
-          <AccountSecurity user={user} onUser={setUser} />
-        ) : loading ? (
+        {loading ? (
           section === 'appointments' ? (
             <div className="appt-list">
               <ListSkeleton label="Cargando tus citas…" count={2} variant="appointment" />

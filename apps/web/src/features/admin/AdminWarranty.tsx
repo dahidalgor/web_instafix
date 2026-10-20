@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { TextSkeleton } from '../../components/ui/Skeleton';
 import { api } from '../../lib/api';
 import { type RunAction } from './admin.types';
@@ -39,9 +40,9 @@ export function AdminWarranty({ policy, setPolicy, run, busy, loading }: Props) 
           onChange={(e) => setPolicy(e.target.value)}
         />
       </label>
-      <button className="button" disabled={busy}>
+      <BusyButton type="submit" className="button" busy={busy} busyLabel="Publicando…">
         Publicar políticas
-      </button>
+      </BusyButton>
     </form>
   );
 }

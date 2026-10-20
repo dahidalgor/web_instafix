@@ -99,7 +99,6 @@ function ScrollStory() {
     <div className="story" ref={story}>
       <div className="story-stage">
         <div className="story-copy">
-          <p className="eyebrow story-eyebrow">TÚ AGENDAS. NOSOTROS VAMOS.</p>
           <div className="story-meter" aria-hidden="true">
             {steps.map((step, index) => (
               <span key={step.label} className={index <= active ? 'is-on' : undefined}>

@@ -1,11 +1,17 @@
 import { AdminEmail } from './AdminEmail';
 import { AdminSlides } from './AdminSlides';
 import { AdminAnalytics } from './AdminAnalytics';
-import { offeringSchema, type AccountUser, type Offering } from '@instafix/contracts';
+import {
+  offeringSchema,
+  type AccountUser,
+  type CatalogEquipment,
+  type Offering,
+  type ServiceCategory,
+} from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { Login } from '../account/Login';
-import { emptyService, type Equipment, type ServiceDraft } from './admin.types';
+import { emptyService, type ServiceDraft } from './admin.types';
 import { AdminAppointments } from './AdminAppointments';
 import { AdminEquipment } from './AdminEquipment';
 import { AdminJobs } from './AdminJobs';
@@ -20,7 +26,8 @@ export default function Admin() {
   const [checking, setChecking] = useState(true);
   const [tab, setTab] = useState('Servicios');
   const [items, setItems] = useState<Offering[]>([]);
-  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [equipment, setEquipment] = useState<CatalogEquipment[]>([]);
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [users, setUsers] = useState<AccountUser[]>([]);
   const [draft, setDraft] = useState<ServiceDraft>({ ...emptyService });
   const [policy, setPolicy] = useState('');
@@ -32,14 +39,16 @@ export default function Admin() {
   const update = <K extends keyof ServiceDraft>(key: K, value: ServiceDraft[K]) =>
     setDraft((previous) => ({ ...previous, [key]: value }));
   async function load() {
-    const [services, devices, customers, terms] = await Promise.all([
+    const [services, devices, groups, customers, terms] = await Promise.all([
       api('admin/services'),
       api('equipment'),
+      api('categories'),
       api('admin/users'),
       api('warranty-policy'),
     ]);
     setItems(services);
     setEquipment(devices);
+    setCategories(groups);
     setUsers(customers);
     setPolicy(terms.text);
     setLoaded(true);
@@ -164,7 +173,7 @@ export default function Admin() {
         <div className="filters">
           {[
             'Servicios',
-            'Equipos',
+            'Categorías y equipos',
             'Citas',
             'Panel técnico',
             'Equipo',
@@ -204,6 +213,7 @@ export default function Admin() {
           <AdminServices
             items={items}
             equipment={equipment}
+            categories={categories}
             draft={draft}
             setDraft={setDraft}
             update={update}
@@ -214,12 +224,12 @@ export default function Admin() {
             loading={!loaded}
           />
         )}
-        {tab === 'Equipos' && (
+        {tab === 'Categorías y equipos' && (
           <AdminEquipment
+            categories={categories}
             equipment={equipment}
-            run={run}
+            services={items}
             load={load}
-            busy={busy}
             loading={!loaded}
           />
         )}
