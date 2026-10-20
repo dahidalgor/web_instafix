@@ -18,6 +18,13 @@ import {
  * sin estado y reutiliza la conexión. La clave vive solo en el backend (BIRD_API_KEY).
  */
 let client: BirdClient | null = null;
+let receivers = new Map<string, BirdClient>();
+
+/** Solo para pruebas: sustituye el cliente por un doble con la misma forma. */
+export function setBirdClient(fake: BirdClient | null) {
+  client = fake;
+  receivers = new Map();
+}
 
 export class BirdConfigError extends Error {}
 
@@ -36,6 +43,19 @@ export function birdClient() {
     defaultHeaders: { 'Bird-Enrichment': '0' },
   });
   return client;
+}
+
+/**
+ * Cliente receptor (sin API key) para verificar webhooks con el secreto de firma de Bird.
+ * La verificación no hace peticiones de red.
+ */
+export function birdWebhookReceiver(secret: string) {
+  let receiver = receivers.get(secret);
+  if (!receiver) {
+    receiver = new BirdClient({ webhooks: { secret } });
+    receivers.set(secret, receiver);
+  }
+  return receiver;
 }
 
 /** Solo la región de la clave, para diagnóstico. Nunca se muestra la clave. */
