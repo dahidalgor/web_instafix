@@ -48,8 +48,14 @@ const mask = (phone?: string | null) =>
 type Verdict = 'sí' | 'no' | 'no verificable';
 const gate: [string, Verdict, string][] = [];
 const record = (item: string, verdict: Verdict, note = '') => gate.push([item, verdict, note]);
+// Permisos que Bird pide y la clave no tiene: Bird nombra el permiso en el mensaje del 403.
+const missingScopes = new Set<string>();
 const failure = (error: unknown) => {
   const { kind, message } = describeBirdError(error);
+  if (kind === 'PERMISSION') {
+    const scope = message.match(/"([a-z_]+:[a-z_]+)" scope/)?.[1];
+    if (scope) missingScopes.add(scope);
+  }
   return `${kind}: ${message}`;
 };
 
@@ -99,9 +105,15 @@ async function main() {
     ok(`clave válida · workspace «${workspace.name}»`);
     record('SDK oficial y autenticación con BIRD_API_KEY', 'sí');
   } catch (error) {
-    bad(failure(error));
-    record('SDK oficial y autenticación con BIRD_API_KEY', 'no', failure(error));
-    return summary();
+    const reason = failure(error);
+    if (describeBirdError(error).kind !== 'PERMISSION') {
+      bad(reason);
+      record('SDK oficial y autenticación con BIRD_API_KEY', 'no', reason);
+      return summary();
+    }
+    // Un 403 por permiso significa que Bird reconoció la clave: el nombre del workspace es opcional.
+    ok('clave válida (Bird la reconoce); sin permiso para leer el workspace, se continúa');
+    record('SDK oficial y autenticación con BIRD_API_KEY', 'sí');
   }
 
   console.log('\n3. Cuentas de WhatsApp Business (WABA)');
@@ -262,6 +274,12 @@ function summary() {
     'no verificable',
     'requiere URL pública registrada en Bird; se prueba con mocks y luego en producción',
   );
+  if (missingScopes.size) {
+    console.log(
+      '\nPermisos que le faltan a la API key (Bird → Settings → API keys → editar la clave):',
+    );
+    for (const scope of missingScopes) console.log(`  · ${scope}`);
+  }
   console.log('\nResumen del gate');
   for (const [item, verdict, note] of gate)
     console.log(
