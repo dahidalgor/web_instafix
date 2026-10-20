@@ -164,19 +164,6 @@ export function AdminAppointments(_props: { services: Offering[] }) {
       setBusyAction(null);
     }
   }
-  async function onTheWay() {
-    if (!id) return;
-    setBusyAction('onTheWay');
-    setMessage('');
-    try {
-      await api(`admin/appointments/${id}/on-the-way`, { method: 'POST' });
-      setMessage('Aviso «técnico en camino» encolado para WhatsApp.');
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'No se pudo enviar el aviso');
-    } finally {
-      setBusyAction(null);
-    }
-  }
   async function linkAccount() {
     if (!id || !linkUserId || !identityVerified) return;
     setBusyAction('link');
@@ -432,18 +419,6 @@ export function AdminAppointments(_props: { services: Offering[] }) {
                 Ver ubicación del cliente
               </a>
             ))}
-          {id && ['CONFIRMED', 'IN_PROGRESS'].includes(draft.status) && (
-            <BusyButton
-              type="button"
-              className="btn btn-secondary"
-              disabled={busy}
-              busy={busyAction === 'onTheWay'}
-              busyLabel="Enviando aviso…"
-              onClick={onTheWay}
-            >
-              Avisar «técnico en camino» por WhatsApp
-            </BusyButton>
-          )}
           <BusyButton
             type="submit"
             disabled={busy}

@@ -118,13 +118,7 @@ export function App() {
                 href={'#' + id}
                 onClick={() => setMenuOpen(false)}
                 aria-current={
-                  id === 'como'
-                    ? hash === '#como'
-                      ? 'location'
-                      : undefined
-                    : page === id && !(id === 'inicio' && hash === '#como')
-                      ? 'page'
-                      : undefined
+                  page === id && !(id === 'inicio' && hash === '#como') ? 'page' : undefined
                 }
                 className={id === 'agenda' ? 'nav-cta' : undefined}
               >
