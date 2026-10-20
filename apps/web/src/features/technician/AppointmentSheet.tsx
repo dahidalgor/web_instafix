@@ -5,7 +5,7 @@ import type { Offering, StaffAppointment } from '@instafix/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StatusPill, visitDay, visitTime } from '../../components/appointments/AppointmentCard';
 import { api, ApiError } from '../../lib/api';
-import { money } from '../../lib/format';
+import { mapsLink, money } from '../../lib/format';
 
 const CAL_ISSUE = 'Confirmada en Instafix; pendiente de confirmar en Cal.com.';
 const plain = (value: string) =>
@@ -182,6 +182,17 @@ export function AppointmentSheet({
                   rel="noreferrer"
                 >
                   Cómo llegar
+                </a>
+              )}
+              {item.locationLatitude == null && mapsLink(item.address) && (
+                // Enlace de mapas sin coordenadas legibles: se abre tal como lo envió el cliente.
+                <a
+                  className="btn btn-secondary"
+                  href={mapsLink(item.address)!}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Abrir en Google Maps
                 </a>
               )}
             </div>

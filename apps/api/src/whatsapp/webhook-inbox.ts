@@ -11,6 +11,7 @@ import { logEvent, logWorkerFailure } from '../common/log-event';
 import { db } from '../database/client';
 import { receiveDelivery } from './delivery';
 import { receiveCustomerMessage } from './inbound';
+import { locationFromText } from './maps-link';
 import {
   WHATSAPP_PROVIDER,
   WebhookSignatureError,
@@ -72,15 +73,18 @@ async function handleEvent(event: WhatsAppWebhookEvent, provider: string) {
   }
   await recordMessage(event, provider);
   // Solo un mensaje nuevo del cliente puede aportar la ubicación: nunca un eco ni el historial.
-  if (event.source === 'customer_live' && event.phone)
-    await receiveCustomerMessage({
-      id: event.providerMessageId,
-      from: event.phone.slice(1),
-      timestamp: String(Math.floor(event.occurredAt.getTime() / 1000)),
-      type: event.type,
-      ...(event.inReplyTo ? { context: { id: event.inReplyTo } } : {}),
-      ...(event.location ? { location: event.location } : {}),
-    });
+  if (event.source !== 'customer_live' || !event.phone) return;
+  // Ubicación nativa de WhatsApp, o un enlace de Google/Apple Maps o coordenadas en el texto.
+  const location =
+    event.location ?? (event.text ? await locationFromText(event.text) : null) ?? undefined;
+  await receiveCustomerMessage({
+    id: event.providerMessageId,
+    from: event.phone.slice(1),
+    timestamp: String(Math.floor(event.occurredAt.getTime() / 1000)),
+    type: location ? 'location' : event.type,
+    ...(event.inReplyTo ? { context: { id: event.inReplyTo } } : {}),
+    ...(location ? { location } : {}),
+  });
 }
 
 async function recordMessage(event: WhatsAppMessageEvent, provider: string) {
