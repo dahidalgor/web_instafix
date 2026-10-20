@@ -1,3 +1,4 @@
+import { logWorkerFailure } from '../common/log-event';
 import { Injectable, type OnModuleInit, type OnModuleDestroy, Inject } from '@nestjs/common';
 import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
@@ -175,8 +176,8 @@ export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
           }),
           confirm: confirmCalBooking,
         });
-    } catch {
-      console.error('No se pudo procesar la cola de WhatsApp');
+    } catch (error) {
+      logWorkerFailure('whatsapp.queue', error);
     } finally {
       this.running = false;
     }
