@@ -1,5 +1,6 @@
 import type { AccountUser, Appointment, Offering } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { api } from '../../lib/api';
 import { type RunAction } from './admin.types';
 type Props = { users: AccountUser[]; items: Offering[]; run: RunAction; busy: boolean };
@@ -220,9 +221,15 @@ export function AdminJobs({ users, items, run, busy }: Props) {
         Condiciones de garantía de este trabajo
         <textarea name="warrantyTerms" required maxLength={5000} />
       </label>
-      <button className="btn btn-primary btn-block" disabled={busy || !userId}>
+      <BusyButton
+        type="submit"
+        className="btn btn-primary btn-block"
+        disabled={!userId}
+        busy={busy}
+        busyLabel="Registrando…"
+      >
         Registrar trabajo
-      </button>
+      </BusyButton>
     </form>
   );
 }

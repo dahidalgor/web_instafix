@@ -1,5 +1,6 @@
 import type { VerificationTicket } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { api, ApiError } from '../../lib/api';
 import { OtpInput } from './OtpInput';
 
@@ -27,7 +28,9 @@ export function PhoneVerification<T>({
 }) {
   const [current, setCurrent] = useState(ticket);
   const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Una sola acción a la vez: verificar el código o pedir uno nuevo.
+  const [action, setAction] = useState<'verify' | 'resend' | null>(null);
+  const busy = action !== null;
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [wait, setWait] = useState(ticket ? ticket.resendAfter : 0);
@@ -39,7 +42,7 @@ export function PhoneVerification<T>({
   async function submit(event?: FormEvent) {
     event?.preventDefault();
     if (!current || code.length !== 6) return;
-    setBusy(true);
+    setAction('verify');
     setError('');
     setNotice('');
     try {
@@ -53,7 +56,7 @@ export function PhoneVerification<T>({
       setCode('');
       setError(e instanceof Error ? e.message : 'No se pudo verificar el código.');
     } finally {
-      setBusy(false);
+      setAction(null);
     }
   }
   useEffect(() => {
@@ -61,7 +64,7 @@ export function PhoneVerification<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
   async function resend() {
-    setBusy(true);
+    setAction('resend');
     setError('');
     setNotice('');
     try {
@@ -82,7 +85,7 @@ export function PhoneVerification<T>({
         setWait(e.body.retryAfter);
       setError(e instanceof Error ? e.message : 'No se pudo reenviar.');
     } finally {
-      setBusy(false);
+      setAction(null);
     }
   }
   return (
@@ -111,15 +114,28 @@ export function PhoneVerification<T>({
         </p>
       )}
       <div className="auth-actions">
-        <button className="button" disabled={busy || !current || code.length !== 6}>
-          {busy ? 'Verificando…' : submitLabel}
-        </button>
+        <BusyButton
+          type="submit"
+          className="button"
+          disabled={busy || !current || code.length !== 6}
+          busy={action === 'verify'}
+          busyLabel="Verificando…"
+        >
+          {submitLabel}
+        </BusyButton>
       </div>
       <p className="otp-resend">
         ¿No recibiste el código?{' '}
-        <button type="button" className="auth-link" disabled={busy || wait > 0} onClick={resend}>
+        <BusyButton
+          type="button"
+          className="auth-link"
+          disabled={busy || wait > 0}
+          busy={action === 'resend'}
+          busyLabel="Reenviando…"
+          onClick={resend}
+        >
           {wait > 0 ? `Reenviar en ${wait} s` : 'Reenviar'}
-        </button>
+        </BusyButton>
       </p>
     </form>
   );

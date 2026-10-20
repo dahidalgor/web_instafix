@@ -83,11 +83,20 @@ enum Role {
   ADMIN
   TECHNICIAN
 }
+// Categoría → equipo → servicio (p. ej. Consolas de Videojuegos → PS5 → Mantenimiento).
+model ServiceCategory {
+  id String @id @default(uuid())
+  name String @unique
+  position Int @default(0)
+  equipment Equipment[]
+}
 model Equipment {
   id String @id @default(uuid())
   name String @unique
-  category String
+  categoryId String
+  category ServiceCategory @relation(fields: [categoryId], references: [id])
   offerings Offering[]
+  @@index([categoryId])
 }
 model User {
   id String @id @default(uuid())

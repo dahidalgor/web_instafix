@@ -1,3 +1,5 @@
+import { BusyButton } from '../../components/ui/BusyButton';
+import { BusyLabel } from '../../components/ui/BusyLabel';
 import { TextSkeleton } from '../../components/ui/Skeleton';
 import type { Offering, StaffAppointment } from '@instafix/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -28,6 +30,7 @@ export function AppointmentSheet({
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState('');
   const [adding, setAdding] = useState(false);
+  const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [confirmComplete, setConfirmComplete] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -108,16 +111,14 @@ export function AppointmentSheet({
                   Confirmada en Instafix. Cal.com aún no refleja la confirmación; se reintenta
                   automáticamente.
                 </p>
-                <button
+                <BusyButton
                   type="button"
                   className="btn btn-ghost btn-small"
                   disabled={busy}
-                  onClick={() =>
-                    void act('/cal-sync', { method: 'POST' }, 'Sincronización solicitada.')
-                  }
+                  onClick={() => act('/cal-sync', { method: 'POST' }, 'Sincronización solicitada.')}
                 >
                   Reintentar ahora
-                </button>
+                </BusyButton>
               </div>
             )}
             {item.bookingIdentityIssue && (
@@ -209,48 +210,51 @@ export function AppointmentSheet({
                       </div>
                       {editable ? (
                         <div className="tech-qty" aria-label={`Cantidad de ${s.nameSnapshot}`}>
-                          <button
+                          <BusyButton
                             type="button"
                             aria-label="Restar uno"
+                            busyLabel=""
                             disabled={!editable || busy || s.quantity <= 1}
                             onClick={() =>
-                              void act(`/services/${s.id}`, {
+                              act(`/services/${s.id}`, {
                                 method: 'PATCH',
                                 body: JSON.stringify({ quantity: s.quantity - 1 }),
                               })
                             }
                           >
                             −
-                          </button>
+                          </BusyButton>
                           <output>{s.quantity}</output>
-                          <button
+                          <BusyButton
                             type="button"
                             aria-label="Sumar uno"
+                            busyLabel=""
                             disabled={!editable || busy || s.quantity >= 100}
                             onClick={() =>
-                              void act(`/services/${s.id}`, {
+                              act(`/services/${s.id}`, {
                                 method: 'PATCH',
                                 body: JSON.stringify({ quantity: s.quantity + 1 }),
                               })
                             }
                           >
                             +
-                          </button>
+                          </BusyButton>
                         </div>
                       ) : (
                         <span className="tech-qty-fixed">×{s.quantity}</span>
                       )}
                       <span className="tech-subtotal">{money(s.totalMinor)}</span>
                       {editable && (
-                        <button
+                        <BusyButton
                           type="button"
                           className="tech-remove"
                           aria-label={`Quitar ${s.nameSnapshot}`}
+                          busyLabel=""
                           disabled={busy}
-                          onClick={() => void act(`/services/${s.id}`, { method: 'DELETE' })}
+                          onClick={() => act(`/services/${s.id}`, { method: 'DELETE' })}
                         >
                           ×
-                        </button>
+                        </BusyButton>
                       )}
                     </li>
                   ))}
@@ -279,11 +283,14 @@ export function AppointmentSheet({
                             <button
                               type="button"
                               disabled={busy}
+                              aria-busy={addingId === o.id || undefined}
                               onClick={async () => {
+                                setAddingId(o.id);
                                 const ok = await act('/services', {
                                   method: 'POST',
                                   body: JSON.stringify({ offeringId: o.id, quantity: 1 }),
                                 });
+                                setAddingId(null);
                                 if (ok) {
                                   setAdding(false);
                                   setQuery('');
@@ -294,7 +301,7 @@ export function AppointmentSheet({
                                 <strong>{o.title}</strong>
                                 <small>{o.device}</small>
                               </span>
-                              <span>{money(o.priceMinor)}</span>
+                              <BusyLabel busy={addingId === o.id} label={money(o.priceMinor)} />
                             </button>
                           </li>
                         ))}
@@ -334,12 +341,12 @@ export function AppointmentSheet({
                   onChange={(e) => setNotes(e.target.value)}
                 />
                 {editable && (
-                  <button
+                  <BusyButton
                     type="button"
                     className="btn btn-secondary"
                     disabled={busy || !notesDirty}
                     onClick={() =>
-                      void act(
+                      act(
                         '/notes',
                         { method: 'PUT', body: JSON.stringify({ notes }) },
                         'Notas guardadas.',
@@ -347,7 +354,7 @@ export function AppointmentSheet({
                     }
                   >
                     {notesDirty ? 'Guardar notas' : 'Notas guardadas'}
-                  </button>
+                  </BusyButton>
                 )}
               </div>
             )}
@@ -360,20 +367,17 @@ export function AppointmentSheet({
 
             <div className="tech-sheet-footer">
               {item.status === 'PENDING_LOCATION' && !item.assignedTechnician && (
-                <button
+                <BusyButton
                   type="button"
                   className="btn btn-primary btn-block"
                   disabled={busy}
+                  busyLabel="Confirmando…"
                   onClick={() =>
-                    void act(
-                      '/confirm',
-                      { method: 'POST' },
-                      '✓ Cita confirmada. Ya está en tus citas.',
-                    )
+                    act('/confirm', { method: 'POST' }, '✓ Cita confirmada. Ya está en tus citas.')
                   }
                 >
-                  {busy ? 'Confirmando…' : 'Confirmar cita'}
-                </button>
+                  Confirmar cita
+                </BusyButton>
               )}
               {editable && (
                 <button
@@ -422,17 +426,18 @@ export function AppointmentSheet({
                 >
                   Revisar
                 </button>
-                <button
+                <BusyButton
                   type="button"
                   className="btn btn-success"
                   disabled={busy}
+                  busyLabel="Completando…"
                   onClick={async () => {
                     await act('/complete', { method: 'POST' }, '✓ Visita completada.');
                     setConfirmComplete(false);
                   }}
                 >
                   Sí, completar
-                </button>
+                </BusyButton>
               </div>
             </div>
           </div>

@@ -18,6 +18,7 @@ import {
   type StatusFilter,
 } from './appointment-filters';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { api } from '../../lib/api';
@@ -73,7 +74,9 @@ export function AdminAppointments(_props: { services: Offering[] }) {
   const [draft, setDraft] = useState({ ...empty });
   const [id, setId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Acción en curso: solo su botón muestra la espera; el resto queda desactivado.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const busy = busyAction !== null;
   async function load(order = sort) {
     const [next, customers] = await Promise.all([
       api<AdminAppointment[]>(
@@ -120,7 +123,7 @@ export function AdminAppointments(_props: { services: Offering[] }) {
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    setBusy(true);
+    setBusyAction('save');
     setMessage('');
     try {
       await api(id ? `admin/appointments/${id}` : 'admin/appointments', {
@@ -140,12 +143,12 @@ export function AdminAppointments(_props: { services: Offering[] }) {
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo guardar');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   const list = items ?? [];
   async function recoverLinks() {
-    setBusy(true);
+    setBusyAction('recover');
     setMessage('');
     try {
       const result = await api<{ recovered: number }>('admin/booking-links/recover', {
@@ -158,12 +161,12 @@ export function AdminAppointments(_props: { services: Offering[] }) {
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo recuperar');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   async function onTheWay() {
     if (!id) return;
-    setBusy(true);
+    setBusyAction('onTheWay');
     setMessage('');
     try {
       await api(`admin/appointments/${id}/on-the-way`, { method: 'POST' });
@@ -171,12 +174,12 @@ export function AdminAppointments(_props: { services: Offering[] }) {
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo enviar el aviso');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   async function linkAccount() {
     if (!id || !linkUserId || !identityVerified) return;
-    setBusy(true);
+    setBusyAction('link');
     setMessage('');
     try {
       const result = await api<AdminAppointment>(`admin/booking-links/${id}`, {
@@ -189,7 +192,7 @@ export function AdminAppointments(_props: { services: Offering[] }) {
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo vincular');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   return (
@@ -206,14 +209,16 @@ export function AdminAppointments(_props: { services: Offering[] }) {
       {recoverable > 0 && (
         <p>
           {recoverable} citas tienen una referencia de cuenta comprobable.{' '}
-          <button
+          <BusyButton
             type="button"
             className="btn btn-secondary btn-small"
             disabled={busy}
+            busy={busyAction === 'recover'}
+            busyLabel="Recuperando…"
             onClick={recoverLinks}
           >
             Recuperar vínculos
-          </button>
+          </BusyButton>
         </p>
       )}
       {message && <p role="status">{message}</p>}
@@ -268,14 +273,16 @@ export function AdminAppointments(_props: { services: Offering[] }) {
                 />
                 He comprobado que esta cita pertenece a este cliente.
               </label>
-              <button
+              <BusyButton
                 type="button"
                 className="btn btn-secondary"
                 disabled={busy || !linkUserId || !identityVerified}
+                busy={busyAction === 'link'}
+                busyLabel="Vinculando…"
                 onClick={linkAccount}
               >
                 Vincular a Mi cuenta
-              </button>
+              </BusyButton>
             </fieldset>
           )}
           {id &&
@@ -426,13 +433,26 @@ export function AdminAppointments(_props: { services: Offering[] }) {
               </a>
             ))}
           {id && ['CONFIRMED', 'IN_PROGRESS'].includes(draft.status) && (
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={onTheWay}>
+            <BusyButton
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              busy={busyAction === 'onTheWay'}
+              busyLabel="Enviando aviso…"
+              onClick={onTheWay}
+            >
               Avisar «técnico en camino» por WhatsApp
-            </button>
+            </BusyButton>
           )}
-          <button disabled={busy} className="button">
-            {busy ? 'Guardando…' : 'Guardar cita'}
-          </button>
+          <BusyButton
+            type="submit"
+            disabled={busy}
+            busy={busyAction === 'save'}
+            busyLabel="Guardando…"
+            className="button"
+          >
+            Guardar cita
+          </BusyButton>
         </form>
       </Disclosure>
       <div className="appt-organizer" ref={organizer}>
@@ -517,13 +537,14 @@ export function AdminAppointments(_props: { services: Offering[] }) {
         {items === null && loadError && (
           <div className="admin-message" role="alert">
             {loadError}{' '}
-            <button
+            <BusyButton
               type="button"
               className="btn btn-secondary btn-small"
+              busyLabel="Reintentando…"
               onClick={() => load().catch((e) => setLoadError(e.message))}
             >
               Reintentar
-            </button>
+            </BusyButton>
           </div>
         )}
         {items === null && !loadError && (

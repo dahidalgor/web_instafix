@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { SiteSlide } from '@instafix/contracts/src/site';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { Skeleton, SkeletonGroup } from '../../components/ui/Skeleton';
 import { api } from '../../lib/api';
 import { MediaEditor } from '../media/MediaEditor';
@@ -137,9 +138,15 @@ export function AdminSlides({ onUploading }: { onUploading: (busy: boolean) => v
           Publicada
         </label>
         <div className="admin-form-actions">
-          <button className="button" disabled={busy || uploading}>
+          <BusyButton
+            type="submit"
+            className="button"
+            disabled={uploading}
+            busy={busy}
+            busyLabel="Guardando…"
+          >
             Guardar diapositiva
-          </button>
+          </BusyButton>
           <button
             type="button"
             className="btn btn-secondary"

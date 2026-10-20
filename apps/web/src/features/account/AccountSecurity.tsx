@@ -6,13 +6,14 @@ import {
   type CountryCode,
 } from '@instafix/contracts/src/phone';
 import { useState, type FormEvent } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { api } from '../../lib/api';
 import { PhoneField } from './PhoneField';
 import { PhoneVerification } from './PhoneVerification';
 
 type Panel = null | 'email' | 'phone' | 'password' | 'verify';
 
-/** Mi cuenta → Seguridad: WhatsApp (obligatorio), correo (opcional) y contraseña. */
+/** Ajustes de la cuenta: WhatsApp (obligatorio), correo (opcional) y contraseña. */
 export function AccountSecurity({
   user,
   onUser,
@@ -21,7 +22,9 @@ export function AccountSecurity({
   onUser: (user: AccountUser) => void;
 }) {
   const [panel, setPanel] = useState<Panel>(null);
-  const [busy, setBusy] = useState(false);
+  // Acción en curso: solo su botón muestra el indicador; el resto queda desactivado.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const busy = busyAction !== null;
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [ticket, setTicket] = useState<VerificationTicket | null>(null);
@@ -32,8 +35,8 @@ export function AccountSecurity({
     setError('');
     setMessage('');
   };
-  async function run(action: () => Promise<void>) {
-    setBusy(true);
+  async function run(key: string, action: () => Promise<void>) {
+    setBusyAction(key);
     setError('');
     setMessage('');
     try {
@@ -41,11 +44,11 @@ export function AccountSecurity({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo completar la operación.');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   const sendVerification = () =>
-    run(async () => {
+    run('email-verification', async () => {
       const result = await api<{
         accepted?: boolean;
         alreadyVerified?: boolean;
@@ -60,7 +63,7 @@ export function AccountSecurity({
     });
   /** «Verificar WhatsApp»: envía un código al número de la cuenta y abre el panel del código. */
   const startWhatsAppVerification = () =>
-    run(async () => {
+    run('whatsapp', async () => {
       const next = await api<VerificationTicket>('my/phone/verification', { method: 'POST' });
       setPanel('verify');
       setTicket(next);
@@ -68,7 +71,7 @@ export function AccountSecurity({
   async function changeEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    await run(async () => {
+    await run('email', async () => {
       onUser(
         await api<AccountUser>('my/email', {
           method: 'POST',
@@ -83,7 +86,7 @@ export function AccountSecurity({
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const raw = String(data.get('phone') ?? '');
-    await run(async () => {
+    await run('phone', async () => {
       setTicket(
         await api<VerificationTicket>('my/phone/change', {
           method: 'POST',
@@ -99,7 +102,7 @@ export function AccountSecurity({
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    await run(async () => {
+    await run('password', async () => {
       if (data.get('password') !== data.get('confirmPassword'))
         throw new Error('Las contraseñas no coinciden.');
       await api('my/password', {
@@ -130,20 +133,17 @@ export function AccountSecurity({
               Cancelar
             </button>
           ) : (
-            <button
+            <BusyButton
               type="button"
               className={`btn btn-small ${user.phoneVerifiedAt ? 'btn-ghost' : 'btn-primary'}`}
               disabled={busy}
-              aria-busy={busy}
+              busy={busyAction === 'whatsapp'}
+              busyLabel="Enviando código…"
               aria-controls="security-verify"
               onClick={startWhatsAppVerification}
             >
-              {busy
-                ? 'Enviando código…'
-                : user.phoneVerifiedAt
-                  ? 'Verificar de nuevo'
-                  : 'Verificar WhatsApp'}
-            </button>
+              {user.phoneVerifiedAt ? 'Verificar de nuevo' : 'Verificar WhatsApp'}
+            </BusyButton>
           )}
           <button
             type="button"
@@ -208,9 +208,15 @@ export function AccountSecurity({
               <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
                 Cancelar
               </button>
-              <button className="btn btn-primary" disabled={busy} aria-busy={busy}>
-                {busy ? 'Enviando…' : 'Enviar código'}
-              </button>
+              <BusyButton
+                type="submit"
+                className="btn btn-primary"
+                disabled={busy}
+                busy={busyAction === 'phone'}
+                busyLabel="Enviando…"
+              >
+                Enviar código
+              </BusyButton>
             </div>
           </form>
         ))}
@@ -227,15 +233,16 @@ export function AccountSecurity({
         </div>
         <div className="security-actions">
           {user.email && !user.emailVerifiedAt && (
-            <button
+            <BusyButton
               type="button"
               className="btn btn-primary btn-small"
               disabled={busy}
-              aria-busy={busy}
+              busy={busyAction === 'email-verification'}
+              busyLabel="Enviando…"
               onClick={sendVerification}
             >
-              {busy ? 'Enviando…' : 'Verificar correo'}
-            </button>
+              Verificar correo
+            </BusyButton>
           )}
           <button
             type="button"
@@ -262,9 +269,15 @@ export function AccountSecurity({
             <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
               Cancelar
             </button>
-            <button className="btn btn-primary" disabled={busy} aria-busy={busy}>
-              {busy ? 'Guardando…' : 'Guardar correo'}
-            </button>
+            <BusyButton
+              type="submit"
+              className="btn btn-primary"
+              disabled={busy}
+              busy={busyAction === 'email'}
+              busyLabel="Guardando…"
+            >
+              Guardar correo
+            </BusyButton>
           </div>
         </form>
       )}
@@ -321,9 +334,15 @@ export function AccountSecurity({
             <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
               Cancelar
             </button>
-            <button className="btn btn-primary" disabled={busy} aria-busy={busy}>
-              {busy ? 'Guardando…' : 'Guardar contraseña'}
-            </button>
+            <BusyButton
+              type="submit"
+              className="btn btn-primary"
+              disabled={busy}
+              busy={busyAction === 'password'}
+              busyLabel="Guardando…"
+            >
+              Guardar contraseña
+            </BusyButton>
           </div>
         </form>
       )}

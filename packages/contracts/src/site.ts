@@ -6,6 +6,7 @@ export const publicPages = [
   'inicio',
   'servicios',
   'cuenta',
+  'ajustes',
   'agenda',
   'garantia',
   'solicitud',

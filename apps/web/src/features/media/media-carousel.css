@@ -12,16 +12,14 @@
   font-size: 13px;
 }
 .media-viewport {
-  /* Desplazamiento nativo: deslizar en móvil, rueda/trackpad y arrastre en escritorio. */
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  /* El avance y el arrastre se hacen con transform; el scroll vertical queda para la página. */
+  overflow: hidden;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
   width: 100%;
   background: #111630;
   cursor: grab;
-}
-.media-viewport::-webkit-scrollbar {
-  display: none;
 }
 .media-viewport:active {
   cursor: grabbing;
@@ -33,30 +31,7 @@
 .media-track {
   display: flex;
   width: max-content;
-}
-.media-arrows {
-  display: flex;
-  gap: 8px;
-}
-.media-arrows button {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 16px;
-  transition:
-    background-color 160ms ease,
-    transform 160ms ease;
-}
-.media-arrows button:hover {
-  background: var(--surface-soft);
-}
-.media-arrows button:active {
-  transform: scale(0.94);
+  will-change: transform;
 }
 .media-group {
   display: flex;

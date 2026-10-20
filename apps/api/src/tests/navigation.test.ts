@@ -14,6 +14,8 @@ test('direct links and navigation use one canonical page', () => {
   }
   assert.equal(homeSection('#servicios'), null);
   assert.equal(resolvePage('#restablecer?token=abc'), 'cuenta');
+  assert.equal(resolvePage('#verificar-correo?token=abc'), 'ajustes');
+  assert.equal(resolvePage('#ajustes'), 'ajustes');
 });
 const appointment = {
   userId: '00000000-0000-4000-8000-000000000001',

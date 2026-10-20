@@ -93,3 +93,11 @@ Mi cuenta vuelve a consultar las citas al recuperar el foco o volver a la pesta�
 El teléfono mostrado por InstaFix es de solo lectura y el backend valida los datos recibidos. Esto **no bloquea el campo dentro del iframe de Cal.com**. Revisar la posibilidad de bloquear el campo prerrellenado requiere inspeccionar la configuración real del evento. No realizar cambios externos sin autorización del propietario.
 
 La base local revisada no contenía citas ni credenciales de Cal.com: estos cambios no recuperan reservas que nunca hayan llegado a esa base. Para comprobar las citas reales hay que revisar el entorno donde está desplegada la API y su recepción de webhooks.
+
+## Catálogo: categoría → equipo → servicio
+
+El catálogo tiene tres niveles, por ejemplo «Consolas de Videojuegos → PS5 → Mantenimiento». `Administración → Categorías y equipos` crea, renombra, ordena y elimina categorías, y añade, renombra o mueve equipos entre categorías. Una categoría con equipos, o un equipo con servicios, no se puede eliminar (409): primero hay que moverlos. Renombrar o mover actualiza el nombre de categoría y equipo que guardan los servicios. La página Servicios muestra arriba las categorías con servicios publicados (en el orden de administración) y, dentro de una categoría, sus equipos. La migración `20261020120000_service_categories` convierte las categorías de texto existentes en registros y renombra «Consolas» a «Consolas de Videojuegos».
+
+## Menú de usuario y ajustes
+
+Con sesión iniciada, el botón de usuario del encabezado despliega «Ir a mi cuenta», «Ajustes» (`#ajustes`: WhatsApp, correo y contraseña) y «Cerrar sesión». Los enlaces de verificación de correo abren Ajustes. Los botones que esperan una respuesta muestran un indicador giratorio y quedan desactivados hasta terminar (`BusyButton`).

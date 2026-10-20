@@ -1,15 +1,17 @@
+import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
-import type { Offering } from '@instafix/contracts';
+import type { CatalogEquipment, Offering, ServiceCategory } from '@instafix/contracts';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { money } from '../../lib/format';
 import { availabilityLabels } from '../catalog/catalog.constants';
 import { MediaEditor } from '../media/MediaEditor';
 import { CoverEditor } from '../media/CoverEditor';
 import { mediaProblem, serviceCover } from '@instafix/contracts';
-import { emptyService, type Equipment, type ServiceDraft } from './admin.types';
+import { emptyService, type ServiceDraft } from './admin.types';
 type Props = {
   items: Offering[];
-  equipment: Equipment[];
+  equipment: CatalogEquipment[];
+  categories: ServiceCategory[];
   draft: ServiceDraft;
   setDraft: Dispatch<SetStateAction<ServiceDraft>>;
   update: <K extends keyof ServiceDraft>(key: K, value: ServiceDraft[K]) => void;
@@ -22,6 +24,7 @@ type Props = {
 export function AdminServices({
   items,
   equipment,
+  categories,
   draft,
   setDraft,
   update,
@@ -83,18 +86,26 @@ export function AdminServices({
       <form className="editor" onSubmit={save}>
         <h2>{draft.id ? 'Editar servicio' : 'Nuevo servicio'}</h2>
         <label>
-          Equipo
+          Categoría y equipo
           <select
             required
             value={draft.equipmentId}
             onChange={(e) => update('equipmentId', e.target.value)}
           >
             <option value="">Selecciona equipo</option>
-            {equipment.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
+            {/* Agrupado por categoría: Categoría → Equipo → Servicio. */}
+            {categories.map((category) => {
+              const devices = equipment.filter((item) => item.categoryId === category.id);
+              return devices.length ? (
+                <optgroup key={category.id} label={category.name}>
+                  {devices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
           </select>
         </label>
         <label>
@@ -185,9 +196,15 @@ export function AdminServices({
           onChange={(media) => update('media', media)}
           onBusy={setUploading}
         />
-        <button className="button" disabled={busy || uploading || !!mediaProblem(draft.media)}>
+        <BusyButton
+          type="submit"
+          className="button"
+          disabled={uploading || !!mediaProblem(draft.media)}
+          busy={busy}
+          busyLabel="Guardando…"
+        >
           Guardar servicio
-        </button>
+        </BusyButton>
       </form>
     </div>
   );
