@@ -7,7 +7,7 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { logEvent } from '../common/log-event';
+import { logEvent, logWorkerFailure } from '../common/log-event';
 import { db } from '../database/client';
 import { receiveDelivery } from './delivery';
 import { receiveCustomerMessage } from './inbound';
@@ -196,8 +196,8 @@ export class WhatsAppWebhookWorker implements OnModuleInit, OnModuleDestroy {
         select: { id: true },
       });
       for (const row of rows) await processWhatsAppWebhook(row.id);
-    } catch {
-      console.error('No se pudo procesar la bandeja de webhooks de WhatsApp');
+    } catch (error) {
+      logWorkerFailure('whatsapp.webhook_inbox', error);
     } finally {
       this.running = false;
     }

@@ -127,6 +127,22 @@ async function main() {
   }
   if (!region) bad('BIRD_API_KEY no tiene el formato bk_<región>_…');
   else ok(`BIRD_API_KEY presente (región «${region}»; la clave no se muestra)`);
+  // Interruptores de la app: sin ellos Instafix no envía aunque Bird funcione.
+  const flag = (name: string) => process.env[name]?.trim() === 'true';
+  if (flag('WHATSAPP_OTP_ENABLED'))
+    ok('WHATSAPP_OTP_ENABLED=true (códigos de verificación activos)');
+  else bad('WHATSAPP_OTP_ENABLED no es "true": la app NO envía códigos de verificación');
+  if (flag('WHATSAPP_ENABLED')) ok('WHATSAPP_ENABLED=true (avisos de citas activos)');
+  else info('WHATSAPP_ENABLED no es "true": los avisos de citas están desactivados');
+  if (process.env.BIRD_WEBHOOK_SECRET?.trim()) ok('BIRD_WEBHOOK_SECRET presente');
+  else
+    info(
+      'Falta BIRD_WEBHOOK_SECRET: sin él no se reciben estados ni mensajes (y la cola no arranca)',
+    );
+  if (process.env.NODE_ENV === 'development' && process.env.WHATSAPP_OTP_PROVIDER === 'console')
+    info(
+      'WHATSAPP_OTP_PROVIDER=console: en local los códigos se imprimen en la consola, no se envían',
+    );
   const bird = birdClient();
 
   if (values.message) {
