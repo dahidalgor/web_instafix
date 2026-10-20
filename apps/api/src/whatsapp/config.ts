@@ -1,14 +1,10 @@
+/** Configuración de WhatsApp (Bird). Solo nombres de variables, nunca sus valores. */
 export function whatsappConfiguration() {
-  const required = [
-    'WASAPFLOW_PARTNER_KEY',
-    'WASAPFLOW_WEBHOOK_SECRET',
-    'WHATSAPP_TEMPLATE_INITIAL',
-    'WHATSAPP_TEMPLATE_CONFIRMED',
-    'WHATSAPP_TEMPLATE_DAY_BEFORE',
-    'WHATSAPP_TEMPLATE_SAME_DAY',
-  ];
-  const missing = required.filter((key) => !process.env[key]);
+  const missing = ['BIRD_API_KEY', 'BIRD_WEBHOOK_SECRET', 'WHATSAPP_BUSINESS_PHONE'].filter(
+    (key) => !process.env[key]?.trim(),
+  );
   return {
+    provider: 'BIRD',
     enabled: process.env.WHATSAPP_ENABLED === 'true',
     configured: !missing.length,
     missing,

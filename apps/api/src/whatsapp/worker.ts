@@ -2,7 +2,7 @@ import { Injectable, type OnModuleInit, type OnModuleDestroy, Inject } from '@ne
 import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
 import { whatsappConfiguration, calConfiguration } from './config';
-import { type MessageKind } from './messages';
+import { isMessageKind, type MessageKind } from './messages';
 import { confirmCalBooking } from '../integrations/cal-client';
 import { ProviderError } from '../integrations/provider-error';
 import { WhatsAppService } from './whatsapp.service';
@@ -10,7 +10,10 @@ import { lockAppointment, queueJob, queueReminders } from './queue';
 import { deliveryState } from './delivery';
 
 type Providers = {
-  send: (appointment: Appointment, kind: MessageKind) => Promise<string>;
+  send: (
+    appointment: Appointment,
+    kind: MessageKind,
+  ) => Promise<{ providerMessageId: string; provider?: string }>;
   confirm: (uid: string) => Promise<void>;
 };
 
@@ -30,11 +33,13 @@ export function kindStillValid(kind: string, appointment: Appointment) {
       return appointment.status === 'CANCELLED';
     case 'RESCHEDULED':
       return ['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status);
-    case 'TECHNICIAN_ASSIGNED':
-    case 'TECHNICIAN_ON_THE_WAY':
-      return ['CONFIRMED', 'IN_PROGRESS'].includes(appointment.status);
-    default:
+    case 'CONFIRMED':
+    case 'DAY_BEFORE':
+    case 'SAME_DAY':
       return appointment.status === 'CONFIRMED';
+    default:
+      // Avisos retirados (p. ej. «técnico en camino», sin plantilla): se cancelan sin enviar.
+      return false;
   }
 }
 
@@ -59,8 +64,7 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           !appointment.whatsappConsentAt ||
           !appointment.contactPhone ||
           job.expiresAt <= now ||
-          // «En camino» puede llegar después de la hora estimada; su límite es expiresAt.
-          (job.kind !== 'TECHNICIAN_ON_THE_WAY' && appointment.startsAt <= now) ||
+          appointment.startsAt <= now ||
           !kindStillValid(job.kind, appointment);
         if (invalid) {
           await tx.automationJob.update({ where: { id }, data: { status: 'CANCELLED' } });
@@ -81,11 +85,17 @@ export async function processJob(id: string, providers: Providers, now = new Dat
               data: { status: 'SENT', lastError: null },
             });
           } else {
-            const providerId = await providers.send(appointment, job.kind as MessageKind);
-            const delivery = await deliveryState(tx, providerId);
+            if (!isMessageKind(job.kind)) throw new ProviderError('Aviso desconocido', 'FAILED');
+            const sent = await providers.send(appointment, job.kind);
+            const delivery = await deliveryState(tx, sent.providerMessageId);
             await tx.automationJob.update({
               where: { id },
-              data: { status: 'SENT', providerId, ...delivery },
+              data: {
+                status: 'SENT',
+                provider: sent.provider ?? null,
+                providerMessageId: sent.providerMessageId,
+                ...delivery,
+              },
             });
           }
         } catch (error) {
@@ -145,7 +155,6 @@ export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
       return;
     this.running = true;
     try {
-      if (!(await this.whatsapp.ensureConnection())) return;
       await db.automationJob.updateMany({
         where: { status: 'SENDING', startedAt: { lt: new Date(Date.now() - 300000) } },
         data: {
@@ -160,7 +169,10 @@ export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
       });
       for (const job of pending)
         await processJob(job.id, {
-          send: (appointment, kind) => this.whatsapp.sendAppointmentMessage(appointment, kind),
+          send: async (appointment, kind) => ({
+            ...(await this.whatsapp.sendAppointmentMessage(appointment, kind)),
+            provider: this.whatsapp.providerName,
+          }),
           confirm: confirmCalBooking,
         });
     } catch {

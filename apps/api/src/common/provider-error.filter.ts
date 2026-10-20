@@ -5,7 +5,7 @@ import { ProviderError } from '../integrations/provider-error';
 /**
  * Un ProviderError que llega a la respuesta HTTP (p. ej. conectar WhatsApp desde
  * Administración) se devolvía como «Internal server error» y ocultaba la causa. Sus mensajes
- * son textos propios y errores de WasapFlow/Meta ya saneados: nunca contienen claves.
+ * son textos propios y errores de Bird/Meta ya saneados: nunca contienen claves.
  */
 @Catch(ProviderError)
 export class ProviderErrorFilter implements ExceptionFilter {

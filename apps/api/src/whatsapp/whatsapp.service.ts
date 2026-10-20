@@ -1,99 +1,97 @@
-import { Injectable, Inject, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Appointment } from '@prisma/client';
+import { logEvent } from '../common/log-event';
 import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
-import { adoptConfiguredWaba, connectedWaba, requireConnectedWaba } from './connection';
-import { messageContent, templateFor, type MessageKind } from './messages';
-import { WasapFlowClient } from './wasapflow.client';
+import { whatsappConfiguration } from './config';
+import { messageVariables, templateFor, type MessageKind } from './messages';
+import {
+  WHATSAPP_PROVIDER,
+  WhatsAppProviderError,
+  type SentMessage,
+  type WhatsAppProvider,
+} from './provider';
 
+/**
+ * Avisos de citas por WhatsApp. Decide qué plantilla y qué datos; el proveedor decide cómo
+ * se envían. Nunca construye payloads de un proveedor concreto.
+ */
 @Injectable()
-export class WhatsAppService implements OnModuleInit {
-  constructor(@Inject(WasapFlowClient) private readonly bridge: WasapFlowClient) {}
-  /** Al arrancar, adopta WASAPFLOW_WABA_ID si WasapFlow la confirma (no impide arrancar). */
-  async onModuleInit() {
-    if (!process.env.WASAPFLOW_PARTNER_KEY || !process.env.WASAPFLOW_WABA_ID) return;
-    if (await connectedWaba().catch(() => null)) return;
-    await adoptConfiguredWaba(this.bridge)
-      .then(() => console.log('WhatsApp: WABA configurada verificada en WasapFlow'))
-      .catch((e) => console.error(`WhatsApp: no se pudo verificar la WABA (${e.message})`));
+export class WhatsAppService {
+  constructor(@Inject(WHATSAPP_PROVIDER) private readonly provider: WhatsAppProvider) {}
+  get providerName() {
+    return this.provider.name;
   }
-  /** WABA operativa o null; intenta adoptar WASAPFLOW_WABA_ID si aún no está guardada. */
-  async ensureConnection() {
-    return requireConnectedWaba(this.bridge).catch(() => null);
-  }
-  private async sendingWaba() {
-    if (process.env.WHATSAPP_ENABLED !== 'true')
+
+  async sendAppointmentMessage(appointment: Appointment, kind: MessageKind): Promise<SentMessage> {
+    if (!whatsappConfiguration().enabled)
       throw new ProviderError('Envíos de WhatsApp desactivados', 'FAILED');
-    return requireConnectedWaba(this.bridge);
-  }
-  async sendAppointmentMessage(appointment: Appointment, kind: MessageKind) {
     if (!appointment.whatsappConsentAt)
       throw new ProviderError('Falta autorización del cliente', 'FAILED');
-    const wabaId = await this.sendingWaba();
-    const content = messageContent(kind, appointment);
     const template = templateFor(kind);
-    if (!template) throw new ProviderError(`Falta plantilla ${kind}`, 'FAILED');
-    // Conservamos los cuatro flujos como templates: pueden iniciar conversación fuera de 24 h.
-    const messageId = await this.bridge.sendTemplate(
-      wabaId,
-      appointment.contactPhone.replace(/^\+/, ''),
-      template,
-      process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'es',
-      content.params,
-    );
-    await this.recordOutbound(
-      wabaId,
-      messageId,
-      appointment.contactPhone,
-      'template',
-      content.text,
-    );
-    return messageId;
-  }
-  // Solo respuestas a mensajes nuevos del cliente abren la ventana; ni echoes ni historial.
-  async replyText(phone: string, text: string) {
-    const wabaId = await this.sendingWaba();
-    const last = await db.whatsAppMessage.findFirst({
-      where: {
-        wabaId,
-        phone,
-        source: 'customer_live',
-        direction: 'inbound',
-        occurredAt: { gt: new Date(Date.now() - 86400000), lte: new Date() },
-      },
-      orderBy: { occurredAt: 'desc' },
-    });
-    if (!last)
-      throw new ProviderError(
-        'Fuera de la ventana de 24 horas: utiliza una plantilla aprobada',
-        'FAILED',
+    try {
+      const sent = await this.provider.sendTemplate({
+        to: appointment.contactPhone,
+        template,
+        variables: messageVariables(kind, appointment),
+      });
+      await db.whatsAppMessage.upsert({
+        where: {
+          accountId_providerMessageId: {
+            accountId: sent.accountId,
+            providerMessageId: sent.providerMessageId,
+          },
+        },
+        update: {},
+        create: {
+          provider: this.provider.name,
+          accountId: sent.accountId,
+          providerMessageId: sent.providerMessageId,
+          phone: appointment.contactPhone,
+          type: 'template',
+          text: sent.text,
+          source: 'api',
+          direction: 'outbound',
+          occurredAt: new Date(),
+          content: { template },
+        },
+      });
+      logEvent('whatsapp.accepted', {
+        provider: this.provider.name,
+        operation: template,
+        appointmentId: appointment.id,
+        providerMessageId: sent.providerMessageId,
+        status: 'ACCEPTED',
+      });
+      return sent;
+    } catch (error) {
+      logEvent(
+        'whatsapp.send_failed',
+        {
+          provider: this.provider.name,
+          operation: template,
+          appointmentId: appointment.id,
+          error: error instanceof WhatsAppProviderError ? error.code : 'UNKNOWN',
+          reason: error instanceof Error ? error.message.slice(0, 300) : 'Error inesperado',
+        },
+        'warn',
       );
-    if (!text.trim() || text.length > 4096) throw new ProviderError('Texto inválido', 'FAILED');
-    const messageId = await this.bridge.sendText(wabaId, phone.replace(/^\+/, ''), text);
-    await this.recordOutbound(wabaId, messageId, phone, 'text', text);
-    return messageId;
+      throw error;
+    }
   }
-  private async recordOutbound(
-    wabaId: string,
-    messageId: string,
-    phone: string,
-    type: string,
-    text: string,
-  ) {
-    await db.whatsAppMessage.upsert({
-      where: { wabaId_messageId: { wabaId, messageId } },
-      update: { phone, type, text, source: 'api', direction: 'outbound' },
-      create: {
-        wabaId,
-        messageId,
-        phone,
-        type,
-        text,
-        source: 'api',
-        direction: 'outbound',
-        occurredAt: new Date(),
-        content: {},
-      },
-    });
+
+  /** Estado de la cuenta para Administración; nunca bloquea la página si el proveedor falla. */
+  async accountStatus() {
+    try {
+      return { ...(await this.provider.accountStatus()), error: null };
+    } catch (error) {
+      return {
+        provider: this.provider.name,
+        number: null,
+        templates: [],
+        authenticationTemplate: null,
+        error: error instanceof Error ? error.message : 'No se pudo consultar el proveedor',
+      };
+    }
   }
 }

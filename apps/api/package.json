@@ -9,8 +9,7 @@
     "db:migrate": "prisma migrate dev --schema ../../database/schema.prisma",
     "db:seed": "tsx src/scripts/seed.ts",
     "admin:create": "tsx src/scripts/create-admin.ts",
-    "whatsapp:test": "tsx src/scripts/test-whatsapp.ts",
-    "whatsapp:diagnose": "tsx src/scripts/diagnose-whatsapp.ts",
+    "whatsapp:diagnose": "tsx src/scripts/bird-spike.ts",
     "bird:spike": "tsx src/scripts/bird-spike.ts"
   },
   "dependencies": {

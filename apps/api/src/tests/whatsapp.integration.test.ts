@@ -19,7 +19,6 @@ test(
     Object.assign(process.env, {
       CAL_EVENT_TYPE_ID: '987654321',
       WHATSAPP_ENABLED: 'false',
-      WHATSAPP_TEMPLATE_CONFIRMED: 'instafix_cita_confirmada',
     });
     const phone = '+593999123456';
     const start = new Date(Date.now() + 4 * 86400000);
@@ -51,7 +50,7 @@ test(
     let sends = 0,
       confirms = 0;
     const providers = {
-      send: async () => `${prefix}:provider:${++sends}`,
+      send: async () => ({ providerMessageId: `${prefix}:provider:${++sends}`, provider: 'BIRD' }),
       confirm: async () => {
         confirms++;
       },
@@ -75,22 +74,22 @@ test(
     assert.equal(a.status, 'PENDING_LOCATION');
     const initial = await db.automationJob.findFirstOrThrow({ where: { appointmentId: a.id } });
     assert.equal(await db.automationJob.count({ where: { appointmentId: a.id } }), 1);
+    // El webhook «leído» llega antes de que se guarde el envío: se concilia igual.
     await receiveDelivery({
-      id: `${prefix}:provider:1`,
-      status: 'read',
-      timestamp: String(Math.floor(Date.now() / 1000)),
+      providerMessageId: `${prefix}:provider:1`,
+      status: 'READ',
+      occurredAt: new Date(),
     });
     await Promise.all([processJob(initial.id, providers), processJob(initial.id, providers)]);
     assert.equal(sends, 1);
     await receiveDelivery({
-      id: `${prefix}:provider:1`,
-      status: 'sent',
-      timestamp: String(Math.floor(Date.now() / 1000)),
+      providerMessageId: `${prefix}:provider:1`,
+      status: 'SENT',
+      occurredAt: new Date(Date.now() - 1000),
     });
-    assert.equal(
-      (await db.automationJob.findUniqueOrThrow({ where: { id: initial.id } })).deliveryStatus,
-      'read',
-    );
+    const delivered = await db.automationJob.findUniqueOrThrow({ where: { id: initial.id } });
+    assert.equal(delivered.deliveryStatus, 'READ');
+    assert.equal(delivered.provider, 'BIRD');
     await receiveCustomerMessage(location('wrong-phone', undefined, '593987654321'));
     assert.equal((await appointment(first)).locationReceivedAt, null);
     await receiveCustomerMessage(location('first'));
@@ -145,9 +144,10 @@ test(
       where: { appointmentId: (await appointment(second)).id, kind: 'INITIAL' },
     });
     await processJob(secondJob.id, providers);
-    const providerId = (await db.automationJob.findUniqueOrThrow({ where: { id: secondJob.id } }))
-      .providerId!;
-    await receiveCustomerMessage(location('context', providerId));
+    const providerMessageId = (
+      await db.automationJob.findUniqueOrThrow({ where: { id: secondJob.id } })
+    ).providerMessageId!;
+    await receiveCustomerMessage(location('context', providerMessageId));
     assert.ok((await appointment(second)).locationReceivedAt);
     assert.equal((await appointment(third)).locationReceivedAt, null);
     const fourth = `${prefix}:fourth`;

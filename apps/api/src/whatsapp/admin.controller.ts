@@ -1,89 +1,23 @@
-import { logEvent } from '../common/log-event';
-import { z } from 'zod';
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Header,
-  HttpCode,
-  Param,
-  Post,
-  Req,
-  Inject,
-} from '@nestjs/common';
+import { BadRequestException, Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { authenticated, checkOrigin } from '../auth/session';
 import { db } from '../database/client';
 import { calConfiguration, whatsappConfiguration } from './config';
-import { lockAppointment } from './queue';
-import { WhatsAppOnboardingService } from './onboarding.service';
-import { connectedWaba } from './connection';
 import { otpConfiguration } from './otp.provider';
+import { lockAppointment } from './queue';
+import { WhatsAppService } from './whatsapp.service';
 
+/**
+ * El número se conecta una sola vez en el panel de Bird (Coexistence); Instafix solo muestra su
+ * estado. No hay botón de conexión en Administración.
+ */
 @Controller('api/v1/admin/whatsapp')
 export class WhatsAppAdminController {
-  constructor(
-    @Inject(WhatsAppOnboardingService) private readonly onboarding: WhatsAppOnboardingService,
-  ) {}
-  @Post('connect/session') @Header('Cache-Control', 'no-store') async connect(@Req() req: Request) {
-    checkOrigin(req);
-    const user = await authenticated(req, true);
-    try {
-      const session = await this.onboarding.start(user.id);
-      logEvent('whatsapp.connect_started', { connectOrigin: new URL(session.connect_url).origin });
-      return session;
-    } catch (error) {
-      logEvent(
-        'whatsapp.connect_start_failed',
-        { reason: error instanceof Error ? error.message.slice(0, 300) : 'Error inesperado' },
-        'warn',
-      );
-      throw error;
-    }
-  }
-  @Post('connect/complete') async complete(@Req() req: Request, @Body() body: unknown) {
-    checkOrigin(req);
-    const user = await authenticated(req, true);
-    try {
-      const result = await this.onboarding.complete(user.id, body);
-      logEvent('whatsapp.connect_completed', { connectionMode: result.connectionMode });
-      return result;
-    } catch (error) {
-      logEvent(
-        'whatsapp.connect_complete_failed',
-        { reason: error instanceof Error ? error.message.slice(0, 300) : 'Error inesperado' },
-        'warn',
-      );
-      throw error;
-    }
-  }
-  /** Resultado observado en el navegador (cancelación, cierre sin respuesta…) para diagnóstico. */
-  @Post('connect/event') @HttpCode(204) async connectEvent(
-    @Req() req: Request,
-    @Body() body: unknown,
-  ) {
-    checkOrigin(req);
-    await authenticated(req, true);
-    const parsed = z
-      .object({
-        outcome: z.enum([
-          'WASAPFLOW_CANCEL',
-          'WASAPFLOW_ERROR',
-          'COMPLETE_FAILED',
-          'POPUP_CLOSED_WITHOUT_RESULT',
-          'SESSION_EXPIRED',
-        ]),
-        detail: z.string().max(300).optional(),
-      })
-      .strict()
-      .safeParse(body);
-    if (!parsed.success) throw new BadRequestException('Evento no válido');
-    logEvent('whatsapp.connect_outcome', parsed.data, 'warn');
-  }
+  constructor(@Inject(WhatsAppService) private readonly whatsapp: WhatsAppService) {}
   @Get() async status(@Req() req: Request) {
     await authenticated(req, true);
-    const [jobs, issues, events] = await Promise.all([
+    const config = whatsappConfiguration();
+    const [jobs, issues, events, messages, webhookIssues, account] = await Promise.all([
       db.automationJob.findMany({
         take: 100,
         orderBy: { createdAt: 'desc' },
@@ -103,35 +37,28 @@ export class WhatsAppAdminController {
         orderBy: { createdAt: 'desc' },
         select: { provider: true, occurredAt: true, outcome: true },
       }),
+      // Historial completo (también el de WasapFlow): no se pierde con la migración.
+      db.whatsAppMessage.findMany({
+        orderBy: { occurredAt: 'desc' },
+        take: 50,
+        select: {
+          provider: true,
+          providerMessageId: true,
+          phone: true,
+          bsuid: true,
+          source: true,
+          direction: true,
+          type: true,
+          text: true,
+          occurredAt: true,
+        },
+      }),
+      db.whatsAppWebhook.count({ where: { provider: config.provider, status: 'REVIEW' } }),
+      config.configured || process.env.BIRD_API_KEY ? this.whatsapp.accountStatus() : null,
     ]);
-    const wabaId = await connectedWaba();
-    const messages = wabaId
-      ? await db.whatsAppMessage.findMany({
-          where: { wabaId },
-          orderBy: { occurredAt: 'desc' },
-          take: 50,
-          select: {
-            messageId: true,
-            phone: true,
-            bsuid: true,
-            source: true,
-            direction: true,
-            type: true,
-            text: true,
-            occurredAt: true,
-          },
-        })
-      : [];
-    const webhookIssues = await db.bridgeWebhook.count({ where: { status: 'REVIEW' } });
     return {
-      whatsapp: {
-        ...whatsappConfiguration(),
-        connected: !!wabaId,
-        connectionMode: wabaId
-          ? ((await db.whatsAppConnection.findUnique({ where: { id: 'main' } }))?.connectionMode ??
-            null)
-          : null,
-      },
+      whatsapp: config,
+      account,
       otp: otpConfiguration(),
       cal: calConfiguration(),
       jobs,
@@ -150,7 +77,7 @@ export class WhatsAppAdminController {
       await lockAppointment(tx, job.appointmentId);
       const current = await tx.automationJob.findUniqueOrThrow({ where: { id } });
       if (
-        !(current.status === 'FAILED' || current.deliveryStatus === 'failed') ||
+        !(current.status === 'FAILED' || current.deliveryStatus === 'FAILED') ||
         current.expiresAt <= new Date()
       )
         throw new BadRequestException(
@@ -162,7 +89,8 @@ export class WhatsAppAdminController {
           status: 'PENDING',
           attempts: 0,
           dueAt: new Date(),
-          providerId: null,
+          provider: null,
+          providerMessageId: null,
           deliveryStatus: null,
           lastError: null,
         },

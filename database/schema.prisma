@@ -282,7 +282,10 @@ model AutomationJob {
   expiresAt DateTime
   attempts Int @default(0)
   startedAt DateTime?
-  providerId String? @unique
+  // Proveedor que aceptó el envío (BIRD; WASAPFLOW en el historial) y su id del mensaje.
+  provider String?
+  providerMessageId String? @unique
+  // Estado normalizado del webhook: SENT, DELIVERED, READ o FAILED.
   deliveryStatus String?
   lastError String?
   createdAt DateTime @default(now())
@@ -301,21 +304,12 @@ model IntegrationEvent {
   @@index([provider, sourceId, occurredAt])
 }
 
-// Una conexión operativa; el estado temporal nunca contiene la Partner Key.
-model WhatsAppConnection {
-  id String @id @default("main")
-  wabaId String?
-  connectionMode String?
-  connectedAt DateTime?
-  stateHash String?
-  stateUserId String?
-  stateExpiresAt DateTime?
-}
-
-// Bandeja durable para responder al webhook antes de ejecutar negocio.
-model BridgeWebhook {
+// Bandeja durable de webhooks de WhatsApp: se responde al proveedor antes de ejecutar negocio.
+// id = proveedor + id de entrega (webhook-id en Bird), así un reintento no se procesa dos veces.
+model WhatsAppWebhook {
   id String @id
-  wabaId String
+  provider String @default("BIRD")
+  accountId String?
   event String
   payload Json
   status String @default("PENDING")
@@ -325,9 +319,12 @@ model BridgeWebhook {
   @@index([status, createdAt])
 }
 
+// Historial de chat (envíos de Instafix, mensajes del cliente, ecos de la app y sincronización).
 model WhatsAppMessage {
-  wabaId String
-  messageId String
+  provider String @default("BIRD")
+  // Número/cuenta del negocio en el proveedor (WABA en el historial de WasapFlow).
+  accountId String
+  providerMessageId String
   phone String?
   bsuid String?
   direction String
@@ -336,17 +333,19 @@ model WhatsAppMessage {
   text String?
   occurredAt DateTime
   content Json
-  @@id([wabaId, messageId])
-  @@index([wabaId, phone, source, occurredAt])
+  @@id([accountId, providerMessageId])
+  @@index([accountId, phone, source, occurredAt])
+  @@index([occurredAt])
 }
 
+// Contactos sincronizados por WasapFlow (solo historial; Bird no sincroniza la agenda).
 model WhatsAppContact {
-  wabaId String
+  accountId String
   phone String
   name String?
   removed Boolean @default(false)
   occurredAt DateTime
-  @@id([wabaId, phone])
+  @@id([accountId, phone])
 }
 
 // Contexto opaco de reserva: nunca se confía en un userId enviado por Cal.

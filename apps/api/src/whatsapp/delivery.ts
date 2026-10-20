@@ -1,53 +1,68 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { db } from '../database/client';
+import type { DeliveryStatus } from './provider';
 
-// WasapFlow puede notificar la entrega antes de que termine de guardarse el envío.
+const ranks: Record<string, number> = { SENT: 1, FAILED: 2, DELIVERED: 3, READ: 4 };
+
+// El webhook de entrega puede llegar antes de que termine de guardarse el envío.
 // Persistir primero el recibo permite conciliar ambos órdenes sin perder estados.
-export async function deliveryState(tx: Prisma.TransactionClient, providerId: string) {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`delivery:${providerId}`}))`;
+export async function deliveryState(tx: Prisma.TransactionClient, providerMessageId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`delivery:${providerMessageId}`}))`;
   const receipts = await tx.integrationEvent.findMany({
-    where: { provider: 'WHATSAPP_STATUS', sourceId: providerId },
+    where: { provider: 'WHATSAPP_STATUS', sourceId: providerMessageId },
   });
-  const ranks: Record<string, number> = { sent: 1, failed: 2, delivered: 3, read: 4 };
+  const status = (outcome: string) => outcome.split(':')[0].toUpperCase();
   const best = receipts.sort(
-    (a, b) => (ranks[b.outcome.split(':')[0]] || 0) - (ranks[a.outcome.split(':')[0]] || 0),
+    (a, b) => (ranks[status(b.outcome)] || 0) - (ranks[status(a.outcome)] || 0),
   )[0];
-  const [status, code] = best?.outcome.split(':') || [];
+  const [, code, metaCode] = best?.outcome.split(':') || [];
+  const deliveryStatus = best ? status(best.outcome) : null;
   return {
-    deliveryStatus: status || null,
-    lastError: status === 'failed' ? `WasapFlow: ${code || 'entrega fallida'}` : null,
+    deliveryStatus,
+    lastError:
+      deliveryStatus === 'FAILED'
+        ? `WhatsApp no entregó el mensaje${code ? ` (${code}${metaCode ? `, Meta ${metaCode}` : ''})` : ''}`
+        : null,
   };
 }
 
-export async function receiveDelivery(status: {
-  id: string;
-  status: string;
-  timestamp: string;
-  errors?: { code: number }[];
+/** Estado normalizado de un envío. Idempotente: el mismo estado repetido no cambia nada. */
+export async function receiveDelivery(receipt: {
+  providerMessageId: string;
+  status: DeliveryStatus;
+  occurredAt: Date;
+  error?: { code: string; metaCode?: string | null };
 }) {
-  const occurredAt = new Date(Number(status.timestamp) * 1000);
-  if (!Number.isFinite(occurredAt.getTime())) return;
+  if (!Number.isFinite(receipt.occurredAt.getTime())) return;
   await db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`delivery:${status.id}`}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`delivery:${receipt.providerMessageId}`}))`;
     const id =
       'wa-status:' +
       createHash('sha256')
-        .update(`${status.id}:${status.status}:${status.timestamp}`)
+        .update(
+          `${receipt.providerMessageId}:${receipt.status}:${receipt.occurredAt.toISOString()}`,
+        )
         .digest('hex');
+    const code = (value?: string | null) => (value || '').replace(/[^\w.-]/g, '').slice(0, 60);
     await tx.integrationEvent.upsert({
       where: { id },
       update: {},
       create: {
         id,
         provider: 'WHATSAPP_STATUS',
-        sourceId: status.id,
-        occurredAt,
+        sourceId: receipt.providerMessageId,
+        occurredAt: receipt.occurredAt,
         outcome:
-          status.status === 'failed' ? `failed:${status.errors?.[0]?.code || ''}` : status.status,
+          receipt.status === 'FAILED'
+            ? `FAILED:${code(receipt.error?.code)}:${code(receipt.error?.metaCode)}`
+            : receipt.status,
       },
     });
-    const state = await deliveryState(tx, status.id);
-    await tx.automationJob.updateMany({ where: { providerId: status.id }, data: state });
+    const state = await deliveryState(tx, receipt.providerMessageId);
+    await tx.automationJob.updateMany({
+      where: { providerMessageId: receipt.providerMessageId },
+      data: state,
+    });
   });
 }
