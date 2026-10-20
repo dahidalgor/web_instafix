@@ -2,13 +2,13 @@
 
 ## Comunicaciones y verificación (17 de octubre de 2026)
 
-Las cuentas se activan verificando el WhatsApp con un código (OTP) enviado por WasapFlow; el correo es opcional y se verifica desde Mi cuenta → Seguridad. La contraseña se recupera por WhatsApp o por correo verificados. La web reserva mediante la API de Cal.com (sin iframe) e Instafix envía por Brevo las confirmaciones, reprogramaciones y cancelaciones. Arquitectura, reglas de seguridad, pruebas y pasos manuales en [Comunicaciones](docs/communications.md).
+Las cuentas se activan verificando el WhatsApp con un código (OTP) enviado por WhatsApp a través de Bird; el correo es opcional y se verifica desde Mi cuenta → Seguridad. La contraseña se recupera por WhatsApp o por correo verificados. La web reserva mediante la API de Cal.com (sin iframe) e Instafix envía por Brevo las confirmaciones, reprogramaciones y cancelaciones. Arquitectura, reglas de seguridad, pruebas y pasos manuales en [Comunicaciones](docs/communications.md).
 
 Consulta la [guía de organización del código](docs/code-organization.md) para localizar componentes, estilos, controladores y contratos. Usa `pnpm format` para mantener el formato uniforme y `pnpm format:check` para comprobarlo.
 
 ## WhatsApp y Cal.com (14 de octubre de 2026)
 
-Implementados los webhooks firmados, reservas de invitados, confirmación tras recibir ubicación, cola persistente de mensajes y recordatorios a las 08:00 de Ecuador continental. Administración → WhatsApp muestra configuración y resultados. La única integración de mensajería es WasapFlow Bridge con Coexistence. Su activación requiere Embedded Signup desde administración, plantillas aprobadas, credenciales de WasapFlow/Cal.com y despliegue HTTPS en `instafix.ec`: consulta [la guía de activación](docs/whatsapp-setup.md). Los envíos permanecen desactivados por defecto.
+Implementados los webhooks firmados, reservas de invitados, solicitud de ubicación, confirmación por técnico, cola persistente de mensajes y recordatorios a las 08:00 de Ecuador continental. Administración → WhatsApp muestra el número, las plantillas y el resultado de cada envío. La única integración de mensajería es **Bird** (`@messagebird/sdk`) con Coexistence: el número sigue en WhatsApp Business App. Requiere `BIRD_API_KEY`, el webhook de Bird registrado y plantillas aprobadas: consulta [la guía](docs/whatsapp-setup.md) y [la migración desde WasapFlow](docs/whatsapp-bird.md). Los envíos permanecen desactivados por defecto.
 
 ## Subida de archivos y despliegue (6 de octubre de 2026)
 

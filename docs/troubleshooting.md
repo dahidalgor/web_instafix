@@ -31,16 +31,19 @@ pnpm --filter @instafix/api exec prisma migrate deploy --schema ../../database/s
 pnpm dev
 ```
 
-## «Conectar WhatsApp» abre una ventana en blanco que se cierra
+## WhatsApp no envía o no se ve entregado
 
-**Causa en el código**: el popup se abría en blanco y, si `POST /admin/whatsapp/connect/session` fallaba, se cerraba con `popup.close()`; el motivo quedaba solo en el panel.
-
-**Ahora**: la ventana abre `/whatsapp-connect.html` («Preparando la conexión…»). Si la sesión falla, la ventana se queda abierta con «No pudimos conectar WhatsApp», el motivo, **Reintentar** y **Cerrar**. Si WasapFlow cancela, da error o se cierra sin resultado, el panel lo explica y el servidor registra `whatsapp.connect_*` (inicio, fallo, resultado).
-
-Diagnóstico en producción (no envía mensajes; crea una sesión de prueba que caduca sola):
+Ya no hay botón «Conectar WhatsApp»: el número se conecta en Bird (Numbers → WhatsApp, Coexistence). En Administración → WhatsApp revisa número (conectado, Coexistence), plantillas y el estado de cada envío. «Aceptado por Bird» no es «Entregado»: la entrega llega por el webhook `api/v1/webhooks/bird`.
 
 ```sh
 docker compose --env-file .env.production -f compose.production.yaml run --rm api \
   pnpm --filter @instafix/api whatsapp:diagnose
-docker compose --env-file .env.production -f compose.production.yaml logs api | grep '"event":"whatsapp.connect'
+docker compose --env-file .env.production -f compose.production.yaml logs api | grep '"event":"whatsapp.'
 ```
+
+- `AUTH` / `PERMISSION`: revisa `BIRD_API_KEY` y sus permisos en Bird.
+- `TEMPLATE`: la plantilla usa variables distintas de `{{nombre}}`, `{{servicio}}`, `{{fecha}}`, `{{hora}}`, `{{tecnico}}`, `{{cuando}}`.
+- Entrega `FAILED` con Meta 100: suele ser un envío del número de Instafix a sí mismo o un parámetro inválido.
+- Nada entregado nunca: falta registrar el webhook o `BIRD_WEBHOOK_SECRET` no coincide (la API responde 403 y registra `whatsapp.webhook_rejected`).
+
+Detalles en [whatsapp-setup.md](whatsapp-setup.md).

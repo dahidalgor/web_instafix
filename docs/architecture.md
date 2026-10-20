@@ -10,9 +10,9 @@ El catálogo relaciona `Offering` con `Equipment`. Cada servicio conserva tambi�
 
 ## Confirmación y mensajería
 
-`WhatsAppModule` reúne el transporte único: lógica de negocio → `WhatsAppService` → `WasapFlowClient` → WasapFlow Bridge. La conexión se realiza con Embedded Signup alojado y exige Coexistence. `WhatsAppConnection` conserva la WABA verificada; `BridgeWebhook` es la bandeja durable; `WhatsAppMessage` y `WhatsAppContact` sincronizan mensajes/contactos sin mezclar su identidad con la de cuentas web.
+`WhatsAppModule` reúne el transporte único: lógica de negocio → `WhatsAppService` → `WhatsAppProvider` (contrato neutral) → `BirdWhatsAppProvider` → SDK de Bird. El número se conecta una sola vez en Bird con Coexistence. `WhatsAppWebhook` es la bandeja durable de webhooks firmados; `WhatsAppMessage` guarda el historial de chat (también el de WasapFlow) sin mezclar su identidad con la de cuentas web.
 
-Reserva pendiente en Cal.com → webhook firmado → `Appointment` pendiente de ubicación → ubicación nativa del cliente por WhatsApp → confirmar reserva mediante API Cal.com → registrar confirmación → notificar y programar recordatorios. La cobertura y asignación de técnico no se validan automáticamente en esta versión.
+Reserva pendiente en Cal.com → `Appointment` pendiente de confirmación → WhatsApp pide la ubicación → el cliente la comparte (solo informa) → un técnico confirma en Instafix → confirmar reserva mediante API Cal.com → notificar y programar recordatorios. La cobertura y asignación de técnico no se validan automáticamente en esta versión.
 
 `AutomationJob` conserva la cola y una clave única por cita, revisión y tipo de mensaje. `IntegrationEvent` deduplica eventos y conserva recibos de entrega. Bloqueos de PostgreSQL serializan cambios por cita y evitan procesar dos veces el mismo mensaje. Cancelar o reprogramar invalida la revisión anterior. Los detalles operativos están en [WhatsApp y Cal.com](whatsapp-setup.md).
 
