@@ -7,15 +7,11 @@
     transition: none !important;
   }
   .service-dialog[open],
-  .service-dialog[open]::backdrop,
-  .media-track {
+  .service-dialog[open]::backdrop {
     animation: none !important;
   }
   .media-copy {
     display: none;
-  }
-  .media-viewport {
-    overflow-x: auto;
   }
   :root {
     scroll-behavior: auto;
@@ -33,6 +29,9 @@
   .tech-sheet,
   .tech-sheet *,
   .tech-confirm,
+  .team-edit,
+  .team-confirm,
+  .team-password,
   .tech-confirm > div,
   .scene *,
   .scene *::after {

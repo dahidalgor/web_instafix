@@ -7,16 +7,17 @@ apps/web/src/
 ├── main.tsx                  # Montaje React y selección del acceso administrativo
 ├── app/                      # Navegación y composición de páginas
 ├── components/layout/        # Elementos compartidos, como la marca
+├── components/ui/            # Skeleton, tarjeta desplegable y etiqueta de botón estable
 ├── features/
 │   ├── home/                 # Presentación inicial
-│   ├── about/                # Quiénes somos y slideshow servido por la API
 │   ├── catalog/              # Servicios, fichas y disponibilidad
 │   ├── account/              # Acceso, citas e historial del cliente
 │   ├── booking/              # Calendario Cal.com
 │   ├── contact/              # Página pública de contacto
 │   ├── analytics/            # Tiempo visible y visitas sin identidad
 │   ├── help/                 # Solicitud de asesoría
-│   ├── how-it-works/         # Pasos, ilustraciones y animación por scroll
+│   ├── home/                 # Inicio: presentación, «Nuestro trabajo» y secciones
+│   ├── how-it-works/         # «Cómo funciona» (sección de Inicio) y su animación por scroll
 │   ├── media/                # Carrusel, editor y transporte de archivos
 │   ├── admin/                # Un componente por pestaña administrativa
 │   └── warranty/             # Políticas públicas

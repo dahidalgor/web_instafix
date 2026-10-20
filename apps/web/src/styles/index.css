@@ -5,8 +5,8 @@
 @import './controls.css';
 @import './layout.css';
 @import './appointments.css';
+@import './ui.css';
 @import '../features/home/home.css';
-@import '../features/about/about.css';
 @import '../features/catalog/catalog.css';
 @import '../features/account/account.css';
 @import '../features/booking/booking.css';

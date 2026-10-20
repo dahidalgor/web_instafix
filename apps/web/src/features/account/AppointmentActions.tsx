@@ -1,5 +1,6 @@
 import type { Appointment } from '@instafix/contracts';
 import { useCallback, useState } from 'react';
+import { BusyLabel } from '../../components/ui/BusyLabel';
 import { api } from '../../lib/api';
 import { dayKey, formatDay, formatTime } from '../booking/booking-time';
 import { ScheduleStep, type BookingSlot, type FetchAvailability } from '../booking/ScheduleStep';
@@ -70,35 +71,52 @@ export function AppointmentActions({
               <strong>{formatTime(slot.start)}</strong>
             </p>
           )}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy || !slot}
-            onClick={() =>
-              run(`my/appointments/${appointment.id}/reschedule`, { start: slot?.start })
-            }
-          >
-            {busy ? 'Reprogramando…' : 'Confirmar nuevo horario'}
-          </button>{' '}
-          <button type="button" className="btn btn-ghost" onClick={() => setMode(null)}>
-            Volver
-          </button>
+          <div className="confirm-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => setMode(null)}
+            >
+              Volver
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || !slot}
+              aria-busy={busy}
+              onClick={() =>
+                run(`my/appointments/${appointment.id}/reschedule`, { start: slot?.start })
+              }
+            >
+              <BusyLabel busy={busy} label="Confirmar horario" busyLabel="Reprogramando…" />
+            </button>
+          </div>
         </div>
       )}
       {mode === 'cancel' && (
         <div className="security-panel">
           <p>¿Seguro que quieres cancelar esta cita? El horario quedará libre.</p>
-          <button
-            type="button"
-            className="btn btn-danger"
-            disabled={busy}
-            onClick={() => run(`my/appointments/${appointment.id}/cancel`)}
-          >
-            {busy ? 'Cancelando…' : 'Sí, cancelar'}
-          </button>{' '}
-          <button type="button" className="btn btn-ghost" onClick={() => setMode(null)}>
-            No, mantener
-          </button>
+          {/* Dos columnas fijas: el estado de carga no cambia tamaño ni posición de los botones. */}
+          <div className="confirm-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => setMode(null)}
+            >
+              Mantener cita
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={busy}
+              aria-busy={busy}
+              onClick={() => run(`my/appointments/${appointment.id}/cancel`)}
+            >
+              <BusyLabel busy={busy} label="Sí, cancelar" busyLabel="Cancelando…" />
+            </button>
+          </div>
         </div>
       )}
       {error && (
