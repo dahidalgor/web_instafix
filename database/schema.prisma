@@ -194,6 +194,8 @@ model Appointment {
   locationLatitude Float?
   locationLongitude Float?
   locationReceivedAt DateTime?
+  // Calle y sector calculados a partir de las coordenadas (geocodificación inversa). '' = sin resultado.
+  locationArea String?
   locationRequestedAt DateTime @default(now())
   automationIssue String?
   bookingIdentityIssue String?

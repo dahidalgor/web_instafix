@@ -168,6 +168,7 @@ export function AppointmentSheet({
 
             <div className="tech-block">
               <h3>Ubicación</h3>
+              {item.locationArea && <p className="tech-strong">{item.locationArea}</p>}
               <p>
                 {item.address ||
                   (item.locationReceivedAt

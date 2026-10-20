@@ -26,6 +26,8 @@ test(
       CAL_EVENT_TYPE_ID: '987654323',
       WHATSAPP_ENABLED: 'false',
       BIRD_WEBHOOK_SECRET: webhookSecret,
+      // El flujo real consultaría OpenStreetMap; aquí se prueba aparte con un fetch simulado.
+      REVERSE_GEOCODING_ENABLED: 'false',
     });
     const provider = new BirdWhatsAppProvider();
     const ids: string[] = [];
@@ -97,6 +99,23 @@ test(
     assert.equal(located.locationLatitude, -0.1801234);
     assert.equal(located.locationLongitude, -78.4805678);
     assert.equal(located.address, 'Edificio Torres');
+    // Calle y sector desde las coordenadas (OpenStreetMap simulado; sin red en las pruebas).
+    const { fillLocationArea } = await import('../whatsapp/location-area');
+    process.env.REVERSE_GEOCODING_ENABLED = 'true';
+    assert.equal(
+      await fillLocationArea(located.id, async () =>
+        Response.json({ address: { road: 'Av. Amazonas', suburb: 'La Carolina', city: 'Quito' } }),
+      ),
+      'Av. Amazonas · La Carolina, Quito',
+    );
+    assert.equal((await appointment(first)).locationArea, 'Av. Amazonas · La Carolina, Quito');
+    // Ya calculado: no vuelve a consultar.
+    assert.equal(
+      await fillLocationArea(located.id, async () => {
+        throw new Error('No debe consultar otra vez');
+      }),
+      'Av. Amazonas · La Carolina, Quito',
+    );
 
     // Coordenadas escritas a mano.
     const b = phone();

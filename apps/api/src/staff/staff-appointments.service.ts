@@ -51,6 +51,7 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     contactPhone: manage ? a.contactPhone : '',
     contactEmail: manage ? a.contactEmail : null,
     address: a.address,
+    locationArea: a.locationArea || null,
     locationLatitude: a.locationLatitude,
     locationLongitude: a.locationLongitude,
     locationReceivedAt: a.locationReceivedAt?.toISOString() ?? null,

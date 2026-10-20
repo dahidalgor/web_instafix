@@ -185,7 +185,11 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
                 details={
                   <div>
                     <dt>Ubicación</dt>
-                    <dd>{a.address || (a.locationReceivedAt ? 'Recibida' : 'Pendiente')}</dd>
+                    <dd>
+                      {a.locationArea ||
+                        a.address ||
+                        (a.locationReceivedAt ? 'Recibida' : 'Pendiente')}
+                    </dd>
                   </div>
                 }
               >

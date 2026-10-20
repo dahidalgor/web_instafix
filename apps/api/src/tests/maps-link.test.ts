@@ -81,3 +81,28 @@ test('ordinary texts and other links are not locations', async () => {
   ])
     assert.equal(await locationFromText(text, noNetwork), null, text);
 });
+
+test('reverse geocoding: street and sector from OpenStreetMap, identified and in Spanish', async () => {
+  const { formatArea, reverseGeocode } = await import('../whatsapp/location-area');
+  assert.equal(
+    formatArea({ road: 'Avenida Amazonas', suburb: 'Iñaquito', city: 'Quito' }),
+    'Avenida Amazonas · Iñaquito, Quito',
+  );
+  assert.equal(formatArea({ neighbourhood: 'La Floresta', city: 'Quito' }), 'La Floresta, Quito');
+  assert.equal(formatArea({ road: 'Calle 10', city: 'Guayaquil' }), 'Calle 10 · Guayaquil');
+  assert.equal(formatArea({}), null);
+  let requested: URL | null = null;
+  let agent = '';
+  const area = await reverseGeocode(-0.18, -78.48, async (input, init) => {
+    requested = new URL(String(input));
+    agent = new Headers(init?.headers).get('user-agent') || '';
+    return Response.json({
+      address: { road: 'Av. 6 de Diciembre', quarter: 'La Mariscal', city: 'Quito' },
+    });
+  });
+  assert.equal(area, 'Av. 6 de Diciembre · La Mariscal, Quito');
+  assert.equal(requested!.hostname, 'nominatim.openstreetmap.org');
+  assert.equal(requested!.searchParams.get('lat'), '-0.18');
+  assert.equal(requested!.searchParams.get('accept-language'), 'es');
+  assert.match(agent, /^Instafix\//);
+});

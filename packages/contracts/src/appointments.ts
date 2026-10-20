@@ -111,6 +111,8 @@ export type StaffAppointment = {
   contactPhone: string;
   contactEmail: string | null;
   address: string;
+  /** Calle y sector calculados desde la ubicación del cliente. */
+  locationArea: string | null;
   locationLatitude: number | null;
   locationLongitude: number | null;
   locationReceivedAt: string | null;
