@@ -21,9 +21,7 @@
   .brand-name b,
   em,
   .eyebrow,
-  .text-button,
-  .price span,
-  .about-jump {
+  .text-button {
     color: var(--accent);
   }
   .intro,
@@ -31,9 +29,6 @@
   .section-head > p,
   .card > p:not(.eyebrow),
   .booking p,
-  .about-intro-bottom p,
-  .about-purpose p,
-  .about-values p,
   .footer-policy,
   footer > span,
   footer small {
@@ -51,7 +46,6 @@
     border-color: var(--border);
   }
   .booking,
-  .about-cta,
   .admin-message {
     background: var(--surface-soft);
   }
@@ -78,16 +72,8 @@
   .card:hover {
     border-color: var(--accent);
   }
-  .card-icon,
-  .icon-1,
-  .icon-2 {
-    background: #302540;
-    color: #e9b1d4;
-  }
-  .price,
   footer,
-  .steps,
-  .about-values article {
+  .steps {
     border-color: var(--border);
   }
   .badge {
@@ -124,9 +110,6 @@
   }
   .receipt button {
     background: #8e205f;
-  }
-  .about-purpose .eyebrow {
-    color: var(--accent);
   }
   .calendar-notice {
     background: var(--surface-soft);

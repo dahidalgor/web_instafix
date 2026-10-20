@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 
@@ -55,6 +56,7 @@ export function AdminEmail() {
         Instafix envía sus correos por Brevo: verificación de correo, recuperación de contraseña y
         avisos de citas. Cal.com solo gestiona la agenda.
       </p>
+      {!status && !message && <ListSkeleton label="Cargando estado del correo…" count={3} />}
       {status && (
         <>
           <strong>

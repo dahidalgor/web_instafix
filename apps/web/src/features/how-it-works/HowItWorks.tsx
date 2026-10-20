@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { measureScene, paintScene } from './paint-scene';
 import { snapshots, stepAt, steps } from './story';
 import { StoryScene } from './StoryScene';
+import { useDockedCta } from './useDockedCta';
 
 const reducedQuery = '(prefers-reduced-motion: reduce)';
 
@@ -142,20 +143,22 @@ function ScrollStory() {
   );
 }
 
+/** Sección de Inicio: la historia termina en el único «Agendar visita» de la página. */
 export function HowItWorks() {
   const reduced = useReducedMotion();
+  const cta = useRef<HTMLAnchorElement>(null);
+  useDockedCta(cta);
   return (
-    <section className="how-page" aria-labelledby="how-title">
+    <section id="como" className="how-page" aria-labelledby="how-title">
       <div className="journey-heading">
         <p className="eyebrow">CÓMO FUNCIONA</p>
-        <h1 id="how-title">
+        <h2 id="how-title">
           Tú agendas.
           <br />
           <em>Nosotros vamos.</em>
-        </h1>
+        </h2>
         <p className="intro">
-          Servicio técnico a domicilio para tu consola o computadora. Sin cargar tu equipo hasta un
-          local.
+          Elige el día y la hora, cuéntanos qué le pasa a tu equipo y un técnico va a tu domicilio.
         </p>
       </div>
       {reduced ? (
@@ -164,7 +167,7 @@ export function HowItWorks() {
             <li key={step.title}>
               <StillScene progress={snapshots[index]} />
               <p className="eyebrow">PASO 0{index + 1}</p>
-              <h2>{step.title}</h2>
+              <h3>{step.title}</h3>
               <p>{step.text}</p>
             </li>
           ))}
@@ -178,7 +181,7 @@ export function HowItWorks() {
         </h2>
         <p>Elige el día y la hora. Del resto nos encargamos nosotros.</p>
         <div className="journey-actions">
-          <a className="button" href="#agenda">
+          <a className="button journey-cta" href="#agenda" ref={cta}>
             Agendar visita <span aria-hidden="true">↗</span>
           </a>
           <a className="text-button" href="#servicios">

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../../components/ui/Skeleton';
 import type { AccountUser, Offering, StaffAppointment } from '@instafix/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppointmentCard, visitDayKey } from '../../components/appointments/AppointmentCard';
@@ -150,7 +151,9 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
           </p>
         )}
         {loading ? (
-          <p role="status">Cargando tus citas…</p>
+          <div className="appt-list">
+            <ListSkeleton label="Cargando tus citas…" count={3} variant="appointment" />
+          </div>
         ) : error ? (
           <p role="alert">
             {error}{' '}

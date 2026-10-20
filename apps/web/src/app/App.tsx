@@ -3,31 +3,54 @@ import { Contact } from '../features/contact/Contact';
 import { usePageAnalytics } from '../features/analytics/usePageAnalytics';
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from '../components/layout/Brand';
-import { About } from '../features/about/About';
 import { AccountDashboard } from '../features/account/AccountDashboard';
 import { Calendar } from '../features/booking/Calendar';
 import { Services } from '../features/catalog/Services';
 import { HelpRequest } from '../features/help/HelpRequest';
 import { Home } from '../features/home/Home';
-import { HowItWorks } from '../features/how-it-works/HowItWorks';
 import { WarrantyPolicy } from '../features/warranty/WarrantyPolicy';
-import { resolvePage } from './navigation';
+import { homeSection, resolvePage } from './navigation';
+// «Cómo funciona» es una sección de Inicio; el resto son páginas.
 const links = [
   ['inicio', 'Inicio'],
   ['servicios', 'Servicios'],
-  ['quienes-somos', 'Quiénes somos'],
   ['como', 'Cómo funciona'],
   ['cuenta', 'Mi cuenta'],
   ['agenda', 'Agendar cita'],
 ] as const;
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Desplaza a la sección de Inicio indicada en el enlace, una vez renderizada. */
+function scrollToSection(hash: string) {
+  const section = homeSection(hash);
+  if (!section) return false;
+  requestAnimationFrame(() =>
+    document
+      .getElementById(section)
+      ?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }),
+  );
+  return true;
+}
 export function App() {
   const [page, setPage] = useState(() => resolvePage(window.location.hash));
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   usePageAnalytics(page);
   const main = useRef<HTMLElement>(null);
+  const [hash, setHash] = useState(() => window.location.hash);
+  const pageRef = useRef(page);
+  pageRef.current = page;
   useEffect(() => {
-    const navigate = () => setPage(resolvePage(window.location.hash));
+    const navigate = () => {
+      const next = resolvePage(window.location.hash);
+      setHash(window.location.hash);
+      // Misma página (p. ej. de #como a #inicio): no se vuelve a montar; solo se desplaza.
+      if (next === pageRef.current) {
+        if (!scrollToSection(window.location.hash))
+          window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
+        return;
+      }
+      setPage(next);
+    };
     window.addEventListener('hashchange', navigate);
     return () => window.removeEventListener('hashchange', navigate);
   }, []);
@@ -42,8 +65,7 @@ export function App() {
             : 'Asesoría')) + ' · InstaFix';
     window.scrollTo({ top: 0, behavior: 'instant' });
     main.current?.focus({ preventScroll: true });
-    if (window.location.hash === '#nuestro-trabajo')
-      document.getElementById('nuestro-trabajo')?.scrollIntoView();
+    scrollToSection(window.location.hash);
   }, [page]);
   return (
     <>
@@ -92,7 +114,15 @@ export function App() {
                 key={id}
                 href={'#' + id}
                 onClick={() => setMenuOpen(false)}
-                aria-current={page === id ? 'page' : undefined}
+                aria-current={
+                  id === 'como'
+                    ? hash === '#como'
+                      ? 'location'
+                      : undefined
+                    : page === id && !(id === 'inicio' && hash === '#como')
+                      ? 'page'
+                      : undefined
+                }
                 className={id === 'agenda' ? 'nav-cta' : undefined}
               >
                 {label}
@@ -105,12 +135,10 @@ export function App() {
         {page === 'contacto' && <Contact />}
         {page === 'inicio' && <Home />}
         {page === 'servicios' && <Services />}
-        {page === 'quienes-somos' && <About />}
         {page === 'agenda' && <Calendar />}
         {page === 'cuenta' && <AccountDashboard />}
         {page === 'garantia' && <WarrantyPolicy />}
         {page === 'solicitud' && <HelpRequest />}
-        {page === 'como' && <HowItWorks />}
       </main>
       <footer>
         <span>© 2026 InstaFix. Todos los derechos reservados.</span>

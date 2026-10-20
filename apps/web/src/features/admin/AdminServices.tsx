@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../../components/ui/Skeleton';
 import type { Offering } from '@instafix/contracts';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { money } from '../../lib/format';
@@ -16,6 +17,7 @@ type Props = {
   setUploading: (value: boolean) => void;
   save: (event: FormEvent) => Promise<void>;
   busy: boolean;
+  loading?: boolean;
 };
 export function AdminServices({
   items,
@@ -27,6 +29,7 @@ export function AdminServices({
   setUploading,
   save,
   busy,
+  loading,
 }: Props) {
   return (
     <div className="admin-layout">
@@ -39,6 +42,8 @@ export function AdminServices({
         >
           + Nuevo servicio
         </button>
+        {loading && <ListSkeleton label="Cargando catálogo…" count={4} />}
+        {!loading && !items.length && <p className="tech-empty">Aún no hay servicios.</p>}
         {items.map((item) => (
           <button
             className="admin-item admin-service-item"

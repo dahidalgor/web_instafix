@@ -56,7 +56,6 @@ h3 {
   margin: 22px 0 28px;
   overflow-wrap: break-word;
 }
-.page-content .about-intro h1,
 .page-content .contact-page h1 {
   font-family: Manrope, sans-serif;
   font-size: clamp(38px, 5vw, 64px);
@@ -75,7 +74,7 @@ h3 {
   margin: 22px 0 28px;
   overflow-wrap: break-word;
 }
-.page-content .how-page h1 {
+.page-content .how-page .journey-heading h2 {
   font-family: Manrope, sans-serif;
   font-size: clamp(38px, 5vw, 64px);
   line-height: 1.14;
@@ -114,14 +113,13 @@ h3 {
   .page-content .hero h1 {
     letter-spacing: -1.6px;
   }
-  .page-content .about-intro h1,
   .page-content .contact-page h1 {
     letter-spacing: -1.6px;
   }
   .page-content .section-head h2 {
     letter-spacing: -1.6px;
   }
-  .page-content .how-page h1 {
+  .page-content .how-page .journey-heading h2 {
     letter-spacing: -1.6px;
   }
   .page-content .account-panel h1 {

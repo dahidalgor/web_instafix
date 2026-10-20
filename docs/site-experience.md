@@ -33,7 +33,7 @@ Se requiere mantener el webhook Cal.com configurado según `whatsapp-setup.md`. 
 
 ## Presentaciones
 
-`Administración → Presentaciones` administra el slideshow de «Quiénes somos»: categoría, título, descripción, pie, archivo, posición y publicación. Cada diapositiva admite una foto o video; se pueden crear varias diapositivas. Las subidas reutilizan la conversión y almacenamiento existentes, local o R2. Menor posición aparece primero. Desmarcar «Publicada» retira la diapositiva sin eliminarla.
+`Administración → Presentaciones` administra el slideshow «Nuestro trabajo» de Inicio: categoría, título, descripción, pie, archivo, posición y publicación. Cada diapositiva admite una foto o video; se pueden crear varias diapositivas. Las subidas reutilizan la conversión y almacenamiento existentes, local o R2. Menor posición aparece primero. Desmarcar «Publicada» retira la diapositiva sin eliminarla.
 
 La migración conserva los tres textos originales como diapositivas publicadas. No inventa fotos de trabajos: hasta subirlas se mantienen las ilustraciones. La web consulta exclusivamente diapositivas publicadas; todos los cambios requieren una sesión ADMIN.
 

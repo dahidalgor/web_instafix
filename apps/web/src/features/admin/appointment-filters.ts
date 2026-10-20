@@ -53,7 +53,15 @@ export function matchesText(item: Filterable, query: string) {
 
 export function filterAppointments<T extends Filterable>(
   items: T[],
-  options: { status: StatusFilter; date: DateFilter; from?: string; to?: string; query?: string },
+  options: {
+    status: StatusFilter;
+    date: DateFilter;
+    from?: string;
+    to?: string;
+    query?: string;
+    /** Mantener el orden recibido (el backend ya ordenó por el criterio elegido). */
+    keepOrder?: boolean;
+  },
   now = Date.now(),
 ) {
   const today = visitDayKey(now);
@@ -77,6 +85,7 @@ export function filterAppointments<T extends Filterable>(
         return true;
     }
   });
+  if (options.keepOrder) return shown;
   // Lo pendiente de atender, de la más próxima a la más lejana; el historial, de la más reciente.
   const ascending =
     options.status === 'active' ||
