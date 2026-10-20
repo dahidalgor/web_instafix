@@ -62,6 +62,8 @@ Funcionamiento:
   - `customer_live`: el cliente escribió ahora. Solo esta fuente puede aportar la ubicación de una cita.
   - `business_app`: eco de lo que escribes desde el teléfono (Coexistence).
   - `history`: historial sincronizado. Nunca dispara automatizaciones.
+- Ubicación válida: la **ubicación nativa de WhatsApp**, un **enlace de Google Maps** (también `maps.app.goo.gl`, que se expande solo entre dominios de Google), Apple Maps o coordenadas escritas («-0.1807, -78.4678»). Un enlace sin coordenadas se guarda tal cual y el técnico ve «Abrir en Google Maps». Prueba un enlace con `whatsapp:diagnose --maps-link "<enlace>"`.
+- **Calle y sector**: con las coordenadas se consulta OpenStreetMap Nominatim (gratuito, sin clave, máx. 1 petición/s; solo se envían las coordenadas) y se guarda en `Appointment.locationArea`, visible en el panel técnico y en Administración. Si falla, se reintenta cada 5 minutos durante 2 días. Se desactiva con `REVERSE_GEOCODING_ENABLED=false`.
 - La ubicación se asigna a la cita respondida (`in_reply_to_message_id` = id del aviso) o a la única cita pendiente de ese teléfono; con varias, se marca para revisión.
 
 ## Errores normalizados

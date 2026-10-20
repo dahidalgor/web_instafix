@@ -307,6 +307,7 @@ export async function receiveCalWebhook(body: unknown) {
       calStatus,
       automationIssue: issue,
       locationLatitude: null,
+      locationArea: null,
       locationLongitude: null,
       locationReceivedAt: null,
       locationRequestedAt: occurredAt,

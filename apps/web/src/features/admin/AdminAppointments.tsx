@@ -29,6 +29,7 @@ type AdminAppointment = Appointment & {
   whatsappConsentAt?: string;
   automationIssue?: string;
   locationLatitude?: number;
+  locationArea?: string | null;
   locationLongitude?: number;
   assignedTechnician?: { id: string; name: string; active?: boolean } | null;
   services: PerformedService[];
@@ -405,6 +406,13 @@ export function AdminAppointments(_props: { services: Offering[] }) {
             El cliente autorizó recibir mensajes de esta cita por WhatsApp.
           </label>
           {list
+            .filter((item) => item.id === id && item.locationArea)
+            .map((item) => (
+              <p key={`area-${item.id}`} className="small">
+                Sector de la ubicación: <strong>{item.locationArea}</strong>
+              </p>
+            ))}
+          {list
             .filter(
               (item) =>
                 item.id === id && item.locationLatitude != null && item.locationLongitude != null,
@@ -591,6 +599,12 @@ export function AdminAppointments(_props: { services: Offering[] }) {
                       highlight={item.id === id ? 'Editando' : undefined}
                       details={
                         <>
+                          {item.locationArea && (
+                            <div>
+                              <dt>Ubicación</dt>
+                              <dd>{item.locationArea}</dd>
+                            </div>
+                          )}
                           {!!item.services?.length && (
                             <div>
                               <dt>Servicios realizados</dt>

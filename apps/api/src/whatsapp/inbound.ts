@@ -19,14 +19,17 @@ export async function receiveCustomerMessage(message: {
   };
 }) {
   const phone = normalizePhone(`+${message.from}`, 'EC');
-  if (!phone) return;
+  if (!phone) return null;
   const receivedAt = new Date(Number(message.timestamp) * 1000);
-  if (!Number.isFinite(receivedAt.getTime()) || receivedAt.getTime() > Date.now() + 300000) return;
-  await db.$transaction(async (tx) => {
+  if (!Number.isFinite(receivedAt.getTime()) || receivedAt.getTime() > Date.now() + 300000)
+    return null;
+  // Devuelve la cita que recibió la ubicación, para completar después su calle y sector.
+  return db.$transaction(async (tx): Promise<string | null> => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`inbound:${phone}`}))`;
     const eventId = `wa:${message.id}`;
-    if (await tx.integrationEvent.findUnique({ where: { id: eventId } })) return;
+    if (await tx.integrationEvent.findUnique({ where: { id: eventId } })) return null;
     let outcome = 'IGNORED';
+    let located: string | null = null;
     if (message.type === 'location' && message.location) {
       const candidates = await tx.appointment.findMany({
         where: {
@@ -78,6 +81,7 @@ export async function receiveCustomerMessage(message: {
                   : [message.location.name, message.location.url].filter(Boolean).join(' · ') ||
                     'Ubicación enviada por WhatsApp'),
               locationReceivedAt: receivedAt,
+              locationArea: null,
               automationIssue: null,
             },
           });
@@ -91,6 +95,7 @@ export async function receiveCustomerMessage(message: {
           });
           // La ubicación solo informa al técnico; la confirmación la hace el técnico.
           outcome = 'LOCATION_ACCEPTED';
+          located = updated.id;
         }
       } else if (candidates.length > 1) {
         // Nunca asignar una ubicación a una cita arbitraria si hay varias pendientes.
@@ -113,5 +118,6 @@ export async function receiveCustomerMessage(message: {
         outcome,
       },
     });
+    return located;
   });
 }

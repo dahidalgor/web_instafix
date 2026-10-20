@@ -179,7 +179,12 @@ export class AppointmentsController {
                 automationRevision: { increment: 1 },
                 locationRequestedAt: new Date(),
                 ...(data.status === 'PENDING_LOCATION'
-                  ? { locationReceivedAt: null, locationLatitude: null, locationLongitude: null }
+                  ? {
+                      locationReceivedAt: null,
+                      locationLatitude: null,
+                      locationLongitude: null,
+                      locationArea: null,
+                    }
                   : {}),
               }
             : {}),

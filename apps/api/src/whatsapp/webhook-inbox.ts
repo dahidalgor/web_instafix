@@ -11,6 +11,7 @@ import { logEvent, logWorkerFailure } from '../common/log-event';
 import { db } from '../database/client';
 import { receiveDelivery } from './delivery';
 import { receiveCustomerMessage } from './inbound';
+import { fillLocationArea, fillPendingLocationAreas } from './location-area';
 import { locationFromText } from './maps-link';
 import {
   WHATSAPP_PROVIDER,
@@ -77,7 +78,7 @@ async function handleEvent(event: WhatsAppWebhookEvent, provider: string) {
   // Ubicación nativa de WhatsApp, o un enlace de Google/Apple Maps o coordenadas en el texto.
   const location =
     event.location ?? (event.text ? await locationFromText(event.text) : null) ?? undefined;
-  await receiveCustomerMessage({
+  const located = await receiveCustomerMessage({
     id: event.providerMessageId,
     from: event.phone.slice(1),
     timestamp: String(Math.floor(event.occurredAt.getTime() / 1000)),
@@ -85,6 +86,8 @@ async function handleEvent(event: WhatsAppWebhookEvent, provider: string) {
     ...(event.inReplyTo ? { context: { id: event.inReplyTo } } : {}),
     ...(location ? { location } : {}),
   });
+  // Calle y sector para la cita (informativo; un fallo no afecta a la ubicación guardada).
+  if (located) await fillLocationArea(located);
 }
 
 async function recordMessage(event: WhatsAppMessageEvent, provider: string) {
@@ -200,6 +203,7 @@ export class WhatsAppWebhookWorker implements OnModuleInit, OnModuleDestroy {
         select: { id: true },
       });
       for (const row of rows) await processWhatsAppWebhook(row.id);
+      await fillPendingLocationAreas();
     } catch (error) {
       logWorkerFailure('whatsapp.webhook_inbox', error);
     } finally {
