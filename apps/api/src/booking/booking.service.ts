@@ -14,6 +14,8 @@ import { db } from '../database/client';
 import {
   cancelCalBooking,
   createCalBooking,
+  dayIn,
+  firstBookableDay,
   isCalSlotAvailable,
   rescheduleCalBooking,
   type CalBooking,
@@ -66,6 +68,15 @@ const localTime = (instant: Date) =>
 /** Error con código estable: la web distingue «horario ocupado» del resto de fallos. */
 const coded = (Type: new (body: object) => HttpException, code: string, message: string) =>
   new Type({ statusCode: new Type({}).getStatus(), code, message });
+/** Regla de Instafix: se agenda a partir de mañana (fecha de Ecuador). */
+function assertBookableDay(start: Date) {
+  if (dayIn(start) < firstBookableDay())
+    throw coded(
+      BadRequestException,
+      'BOOKING_TOO_SOON',
+      'Las citas se agendan a partir de mañana. Elige otro día.',
+    );
+}
 export const slotTaken = () =>
   coded(
     ConflictException,
@@ -169,6 +180,7 @@ export async function createBooking(
   const start = new Date(input.start);
   if (start.getTime() < Date.now() + 15 * 60000)
     throw new BadRequestException('Elige un horario futuro.');
+  assertBookableDay(start);
   const name = customer?.name || input.name?.trim();
   const phone = customer ? customer.phone : normalizePhone(input.phone || '', 'EC');
   const email = (customer ? customer.email : input.email?.trim().toLowerCase()) || null;
@@ -346,6 +358,7 @@ export async function rescheduleBooking(userId: string, id: string, startValue: 
   const start = new Date(startValue);
   if (start.getTime() < Date.now() + 15 * 60000)
     throw new BadRequestException('Elige un horario futuro.');
+  assertBookableDay(start);
   const recheck = await isCalSlotAvailable(start).catch(() => null);
   if (recheck && !recheck.available) throw slotTaken();
   let booking: CalBooking;
