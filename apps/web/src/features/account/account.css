@@ -475,3 +475,6 @@
 .security-actions .btn {
   white-space: nowrap;
 }
+.account-settings .account-heading > a {
+  white-space: nowrap;
+}

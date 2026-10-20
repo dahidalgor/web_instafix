@@ -1,6 +1,7 @@
 import type { AccountUser, BookingResult } from '@instafix/contracts';
 import { maskPhone, normalizePhone, type CountryCode } from '@instafix/contracts/src/phone';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { api, ApiError } from '../../lib/api';
 import { PhoneField } from '../account/PhoneField';
 import { dayKey, formatDay, formatTime } from './booking-time';
@@ -423,16 +424,15 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
             >
               ← Modificar
             </button>
-            <button
+            <BusyButton
               type="button"
               className="button"
-              disabled={busy}
+              busy={busy}
+              busyLabel="Agendando…"
               onClick={confirm}
-              aria-busy={busy}
             >
-              {busy ? 'Agendando…' : 'Agendar visita'}
-              <span>{busy ? '' : '→'}</span>
-            </button>
+              Agendar visita <span>→</span>
+            </BusyButton>
           </div>
         </section>
       )}

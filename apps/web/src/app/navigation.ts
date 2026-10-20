@@ -10,8 +10,9 @@ export function resolvePage(hash: string): Page {
   const value = hashPath(hash);
   // Antiguas páginas «Quiénes somos» y «Cómo funciona»: ahora son secciones de Inicio.
   if ((homeSections as readonly string[]).includes(value)) return 'inicio';
-  // Enlaces de correo: recuperación y verificación se gestionan dentro de Mi cuenta.
-  if (value === 'restablecer' || value === 'verificar-correo') return 'cuenta';
+  // Enlaces de correo: la recuperación se gestiona en Mi cuenta; la verificación, en Ajustes.
+  if (value === 'restablecer') return 'cuenta';
+  if (value === 'verificar-correo') return 'ajustes';
   return pages.includes(value as Page) ? (value as Page) : 'inicio';
 }
 /** Sección de Inicio a la que debe desplazarse un enlace (#como, #nuestro-trabajo…). */

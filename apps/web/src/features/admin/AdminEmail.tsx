@@ -1,3 +1,4 @@
+import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
@@ -24,7 +25,9 @@ type MailStatus = {
 export function AdminEmail() {
   const [status, setStatus] = useState<MailStatus | null>(null);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Ruta de la acción en curso: solo su botón muestra la espera.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const busy = busyAction !== null;
   const [to, setTo] = useState('');
   const load = () =>
     api<MailStatus>('admin/email/status')
@@ -34,7 +37,7 @@ export function AdminEmail() {
     void load();
   }, []);
   async function run(path: string, body?: unknown) {
-    setBusy(true);
+    setBusyAction(path);
     setMessage('');
     try {
       const result = await api<{ message: string }>(path, {
@@ -46,7 +49,7 @@ export function AdminEmail() {
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo completar');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   return (
@@ -77,13 +80,15 @@ export function AdminEmail() {
               : 'DESACTIVADOS con APPOINTMENT_EMAILS_ENABLED=false: ningún cliente recibe correos de sus citas. Quita esa línea o ponla en true en el servidor.'}
             .
           </p>
-          <button
+          <BusyButton
             className="btn btn-secondary"
             disabled={busy || !status.configured}
+            busy={busyAction === 'admin/email/verify'}
+            busyLabel="Comprobando…"
             onClick={() => run('admin/email/verify')}
           >
-            {busy ? 'Comprobando…' : 'Comprobar conexión sin enviar correo'}
-          </button>
+            Comprobar conexión sin enviar correo
+          </BusyButton>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -94,9 +99,15 @@ export function AdminEmail() {
               Enviar correo de prueba a un buzón propio
               <input type="email" required value={to} onChange={(e) => setTo(e.target.value)} />
             </label>
-            <button className="btn btn-primary" disabled={busy || !status.configured}>
+            <BusyButton
+              type="submit"
+              className="btn btn-primary"
+              disabled={busy || !status.configured}
+              busy={busyAction === 'admin/email/test'}
+              busyLabel="Enviando…"
+            >
               Enviar prueba real
-            </button>
+            </BusyButton>
           </form>
           <p className="small">
             «Aceptado» significa que Brevo recibió el mensaje. La llegada a la bandeja se comprueba

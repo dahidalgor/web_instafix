@@ -1,6 +1,6 @@
 import type { StaffMember } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
-import { BusyLabel } from '../../components/ui/BusyLabel';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { api, ApiError } from '../../lib/api';
@@ -16,7 +16,9 @@ export function AdminTeam() {
   const [draft, setDraft] = useState({ ...empty });
   const [createOpen, setCreateOpen] = useState(false);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Acción en curso (p. ej. «create», «active:<id>»): solo su botón muestra la espera.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const busy = busyAction !== null;
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
@@ -40,8 +42,8 @@ export function AdminTeam() {
   useEffect(() => {
     void load();
   }, []);
-  async function run(action: () => Promise<unknown>, done: string) {
-    setBusy(true);
+  async function run(key: string, action: () => Promise<unknown>, done: string) {
+    setBusyAction(key);
     setMessage('');
     try {
       await action();
@@ -52,12 +54,13 @@ export function AdminTeam() {
       setMessage(e instanceof Error ? e.message : 'No se pudo guardar');
       return false;
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   async function create(event: FormEvent) {
     event.preventDefault();
     const ok = await run(
+      'create',
       () => api('admin/staff', { method: 'POST', body: JSON.stringify(draft) }),
       'Técnico creado. Ya puede iniciar sesión en el panel con su teléfono y contraseña.',
     );
@@ -86,13 +89,14 @@ export function AdminTeam() {
   async function saveProfile(event: FormEvent, id: string) {
     event.preventDefault();
     const ok = await run(
+      `profile:${id}`,
       () => api(`admin/staff/${id}`, { method: 'PATCH', body: JSON.stringify(profile) }),
       'Datos del técnico actualizados.',
     );
     if (ok) setEditing(null);
   }
   async function setActive(m: StaffMember, active: boolean, confirmed = false) {
-    setBusy(true);
+    setBusyAction(`${confirmed ? 'confirm' : 'active'}:${m.id}`);
     setMessage('');
     try {
       await api(`admin/staff/${m.id}`, {
@@ -107,7 +111,7 @@ export function AdminTeam() {
         setConfirmDeactivate({ id: m.id, text: e.message });
       else setMessage(e instanceof Error ? e.message : 'No se pudo guardar');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   const set = (key: keyof typeof empty) => (e: { target: { value: string } }) =>
@@ -184,17 +188,28 @@ export function AdminTeam() {
           <p className="small">
             Compártela con el técnico por un canal privado; puede cambiarla después.
           </p>
-          <button className="btn btn-primary btn-block" disabled={busy}>
-            <BusyLabel busy={busy} label="Crear técnico" busyLabel="Guardando…" />
-          </button>
+          <BusyButton
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={busy}
+            busy={busyAction === 'create'}
+            busyLabel="Guardando…"
+          >
+            Crear técnico
+          </BusyButton>
         </form>
       </Disclosure>
       {members === null && loadError && (
         <div className="admin-message" role="alert">
           {loadError}{' '}
-          <button type="button" className="btn btn-secondary btn-small" onClick={() => void load()}>
+          <BusyButton
+            type="button"
+            className="btn btn-secondary btn-small"
+            busyLabel="Reintentando…"
+            onClick={() => load()}
+          >
             Reintentar
-          </button>
+          </BusyButton>
         </div>
       )}
       {members === null && !loadError && <ListSkeleton label="Cargando equipo…" count={3} />}
@@ -237,14 +252,16 @@ export function AdminTeam() {
                 >
                   Cambiar contraseña
                 </button>
-                <button
+                <BusyButton
                   type="button"
                   className={`btn btn-small ${m.active ? 'btn-danger' : 'btn-secondary'}`}
                   disabled={busy}
+                  busy={busyAction === `active:${m.id}`}
+                  busyLabel={m.active ? 'Desactivando…' : 'Activando…'}
                   onClick={() => void setActive(m, !m.active)}
                 >
                   {m.active ? 'Desactivar' : 'Activar'}
-                </button>
+                </BusyButton>
               </div>
             )}
             {confirmDeactivate?.id === m.id && (
@@ -258,18 +275,16 @@ export function AdminTeam() {
                   >
                     Mantener activo
                   </button>
-                  <button
+                  <BusyButton
                     type="button"
                     className="btn btn-danger"
                     disabled={busy}
+                    busy={busyAction === `confirm:${m.id}`}
+                    busyLabel="Desactivando…"
                     onClick={() => void setActive(m, false, true)}
                   >
-                    <BusyLabel
-                      busy={busy}
-                      label="Desactivar igualmente"
-                      busyLabel="Desactivando…"
-                    />
-                  </button>
+                    Desactivar igualmente
+                  </BusyButton>
                 </div>
               </div>
             )}
@@ -325,9 +340,15 @@ export function AdminTeam() {
                   <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)}>
                     Cancelar
                   </button>
-                  <button className="btn btn-primary" disabled={busy}>
-                    <BusyLabel busy={busy} label="Guardar cambios" busyLabel="Guardando…" />
-                  </button>
+                  <BusyButton
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    busy={busyAction === `profile:${m.id}`}
+                    busyLabel="Guardando…"
+                  >
+                    Guardar cambios
+                  </BusyButton>
                 </div>
               </form>
             )}
@@ -337,6 +358,7 @@ export function AdminTeam() {
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const ok = await run(
+                    `password:${m.id}`,
                     () =>
                       api(`admin/staff/${m.id}`, {
                         method: 'PATCH',
@@ -359,9 +381,15 @@ export function AdminTeam() {
                     onChange={(e) => setNewPassword(e.target.value)}
                   />
                 </label>
-                <button className="btn btn-primary" disabled={busy}>
+                <BusyButton
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={busy}
+                  busy={busyAction === `password:${m.id}`}
+                  busyLabel="Guardando…"
+                >
                   Guardar
-                </button>
+                </BusyButton>
               </form>
             )}
           </article>

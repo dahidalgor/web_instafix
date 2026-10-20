@@ -1,3 +1,4 @@
+import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
@@ -59,7 +60,9 @@ const statuses: Record<string, string> = {
 export function AdminWhatsApp() {
   const [data, setData] = useState<Overview | null>(null);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Acción en curso («complete», «refresh» o el id del envío): solo su botón muestra la espera.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const busy = busyAction !== null;
   const connection = useRef<{
     popup: Window;
     state: string;
@@ -139,7 +142,7 @@ export function AdminWhatsApp() {
         );
         return;
       }
-      setBusy(true);
+      setBusyAction('complete');
       api('admin/whatsapp/connect/complete', {
         method: 'POST',
         body: JSON.stringify({
@@ -156,7 +159,7 @@ export function AdminWhatsApp() {
           void report('COMPLETE_FAILED', error.message);
           setMessage(error.message);
         })
-        .finally(() => setBusy(false));
+        .finally(() => setBusyAction(null));
     }
     window.addEventListener('message', onMessage);
     const timer = window.setInterval(() => {
@@ -227,7 +230,7 @@ export function AdminWhatsApp() {
     await startSession(popup);
   }
   async function refresh(id?: string) {
-    setBusy(true);
+    setBusyAction(id ?? 'refresh');
     setMessage('');
     try {
       if (id) await api(`admin/whatsapp/${id}/retry`, { method: 'POST' });
@@ -235,33 +238,36 @@ export function AdminWhatsApp() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No se pudo actualizar');
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   return (
     <section className="whatsapp-admin">
       <h2>WhatsApp y citas</h2>
       <p>WasapFlow Bridge · Coexistence. Tu número seguirá funcionando en WhatsApp Business App.</p>
-      <button
+      <BusyButton
         type="button"
         className="btn btn-primary"
-        aria-busy={connecting}
-        disabled={busy || connecting || data?.whatsapp.connected}
+        disabled={busy || data?.whatsapp.connected}
+        busy={connecting || busyAction === 'complete'}
+        busyLabel="Conectando…"
         onClick={connect}
       >
-        {connecting
-          ? 'Conectando…'
-          : data?.whatsapp.connected
-            ? 'Conectado con Coexistence'
-            : 'Conectar WhatsApp Business'}
-      </button>
+        {data?.whatsapp.connected ? 'Conectado con Coexistence' : 'Conectar WhatsApp Business'}
+      </BusyButton>
       <p>
         Recordatorios a las 08:00, hora de Ecuador continental. Los mensajes se envían únicamente
         con autorización del cliente.
       </p>
-      <button className="btn btn-secondary btn-small" disabled={busy} onClick={() => refresh()}>
+      <BusyButton
+        className="btn btn-secondary btn-small"
+        disabled={busy}
+        busy={busyAction === 'refresh'}
+        busyLabel="Actualizando…"
+        onClick={() => refresh()}
+      >
         Actualizar estado
-      </button>
+      </BusyButton>
       {message && <p role="status">{message}</p>}
       {!data && !message && <ListSkeleton label="Cargando WhatsApp…" count={3} />}
       {data && (
@@ -334,13 +340,15 @@ export function AdminWhatsApp() {
                 )}
                 {(job.status === 'FAILED' || job.deliveryStatus === 'failed') &&
                   new Date(job.expiresAt) > new Date() && (
-                    <button
+                    <BusyButton
                       className="btn btn-secondary btn-small"
                       disabled={busy}
+                      busy={busyAction === job.id}
+                      busyLabel="Reintentando…"
                       onClick={() => refresh(job.id)}
                     >
                       Reintentar envío fallido
-                    </button>
+                    </BusyButton>
                   )}
               </article>
             ))}

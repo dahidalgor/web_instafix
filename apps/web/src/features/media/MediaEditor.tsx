@@ -1,5 +1,6 @@
 import { MAX_VIDEOS, mediaProblem, type Offering } from '@instafix/contracts';
 import { useState } from 'react';
+import { BusyLabel } from '../../components/ui/BusyLabel';
 import { uploadMedia } from './upload-media';
 type Media = Offering['media'];
 export function MediaEditor({
@@ -80,8 +81,8 @@ export function MediaEditor({
         Hasta {maxFiles} archivos. Fotos: 20 MB. Videos: 100 MB y 60 segundos; se publican sin
         sonido.{maxFiles > 1 && ` Máximo ${MAX_VIDEOS} videos, separados por al menos una imagen.`}
       </p>
-      <label className="media-upload">
-        Subir desde mi dispositivo
+      <label className="media-upload" aria-busy={busy || undefined}>
+        <BusyLabel busy={busy} label="Subir desde mi dispositivo" busyLabel="Subiendo archivos…" />
         <input
           type="file"
           multiple={maxFiles > 1}

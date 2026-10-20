@@ -195,7 +195,11 @@
 .busy-label[data-busy] .busy-label-busy {
   visibility: visible;
 }
+button[aria-busy='true'] {
+  cursor: progress;
+}
 .busy-spinner {
+  flex: none;
   width: 14px;
   height: 14px;
   border: 2px solid currentColor;
@@ -237,10 +241,9 @@
   .disclosure-chevron {
     transition: none;
   }
+  /* El indicador de espera es información, no decoración: gira, pero más despacio. */
   .busy-spinner {
-    animation: none;
-    border-right-color: currentColor;
-    opacity: 0.6;
+    animation-duration: 1600ms;
   }
 }
 
@@ -267,4 +270,31 @@
 .admin-skeleton-tabs {
   flex-wrap: wrap;
   margin: 27px 0;
+}
+
+/* Indicador deslizante de la opción activa (navegación principal y filtros). */
+.has-indicator {
+  position: relative;
+  isolation: isolate;
+}
+.sliding-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 320ms cubic-bezier(0.3, 0.9, 0.3, 1),
+    width 320ms cubic-bezier(0.3, 0.9, 0.3, 1),
+    height 320ms cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 160ms;
+}
+.sliding-indicator.is-instant {
+  transition: opacity 160ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sliding-indicator {
+    transition: none;
+  }
 }

@@ -1,3 +1,4 @@
+import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import type { AccountUser, Offering, StaffAppointment } from '@instafix/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -157,9 +158,9 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
         ) : error ? (
           <p role="alert">
             {error}{' '}
-            <button className="btn btn-ghost btn-small" onClick={() => void load()}>
+            <BusyButton type="button" className="btn btn-ghost btn-small" onClick={() => load()}>
               Reintentar
-            </button>
+            </BusyButton>
           </p>
         ) : !list.length ? (
           <p className="tech-empty">{empty[tab]}</p>
@@ -189,14 +190,15 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
                 }
               >
                 {tab === 'pending' && (
-                  <button
+                  <BusyButton
                     type="button"
                     className="btn btn-primary"
-                    disabled={busyId === a.id}
+                    busy={busyId === a.id}
+                    busyLabel="Confirmando…"
                     onClick={() => void confirm(a.id)}
                   >
-                    {busyId === a.id ? 'Confirmando…' : 'Confirmar cita'}
-                  </button>
+                    Confirmar cita
+                  </BusyButton>
                 )}
                 <button type="button" className="btn btn-secondary" onClick={() => setOpenId(a.id)}>
                   Ver cita

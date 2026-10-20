@@ -1,6 +1,7 @@
 import type { AccountUser, VerificationTicket } from '@instafix/contracts';
 import { type CountryCode, normalizePhone } from '@instafix/contracts/src/phone';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 import { api, ApiError } from '../../lib/api';
 import { PhoneField } from './PhoneField';
 import { PhoneVerification } from './PhoneVerification';
@@ -365,9 +366,15 @@ export function Login({
                 </p>
               )}
               <div className="auth-actions">
-                <button className="button" disabled={busy || wait > 0}>
-                  {busy ? 'Procesando…' : wait > 0 ? `Espera ${wait} s` : labels[mode]}
-                </button>
+                <BusyButton
+                  type="submit"
+                  className="button"
+                  disabled={wait > 0}
+                  busy={busy}
+                  busyLabel="Procesando…"
+                >
+                  {wait > 0 ? `Espera ${wait} s` : labels[mode]}
+                </BusyButton>
               </div>
             </form>
           </>
