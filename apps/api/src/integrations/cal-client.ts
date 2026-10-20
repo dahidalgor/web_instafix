@@ -104,11 +104,17 @@ export async function getCalSlots(start: string, end: string, timeZone: string) 
     .record(z.array(z.object({ start: z.string().datetime({ offset: true }) }).passthrough()))
     .safeParse(body?.data);
   if (!data.success) throw new ProviderError('Cal.com devolvió horarios no reconocibles', 'RETRY');
+  const first = firstBookableDay(new Date(), timeZone);
   return Object.fromEntries(
-    Object.entries(data.data).map(([day, slots]) => [
-      day,
-      slots.map((slot) => new Date(slot.start).toISOString()),
-    ]),
+    Object.entries(data.data)
+      .map(([day, slots]): [string, string[]] => [
+        day,
+        slots
+          .map((slot) => new Date(slot.start))
+          .filter((slot) => dayIn(slot, timeZone) >= first)
+          .map((slot) => slot.toISOString()),
+      ])
+      .filter(([, slots]) => slots.length),
   );
 }
 
@@ -195,8 +201,20 @@ export async function confirmCalBooking(uid: string): Promise<void> {
   }
 }
 
-const dayIn = (instant: Date, timeZone: string) =>
+export const dayIn = (instant: Date, timeZone = 'America/Guayaquil') =>
   new Intl.DateTimeFormat('en-CA', { timeZone }).format(instant);
+
+/**
+ * Primer día reservable (fecha de Ecuador). Por defecto mañana: no se agenda para hoy, pero el
+ * primer horario de mañana sí, aunque falten menos de 24 h. BOOKING_MIN_DAYS_AHEAD=0 permite
+ * reservar hoy. Cal.com debe tener un aviso mínimo corto para ofrecer esos horarios.
+ */
+export function firstBookableDay(now = new Date(), timeZone = 'America/Guayaquil') {
+  const value = Number(process.env.BOOKING_MIN_DAYS_AHEAD ?? 1);
+  const days = Number.isInteger(value) && value >= 0 && value <= 30 ? value : 1;
+  // Ecuador no tiene horario de verano: un día son siempre 24 h.
+  return dayIn(new Date(now.getTime() + days * 86400000), timeZone);
+}
 
 /**
  * Revalida un horario contra la disponibilidad actual de Cal.com (sin caché). Compara

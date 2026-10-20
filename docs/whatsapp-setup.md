@@ -93,6 +93,7 @@ En el evento `instafix/agenda-tu-cita-con-instafix`:
 
 1. Activa **requiere confirmación**: la reserva queda pendiente hasta que un técnico la confirma en Instafix ([Técnicos](technicians.md)).
 2. Zona operativa `America/Guayaquil`.
+   - **Aviso mínimo** (Limits → Minimum notice): pon un valor corto, por ejemplo **1 hora**. Instafix aplica su propia regla: se agenda **desde mañana** (fecha de Ecuador), incluido el primer horario de mañana aunque falten menos de 24 h (`BOOKING_MIN_DAYS_AHEAD`, por defecto 1). Con 24 h en Cal.com, esos horarios no aparecen.
 3. Teléfono del asistente (`attendeePhoneNumber`) obligatorio, con código internacional.
 4. Campo de texto obligatorio con identificador **`servicio`**.
 5. Casilla obligatoria **`whatsappConsent`**: «Autorizo a InstaFix a enviarme por WhatsApp la confirmación y los recordatorios de esta cita».
