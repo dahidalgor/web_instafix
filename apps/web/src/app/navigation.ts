@@ -1,10 +1,21 @@
-import { publicPages } from '@instafix/contracts/src/site';
+import { homeSections, publicPages } from '@instafix/contracts/src/site';
 export const pages = publicPages;
 export type Page = (typeof pages)[number];
+export type HomeSection = (typeof homeSections)[number];
+
+function hashPath(hash: string) {
+  return hash.replace(/^#/, '').split('?')[0];
+}
 export function resolvePage(hash: string): Page {
-  const value = hash.replace(/^#/, '').split('?')[0];
-  if (value === 'nuestro-trabajo') return 'quienes-somos';
+  const value = hashPath(hash);
+  // Antiguas páginas «Quiénes somos» y «Cómo funciona»: ahora son secciones de Inicio.
+  if ((homeSections as readonly string[]).includes(value)) return 'inicio';
   // Enlaces de correo: recuperación y verificación se gestionan dentro de Mi cuenta.
   if (value === 'restablecer' || value === 'verificar-correo') return 'cuenta';
   return pages.includes(value as Page) ? (value as Page) : 'inicio';
+}
+/** Sección de Inicio a la que debe desplazarse un enlace (#como, #nuestro-trabajo…). */
+export function homeSection(hash: string): HomeSection | null {
+  const value = hashPath(hash);
+  return (homeSections as readonly string[]).includes(value) ? (value as HomeSection) : null;
 }

@@ -18,7 +18,7 @@ Administración → Servicios permite subir fotos y videos desde el dispositivo,
 
 ## Navegación y cuenta (4 de octubre de 2026)
 
-La web tiene páginas independientes con navegación por hash: Inicio, Servicios, Quiénes somos, Cómo funciona, Mi cuenta y Agenda. Los enlaces directos y Atrás/Adelante comparten el mismo estado de selección. Los colores siguen `prefers-color-scheme` del sistema; las animaciones y el carrusel respetan `prefers-reduced-motion`.
+La web tiene páginas con navegación por hash: Inicio, Servicios, Mi cuenta y Agenda. Inicio reúne la presentación (antes «Quiénes somos»), «Nuestro trabajo» y «Cómo funciona»; los enlaces antiguos `#quienes-somos`, `#nuestro-trabajo` y `#como` abren Inicio en esa sección. Los enlaces directos y Atrás/Adelante comparten el mismo estado de selección. Los colores siguen `prefers-color-scheme` del sistema; las animaciones y el carrusel respetan `prefers-reduced-motion`.
 
 Las fichas abren un diálogo animado con galería continua de imágenes y videos HTTPS configurados en cada servicio. Los videos comienzan sin sonido; el movimiento puede pausarse y se detiene al interactuar. Sin medios cargados, no se inventan fotos ni aparece un carrusel vacío.
 

@@ -1,9 +1,11 @@
 import {
-  appointmentLabels,
-  type AccountUser,
-  type Appointment,
-  type CompletedJob,
-} from '@instafix/contracts';
+  AppointmentCardSkeleton,
+  ListSkeleton,
+  Skeleton,
+  SkeletonGroup,
+  StatTilesSkeleton,
+} from '../../components/ui/Skeleton';
+import { type AccountUser, type Appointment, type CompletedJob } from '@instafix/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
@@ -23,7 +25,8 @@ export function AccountDashboard() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [sessionError, setSessionError] = useState('');
-  const [loading, setLoading] = useState(false);
+  // true desde el inicio: antes de la primera respuesta no se muestra el estado vacío.
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [jobs, setJobs] = useState<CompletedJob[]>([]);
@@ -135,9 +138,20 @@ export function AccountDashboard() {
   }
   if (sessionLoading)
     return (
-      <p className="account-panel" role="status">
-        Cargando tu cuenta…
-      </p>
+      <section className="account-panel wide">
+        <SkeletonGroup label="Cargando tu cuenta…">
+          <Skeleton width={150} height={14} />
+          <Skeleton width="min(420px, 80%)" height={44} className="skeleton-heading" />
+          <Skeleton width={140} height={14} />
+        </SkeletonGroup>
+        <div className="account-summary">
+          <StatTilesSkeleton />
+        </div>
+        <div className="appt-list">
+          <AppointmentCardSkeleton />
+          <AppointmentCardSkeleton />
+        </div>
+      </section>
     );
   if (sessionError)
     return (
@@ -208,18 +222,24 @@ export function AccountDashboard() {
         </p>
       )}
       <div className="account-summary">
-        <div>
-          <strong>{loading || error ? '—' : upcoming.length}</strong>
-          <span>Citas próximas</span>
-        </div>
-        <div>
-          <strong>{loading || error ? '—' : servicesDone}</strong>
-          <span>Servicios realizados</span>
-        </div>
-        <div>
-          <strong>{loading || error ? '—' : activeWarranties}</strong>
-          <span>Garantías vigentes</span>
-        </div>
+        {loading ? (
+          <StatTilesSkeleton />
+        ) : (
+          <>
+            <div>
+              <strong>{error ? '—' : upcoming.length}</strong>
+              <span>Citas próximas</span>
+            </div>
+            <div>
+              <strong>{error ? '—' : servicesDone}</strong>
+              <span>Servicios realizados</span>
+            </div>
+            <div>
+              <strong>{error ? '—' : activeWarranties}</strong>
+              <span>Garantías vigentes</span>
+            </div>
+          </>
+        )}
       </div>
       <div className="account-tabs" role="group" aria-label="Contenido de mi cuenta">
         <button
@@ -248,7 +268,13 @@ export function AccountDashboard() {
         {section === 'security' ? (
           <AccountSecurity user={user} onUser={setUser} />
         ) : loading ? (
-          <p role="status">Cargando tus datos…</p>
+          section === 'appointments' ? (
+            <div className="appt-list">
+              <ListSkeleton label="Cargando tus citas…" count={2} variant="appointment" />
+            </div>
+          ) : (
+            <ListSkeleton label="Cargando tus servicios…" count={2} />
+          )
         ) : error ? (
           <p role="alert">
             {error} <button onClick={() => void load()}>Reintentar</button>
