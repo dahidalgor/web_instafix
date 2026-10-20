@@ -94,7 +94,6 @@ export function Services() {
               <h3>{item.title}</h3>
               <div className="price">
                 <strong>{money(item.priceMinor)}</strong>
-                <span>Ver servicio ↗</span>
               </div>
             </button>
           ))}
@@ -122,19 +121,6 @@ export function Services() {
             <span className={'badge ' + selected.availability}>
               {availabilityLabels[selected.availability]}
             </span>
-            {selected.cover && (
-              <img
-                className="service-detail-cover"
-                src={selected.cover.url}
-                srcSet={
-                  selected.cover.thumbnail
-                    ? `${selected.cover.thumbnail} 640w, ${selected.cover.url} 1600w`
-                    : undefined
-                }
-                sizes="(max-width: 700px) 90vw, 640px"
-                alt={selected.cover.alt}
-              />
-            )}
             <MediaCarousel media={selected.media} />
             <p className="service-description">{selected.description}</p>
             <strong className="service-price">{money(selected.priceMinor)}</strong>

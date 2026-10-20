@@ -336,9 +336,6 @@ export function AccountDashboard() {
                     </p>
                   )}
                   <AppointmentActions appointment={item} onChanged={() => void load()} />
-                  <a className="btn btn-ghost" href="#solicitud">
-                    Consultar sobre mi cita
-                  </a>
                 </AppointmentCard>
               ))}
             </div>
