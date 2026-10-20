@@ -16,7 +16,6 @@ import { homeSection, resolvePage } from './navigation';
 const links = [
   ['inicio', 'Inicio'],
   ['servicios', 'Servicios'],
-  ['como', 'Cómo funciona'],
   ['cuenta', 'Mi cuenta'],
   ['agenda', 'Agendar cita'],
 ] as const;
