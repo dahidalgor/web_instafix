@@ -77,3 +77,16 @@ export function serviceCover(offering: Pick<Offering, 'cover' | 'media'>) {
   const image = offering.media.find((item) => item.type === 'image');
   return image ? { url: image.url, thumbnail: image.thumbnail, alt: image.alt } : null;
 }
+
+/** Nivel superior del catálogo: categoría → equipo → servicio. */
+const catalogName = z.string().trim().min(2, 'Mínimo 2 caracteres').max(80, 'Máximo 80 caracteres');
+export const categoryInputSchema = z
+  .object({ name: catalogName, position: z.number().int().min(0).max(1000).optional() })
+  .strict();
+export const categoryUpdateSchema = categoryInputSchema.partial().strict();
+export const equipmentInputSchema = z
+  .object({ name: catalogName, categoryId: z.string().min(1, 'Elige una categoría') })
+  .strict();
+export const equipmentUpdateSchema = equipmentInputSchema.partial().strict();
+export type ServiceCategory = { id: string; name: string; position: number };
+export type CatalogEquipment = { id: string; name: string; categoryId: string; category: string };

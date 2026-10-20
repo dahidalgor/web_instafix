@@ -246,3 +246,58 @@ body.service-dialog-open {
     padding: 22px;
   }
 }
+
+/* Categoría → equipo: dos niveles de filtro y un grupo de tarjetas por categoría. */
+.category-filters button {
+  font-weight: 700;
+}
+.device-filters {
+  margin-top: -6px;
+}
+.device-filters button {
+  padding: 6px 14px;
+  font-size: 14px;
+}
+.service-group + .service-group {
+  margin-top: 36px;
+}
+.service-group-title {
+  margin: 0 0 14px;
+  font-size: 20px;
+  letter-spacing: -0.2px;
+}
+/* La opción activa la marca el indicador deslizante (ver ui.css). */
+.has-indicator.filters .active {
+  background: transparent;
+  border-color: transparent;
+  animation: none;
+}
+.has-indicator.filters .sliding-indicator {
+  border-radius: 24px;
+  background: #29203f;
+}
+.has-indicator.filters button {
+  transition:
+    color 220ms,
+    border-color 220ms,
+    transform 160ms;
+}
+.service-results .service-group-title {
+  animation: service-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.service-results .service-card {
+  animation: service-in 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@keyframes service-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .service-results .service-group-title,
+  .service-results .service-card {
+    animation: none;
+  }
+}

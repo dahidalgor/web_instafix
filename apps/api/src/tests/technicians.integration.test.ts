@@ -348,7 +348,10 @@ test(
       `svc-${randomUUID()}@example.com`,
     );
     const equipment = await db.equipment.create({
-      data: { name: `PS5-${randomUUID()}`, category: 'Consolas' },
+      data: {
+        name: `PS5-${randomUUID()}`,
+        category: { connectOrCreate: { where: { name: 'Pruebas' }, create: { name: 'Pruebas' } } },
+      },
     });
     const maintenance = await db.offering.create({
       data: {

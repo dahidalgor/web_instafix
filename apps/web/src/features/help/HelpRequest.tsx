@@ -6,6 +6,7 @@ import {
   type CountryCode,
 } from '@instafix/contracts/src/phone';
 import { useState, type FormEvent } from 'react';
+import { BusyButton } from '../../components/ui/BusyButton';
 const names = new Intl.DisplayNames(['es'], { type: 'region' });
 const countries = getCountries().sort((a, b) =>
   (names.of(a) ?? a).localeCompare(names.of(b) ?? b, 'es'),
@@ -156,9 +157,9 @@ export function HelpRequest() {
               {error}
             </p>
           )}
-          <button className="button" disabled={busy}>
-            {busy ? 'Enviando consulta…' : 'Solicitar asesoría'} <span>↗</span>
-          </button>
+          <BusyButton type="submit" className="button" busy={busy} busyLabel="Enviando consulta…">
+            Solicitar asesoría <span>↗</span>
+          </BusyButton>
           <p className="small">
             Esta consulta no reserva un horario ni genera un cobro. La atención por técnicos todavía
             está en preparación.

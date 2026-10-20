@@ -1,5 +1,6 @@
 import type { ServiceCover } from '@instafix/contracts';
 import { useState } from 'react';
+import { BusyLabel } from '../../components/ui/BusyLabel';
 import { uploadMedia } from './upload-media';
 
 /** Portada del servicio: una imagen propia, independiente de la galería. Usa la subida actual (R2). */
@@ -69,8 +70,12 @@ export function CoverEditor({
       )}
       {status && <p role="status">{status}</p>}
       <div className="tech-actions-row">
-        <label className="btn btn-secondary">
-          {value ? 'Reemplazar portada' : 'Subir portada'}
+        <label className="btn btn-secondary" aria-busy={busy || undefined}>
+          <BusyLabel
+            busy={busy}
+            label={value ? 'Reemplazar portada' : 'Subir portada'}
+            busyLabel="Subiendo portada…"
+          />
           <input
             className="visually-hidden"
             type="file"

@@ -1,15 +1,21 @@
-import { serviceCover, type Offering } from '@instafix/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { serviceCover, type Offering, type ServiceCategory } from '@instafix/contracts';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
 import { ServiceCardSkeleton, SkeletonGroup } from '../../components/ui/Skeleton';
+import { SlidingIndicator } from '../../components/ui/SlidingIndicator';
 import { MediaCarousel } from '../media/MediaCarousel';
 import { ServiceFacts } from './ServiceFacts';
 import { availabilityLabels } from './catalog.constants';
 
+const ALL = 'Todos';
+
+/** Catálogo público: Categoría → Equipo → Servicio. */
 export function Services() {
   const [items, setItems] = useState<Offering[]>([]);
-  const [device, setDevice] = useState('Todos');
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [category, setCategory] = useState(ALL);
+  const [device, setDevice] = useState(ALL);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Offering | null>(null);
@@ -17,8 +23,15 @@ export function Services() {
   function load() {
     setLoading(true);
     setError('');
-    api<Offering[]>('catalog')
-      .then(setItems)
+    Promise.all([
+      api<Offering[]>('catalog'),
+      // Sin el orden de categorías el catálogo sigue funcionando (orden alfabético).
+      api<ServiceCategory[]>('categories').catch(() => []),
+    ])
+      .then(([offerings, groups]) => {
+        setItems(offerings);
+        setCategories(groups);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }
@@ -35,6 +48,23 @@ export function Services() {
       document.body.classList.remove('service-dialog-open');
     };
   }, [selected]);
+  // Solo se muestran las categorías con servicios publicados, en el orden de administración.
+  const present = new Set(items.map((item) => item.category));
+  const groups = [
+    ...categories.map((item) => item.name).filter((name) => present.has(name)),
+    ...[...present].filter((name) => !categories.some((item) => item.name === name)).sort(),
+  ];
+  const inCategory = items.filter((item) => category === ALL || item.category === category);
+  // El filtro de equipo aparece dentro de una categoría (o si solo hay una).
+  const devices =
+    category === ALL && groups.length > 1
+      ? []
+      : [...new Set(inCategory.map((item) => item.device))];
+  const visible = inCategory.filter((item) => device === ALL || item.device === device);
+  const chooseCategory = (name: string) => {
+    setCategory(name);
+    setDevice(ALL);
+  };
   return (
     <section id="servicios">
       <div className="section-head">
@@ -48,17 +78,36 @@ export function Services() {
         </div>
         <p>Conoce el alcance, el precio y la disponibilidad.</p>
       </div>
-      <div className="filters">
-        {['Todos', ...new Set(items.map((item) => item.device))].map((name) => (
-          <button
-            key={name}
-            className={device === name ? 'active' : ''}
-            onClick={() => setDevice(name)}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
+      {groups.length > 1 && (
+        <div className="filters category-filters has-indicator" role="group" aria-label="Categoría">
+          {[ALL, ...groups].map((name) => (
+            <button
+              key={name}
+              aria-pressed={category === name}
+              className={category === name ? 'active' : ''}
+              onClick={() => chooseCategory(name)}
+            >
+              {name === ALL ? 'Todas' : name}
+            </button>
+          ))}
+          <SlidingIndicator selector=".active" watch={category} />
+        </div>
+      )}
+      {devices.length > 1 && (
+        <div className="filters device-filters has-indicator" role="group" aria-label="Equipo">
+          {[ALL, ...devices].map((name) => (
+            <button
+              key={name}
+              aria-pressed={device === name}
+              className={device === name ? 'active' : ''}
+              onClick={() => setDevice(name)}
+            >
+              {name}
+            </button>
+          ))}
+          <SlidingIndicator selector=".active" watch={`${category}/${device}`} />
+        </div>
+      )}
       {loading && (
         <div className="cards">
           <SkeletonGroup label="Cargando servicios…">
@@ -78,52 +127,28 @@ export function Services() {
       )}
       {!loading && !error && !items.length && <p>Pronto publicaremos nuestros servicios.</p>}
       {!loading && !error && (
-        <div className="cards">
-          {items
-            .filter((item) => device === 'Todos' || item.device === device)
-            .map((item) => {
-              const cover = serviceCover(item);
-              return (
-                <button
-                  className="card service-card"
-                  key={item.id}
-                  onClick={() => setSelected(item)}
-                  aria-label={`${item.title}, ${item.device}, ${money(item.priceMinor)}, ${availabilityLabels[item.availability]}. Ver detalles`}
-                >
-                  {cover ? (
-                    <img
-                      className="service-cover"
-                      src={cover.thumbnail || cover.url}
-                      srcSet={
-                        cover.thumbnail ? `${cover.thumbnail} 640w, ${cover.url} 1600w` : undefined
-                      }
-                      sizes="(max-width: 700px) 90vw, 380px"
-                      alt=""
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span className="card-icon" aria-hidden="true">
-                      ✦
-                    </span>
-                  )}
-                  <span className="service-card-top">
-                    <span className="eyebrow">{item.device}</span>
-                    <span className={'badge ' + item.availability}>
-                      {availabilityLabels[item.availability]}
-                    </span>
-                  </span>
-                  <span className="service-card-title">{item.title}</span>
-                  <span className="service-card-bottom">
-                    <strong className="service-card-price">{money(item.priceMinor)}</strong>
-                    <ServiceFacts
-                      durationMinutes={item.durationMinutes}
-                      warrantyDays={item.warrantyDays}
-                      compact
-                    />
-                  </span>
-                </button>
-              );
-            })}
+        // Cambiar de categoría o de equipo vuelve a montar el listado y las tarjetas entran
+        // escalonadas.
+        <div className="service-results" key={`${category}/${device}`}>
+          {groups
+            .filter((name) => visible.some((item) => item.category === name))
+            .map((name) => (
+              <div className="service-group" key={name}>
+                <h3 className="service-group-title">{name}</h3>
+                <div className="cards">
+                  {visible
+                    .filter((item) => item.category === name)
+                    .map((item, index) => (
+                      <ServiceCard
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        onOpen={() => setSelected(item)}
+                      />
+                    ))}
+                </div>
+              </div>
+            ))}
         </div>
       )}
       <dialog
@@ -144,7 +169,9 @@ export function Services() {
             >
               ×
             </button>
-            <p className="eyebrow">{selected.device}</p>
+            <p className="eyebrow">
+              {selected.category} · {selected.device}
+            </p>
             <h2 id="service-detail-title">{selected.title}</h2>
             <span className={'badge ' + selected.availability}>
               {availabilityLabels[selected.availability]}
@@ -176,5 +203,55 @@ export function Services() {
         )}
       </dialog>
     </section>
+  );
+}
+
+function ServiceCard({
+  item,
+  index,
+  onOpen,
+}: {
+  item: Offering;
+  index: number;
+  onOpen: () => void;
+}) {
+  const cover = serviceCover(item);
+  return (
+    <button
+      className="card service-card"
+      style={{ '--i': Math.min(index, 8) } as CSSProperties}
+      onClick={onOpen}
+      aria-label={`${item.title}, ${item.category}, ${item.device}, ${money(item.priceMinor)}, ${availabilityLabels[item.availability]}. Ver detalles`}
+    >
+      {cover ? (
+        <img
+          className="service-cover"
+          src={cover.thumbnail || cover.url}
+          srcSet={cover.thumbnail ? `${cover.thumbnail} 640w, ${cover.url} 1600w` : undefined}
+          sizes="(max-width: 700px) 90vw, 380px"
+          alt=""
+          loading="lazy"
+        />
+      ) : (
+        <span className="card-icon" aria-hidden="true">
+          ✦
+        </span>
+      )}
+      <span className="service-card-top">
+        <span className="eyebrow">{item.device}</span>
+        <span className={'badge ' + item.availability}>
+          {availabilityLabels[item.availability]}
+        </span>
+      </span>
+      <span className="service-card-title">{item.title}</span>
+      <span className="service-card-bottom">
+        <strong className="service-card-price">{money(item.priceMinor)}</strong>
+        <ServiceFacts
+          durationMinutes={item.durationMinutes}
+          warrantyDays={item.warrantyDays}
+          compact
+        />
+      </span>
+    </button>
   );
 }

@@ -6,12 +6,16 @@
   padding: 80px 0 0;
   scroll-margin-top: 10px;
 }
+/* Encabezado alineado a la derecha: equilibra la presentación de «Nuestro trabajo». */
 .journey-heading {
   max-width: 820px;
+  margin-left: auto;
   padding-bottom: 10px;
+  text-align: right;
 }
 .journey-heading .intro {
   max-width: 470px;
+  margin-left: auto;
 }
 
 /* ---------- Escenario fijo durante el scroll ---------- */

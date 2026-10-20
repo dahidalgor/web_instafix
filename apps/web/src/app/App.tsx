@@ -1,9 +1,11 @@
-import { AccountLink } from '../components/layout/AccountLink';
+import { AccountMenu } from '../components/layout/AccountMenu';
 import { Contact } from '../features/contact/Contact';
 import { usePageAnalytics } from '../features/analytics/usePageAnalytics';
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from '../components/layout/Brand';
+import { SlidingIndicator } from '../components/ui/SlidingIndicator';
 import { AccountDashboard } from '../features/account/AccountDashboard';
+import { AccountSettings } from '../features/account/AccountSettings';
 import { Calendar } from '../features/booking/Calendar';
 import { Services } from '../features/catalog/Services';
 import { HelpRequest } from '../features/help/HelpRequest';
@@ -58,11 +60,13 @@ export function App() {
     setMenuOpen(false);
     document.title =
       (links.find(([id]) => id === page)?.[1] ??
-        (page === 'garantia'
-          ? 'Políticas de garantía'
-          : page === 'contacto'
-            ? 'Contacto'
-            : 'Asesoría')) + ' · InstaFix';
+        (page === 'ajustes'
+          ? 'Ajustes de la cuenta'
+          : page === 'garantia'
+            ? 'Políticas de garantía'
+            : page === 'contacto'
+              ? 'Contacto'
+              : 'Asesoría')) + ' · InstaFix';
     window.scrollTo({ top: 0, behavior: 'instant' });
     main.current?.focus({ preventScroll: true });
     scrollToSection(window.location.hash);
@@ -104,7 +108,7 @@ export function App() {
         </button>
         <nav
           id="main-navigation"
-          className={menuOpen ? 'is-open' : ''}
+          className={`has-indicator ${menuOpen ? 'is-open' : ''}`}
           aria-label="Navegación principal"
         >
           {links
@@ -128,8 +132,15 @@ export function App() {
                 {label}
               </a>
             ))}
+          <SlidingIndicator
+            selector="a[aria-current]:not(.nav-cta)"
+            watch={`${page}${hash}${menuOpen}`}
+          />
         </nav>
-        <AccountLink active={page === 'cuenta'} onNavigate={() => setMenuOpen(false)} />
+        <AccountMenu
+          active={page === 'cuenta' || page === 'ajustes'}
+          onNavigate={() => setMenuOpen(false)}
+        />
       </header>
       <main key={page} id="contenido" ref={main} tabIndex={-1} className="page-content">
         {page === 'contacto' && <Contact />}
@@ -137,6 +148,7 @@ export function App() {
         {page === 'servicios' && <Services />}
         {page === 'agenda' && <Calendar />}
         {page === 'cuenta' && <AccountDashboard />}
+        {page === 'ajustes' && <AccountSettings />}
         {page === 'garantia' && <WarrantyPolicy />}
         {page === 'solicitud' && <HelpRequest />}
       </main>

@@ -3,9 +3,14 @@ import { config } from 'dotenv';
 config({ path: '../../.env' });
 const db = new PrismaClient();
 async function main() {
+  const category = await db.serviceCategory.upsert({
+    where: { name: 'Consolas de Videojuegos' },
+    create: { name: 'Consolas de Videojuegos', position: 0 },
+    update: {},
+  });
   const equipment = await db.equipment.upsert({
     where: { name: 'PS5' },
-    create: { name: 'PS5', category: 'Consolas' },
+    create: { name: 'PS5', categoryId: category.id },
     update: {},
   });
   const services = [
@@ -44,7 +49,7 @@ async function main() {
       create: {
         ...service,
         device: 'PS5',
-        category: 'Consolas',
+        category: category.name,
         equipmentId: equipment.id,
         durationMinutes: 60,
         availability: 'AVAILABLE',
