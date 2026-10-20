@@ -373,8 +373,32 @@ body.sheet-open {
   color: var(--muted);
   font-size: 14px;
 }
-.team-member.is-inactive {
+.team-member.is-inactive > div:first-child {
   opacity: 0.6;
+}
+/* Edición, confirmación y contraseña ocupan el ancho completo de la tarjeta. */
+.team-edit,
+.team-confirm,
+.team-password {
+  flex-basis: 100%;
+  animation: pop-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.team-edit {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.team-confirm {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.team-confirm p {
+  margin: 0;
+  color: var(--text);
+}
+.team-password label {
+  flex: 2 1 220px;
+  margin: 0;
 }
 
 @media (max-width: 760px) {

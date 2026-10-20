@@ -3,7 +3,8 @@
 .how-page {
   --page-bg: #faf9fc;
   --ok: #22a06b;
-  padding: 55px 0 0;
+  padding: 80px 0 0;
+  scroll-margin-top: 10px;
 }
 .journey-heading {
   max-width: 820px;
@@ -650,6 +651,27 @@
   animation: work 900ms ease-in-out infinite;
 }
 
+/* ---------- Un solo «Agendar» al final de la historia ---------- */
+/* El botón final aparece cuando el lateral/flotante se retira (ver useDockedCta). */
+.journey-cta {
+  transition: opacity 220ms ease;
+}
+body:not(.cta-docked) .journey-cta:not(:focus-visible) {
+  opacity: 0;
+}
+.story-cta,
+.mobile-booking {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+.cta-docked .story-cta,
+.cta-docked .mobile-booking {
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+}
+
 /* ---------- Cierre ---------- */
 .journey-end {
   padding: 70px 0 20px;
@@ -695,7 +717,7 @@
   font-size: 12px;
   margin: 0;
 }
-.story-static h2 {
+.story-static h3 {
   font-size: 28px;
   margin: 8px 0;
 }

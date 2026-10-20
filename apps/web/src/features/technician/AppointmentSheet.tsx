@@ -1,3 +1,4 @@
+import { TextSkeleton } from '../../components/ui/Skeleton';
 import type { Offering, StaffAppointment } from '@instafix/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StatusPill, visitDay, visitTime } from '../../components/appointments/AppointmentCard';
@@ -98,7 +99,7 @@ export function AppointmentSheet({
           {item ? `Visita de ${item.contactName || 'cliente'}` : 'Cita'}
         </h2>
         {error && <p role="alert">{error}</p>}
-        {!item && !error && <p role="status">Cargando…</p>}
+        {!item && !error && <TextSkeleton lines={6} label="Cargando la cita…" />}
         {item && (
           <>
             {item.automationIssue === CAL_ISSUE && item.canManage && (
