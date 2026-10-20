@@ -1,4 +1,9 @@
-import { appointmentSchema } from '@instafix/contracts';
+import {
+  appointmentSchema,
+  appointmentSortSchema,
+  type AppointmentSort,
+} from '@instafix/contracts';
+import type { Prisma } from '@prisma/client';
 import {
   BadRequestException,
   Body,
@@ -7,6 +12,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -16,6 +22,19 @@ import { normalizePhone } from '@instafix/contracts/src/phone';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
 import { z } from 'zod';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
+
+/** createdAt = alta de la cita en Instafix; startsAt = inicio de la visita. Desempate por id. */
+export function appointmentOrder(
+  sort: AppointmentSort,
+): Prisma.AppointmentOrderByWithRelationInput[] {
+  const [field, direction] = {
+    created_desc: ['createdAt', 'desc'],
+    created_asc: ['createdAt', 'asc'],
+    starts_asc: ['startsAt', 'asc'],
+    starts_desc: ['startsAt', 'desc'],
+  }[sort] as ['createdAt' | 'startsAt', 'asc' | 'desc'];
+  return [{ [field]: direction }, { id: 'asc' }];
+}
 
 @Controller('api/v1')
 export class AppointmentsController {
@@ -72,13 +91,19 @@ export class AppointmentsController {
     });
   }
 
-  @Get('admin/appointments') async adminAppointments(@Req() req: Request) {
+  @Get('admin/appointments') async adminAppointments(
+    @Req() req: Request,
+    @Query('sort') sortParam?: string,
+  ) {
     await authenticated(req, true);
+    const sort = appointmentSortSchema.safeParse(sortParam ?? undefined);
+    if (!sort.success) throw new BadRequestException('Orden no válido');
     return db.appointment.findMany({
-      orderBy: { startsAt: 'desc' },
+      // El orden se resuelve en PostgreSQL sobre campos reales, nunca sobre texto formateado.
+      orderBy: appointmentOrder(sort.data),
       include: {
         user: { select: { name: true, phone: true } },
-        assignedTechnician: { select: { id: true, name: true } },
+        assignedTechnician: { select: { id: true, name: true, active: true } },
         services: { orderBy: { createdAt: 'asc' } },
       },
     });

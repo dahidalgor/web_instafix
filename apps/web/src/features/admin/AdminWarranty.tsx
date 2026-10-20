@@ -1,8 +1,15 @@
 import type { FormEvent } from 'react';
+import { TextSkeleton } from '../../components/ui/Skeleton';
 import { api } from '../../lib/api';
 import { type RunAction } from './admin.types';
-type Props = { policy: string; setPolicy: (value: string) => void; run: RunAction; busy: boolean };
-export function AdminWarranty({ policy, setPolicy, run, busy }: Props) {
+type Props = {
+  policy: string;
+  setPolicy: (value: string) => void;
+  run: RunAction;
+  busy: boolean;
+  loading?: boolean;
+};
+export function AdminWarranty({ policy, setPolicy, run, busy, loading }: Props) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     run(async () => {
@@ -20,7 +27,8 @@ export function AdminWarranty({ policy, setPolicy, run, busy }: Props) {
         Estas condiciones se publicarán en el footer. No cambian las garantías ya registradas en
         trabajos anteriores.
       </p>
-      <label>
+      {loading && <TextSkeleton lines={6} label="Cargando políticas…" />}
+      <label hidden={loading}>
         Texto público
         <textarea
           required

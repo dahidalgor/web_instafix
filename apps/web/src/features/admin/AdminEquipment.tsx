@@ -1,8 +1,15 @@
 import type { FormEvent } from 'react';
+import { ListSkeleton } from '../../components/ui/Skeleton';
 import { api } from '../../lib/api';
 import { type Equipment, type RunAction } from './admin.types';
-type Props = { equipment: Equipment[]; run: RunAction; load: () => Promise<void>; busy: boolean };
-export function AdminEquipment({ equipment, run, load, busy }: Props) {
+type Props = {
+  equipment: Equipment[];
+  run: RunAction;
+  load: () => Promise<void>;
+  busy: boolean;
+  loading?: boolean;
+};
+export function AdminEquipment({ equipment, run, load, busy, loading }: Props) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -20,6 +27,7 @@ export function AdminEquipment({ equipment, run, load, busy }: Props) {
   return (
     <form className="editor" onSubmit={handleSubmit}>
       <h2>Equipos</h2>
+      {loading && <ListSkeleton label="Cargando equipos…" count={3} />}
       {equipment.map((item) => (
         <p key={item.id}>
           {item.category} / {item.name}

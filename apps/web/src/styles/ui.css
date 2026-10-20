@@ -1,0 +1,270 @@
+/* ui: skeletons, tarjeta desplegable y etiquetas de botón estables. */
+
+/* Skeleton: mismo radio y proporciones que el contenido final; brillo sutil. */
+.skeleton {
+  display: block;
+  max-width: 100%;
+  background: linear-gradient(
+    100deg,
+    var(--surface-soft) 30%,
+    color-mix(in srgb, var(--surface-soft) 55%, var(--surface)) 50%,
+    var(--surface-soft) 70%
+  );
+  background-size: 300% 100%;
+  border-radius: 6px;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-group {
+  display: contents;
+}
+.skeleton-card {
+  display: grid;
+  gap: 12px;
+  pointer-events: none;
+}
+.skeleton-card:hover {
+  border-color: var(--border);
+  box-shadow: none;
+}
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.skeleton-row.is-start {
+  justify-content: flex-start;
+}
+.skeleton-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.skeleton-list-row > div {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+}
+.skeleton-stats {
+  display: contents;
+}
+.skeleton-stat {
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.skeleton-stat .skeleton {
+  background: var(--surface);
+  opacity: 0.7;
+}
+.skeleton-text {
+  display: grid;
+  gap: 10px;
+}
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* Tarjeta desplegable: cerrada por defecto; la altura se anima sin saltos de layout. */
+.disclosure {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.disclosure.is-open {
+  border-color: var(--accent);
+  box-shadow: 0 10px 30px rgb(82 32 71 / 8%);
+}
+.disclosure-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 16px;
+  text-align: left;
+}
+.disclosure-header:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.disclosure-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--accent);
+  font-size: 20px;
+  line-height: 1;
+  transition:
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 200ms ease,
+    color 200ms ease;
+}
+.disclosure.is-open .disclosure-icon {
+  transform: rotate(45deg);
+  background: var(--accent);
+  color: #fff;
+}
+.disclosure-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.disclosure-chevron {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.disclosure.is-open .disclosure-chevron {
+  transform: rotate(-135deg);
+}
+.disclosure-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.disclosure.is-open .disclosure-panel {
+  grid-template-rows: 1fr;
+}
+.disclosure-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.disclosure.is-open .disclosure-inner {
+  opacity: 1;
+}
+/* El formulario es el contenido de la tarjeta: sin segundo borde ni título repetido. */
+.disclosure-inner > .editor {
+  max-width: 820px;
+  margin: 0;
+  padding: 4px 18px 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Etiqueta de botón estable: el texto más largo fija el ancho en todos los estados. */
+.busy-label {
+  display: inline-grid;
+  justify-items: center;
+}
+.busy-label > span {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.busy-label-busy,
+.busy-label[data-busy] .busy-label-idle {
+  visibility: hidden;
+}
+.busy-label[data-busy] .busy-label-busy {
+  visibility: visible;
+}
+.busy-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: busy-spin 700ms linear infinite;
+}
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Botones de confirmación: dos columnas fijas en todos los estados. */
+.confirm-actions {
+  display: grid;
+  /* Las columnas dependen del ancho del contenedor, nunca del texto: dos columnas si caben
+     (≥ 128 px cada una) y apiladas si no, igual en reposo, carga, error y éxito. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.confirm-actions .btn {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 12px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-soft);
+  }
+  .disclosure-panel,
+  .disclosure-inner,
+  .disclosure-icon,
+  .disclosure-chevron {
+    transition: none;
+  }
+  .busy-spinner {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.6;
+  }
+}
+
+/* Formas específicas: agenda, Mi cuenta y pestañas de administración. */
+.booking-flow.skeleton-group {
+  display: grid;
+  gap: 18px;
+}
+.booking-skeleton-steps {
+  gap: 8px;
+}
+.booking-skeleton-month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.skeleton-heading {
+  margin: 14px 0 12px;
+}
+.account-panel > .skeleton-group {
+  display: grid;
+  gap: 6px;
+}
+.admin-skeleton-tabs {
+  flex-wrap: wrap;
+  margin: 27px 0;
+}

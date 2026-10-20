@@ -1,17 +1,18 @@
 import { z } from 'zod';
 import { mediaItemSchema } from './catalog';
 
+// «Quiénes somos» y «Cómo funciona» son secciones de Inicio (ver homeSections), no páginas.
 export const publicPages = [
   'inicio',
   'servicios',
-  'quienes-somos',
-  'como',
   'cuenta',
   'agenda',
   'garantia',
   'solicitud',
   'contacto',
 ] as const;
+/** Enlaces antiguos o internos que abren Inicio y se desplazan a una de sus secciones. */
+export const homeSections = ['quienes-somos', 'nuestro-trabajo', 'como'] as const;
 export const slideSchema = z
   .object({
     label: z.string().trim().min(1).max(60),
