@@ -5,14 +5,14 @@
 ```text
 CALENDARIO   Cliente → Instafix (API) → Cal.com API v2          (solo disponibilidad y reservas)
 EMAIL        Instafix → EmailService → SmtpEmailProvider → Brevo → Cliente
-WHATSAPP     Instafix → WhatsAppService / WhatsAppOtpProvider → WasapFlow Bridge → WABA Instafix → Cliente
+WHATSAPP     Instafix → WhatsAppService / WhatsAppOtpProvider → WhatsAppProvider → Bird → Cliente
 ```
 
 - `mail/email.service.ts`: único punto de envío de correo (`sendEmail`). Registra cada intento en `CommunicationLog` con destinatario enmascarado. Si Brevo no acepta el mensaje lanza un error: ningún llamador afirma un envío no aceptado.
 - `mail/templates.ts`: verificación de correo, recuperación de contraseña, cita creada, reprogramada y cancelada. Vistas previas con datos ficticios en `docs/email-previews/`.
-- `auth/verification.service.ts`: genera y valida OTP. `whatsapp/otp.provider.ts` solo los transporta (`WasapFlowOtpProvider`). La autenticación no conoce WasapFlow.
+- `auth/verification.service.ts`: genera y valida OTP. `whatsapp/otp.provider.ts` solo los transporta (`WhatsAppCodeSender` → proveedor → plantilla `bird_otp`). La autenticación no conoce Bird.
 - `booking/booking.service.ts`: crea, reprograma y cancela en Cal.com y después persiste en PostgreSQL.
-- `notifications/appointment-events.ts`: eventos internos `appointment.created`, `.rescheduled`, `.cancelled`, `.technician_assigned`, `.technician_on_the_way`. Deciden los canales: correo (bandeja `Notification`) y WhatsApp (cola `AutomationJob`). Los OTP no pasan por aquí.
+- `notifications/appointment-events.ts`: eventos internos `appointment.created`, `.rescheduled`, `.cancelled`, `.confirmed`, `.completed`. Deciden los canales: correo (bandeja `Notification`) y WhatsApp (cola `AutomationJob`). Los OTP no pasan por aquí.
 - `notifications/notification.service.ts`: bandeja durable con clave única por hecho y worker de reintentos.
 
 ## Verificación de cuentas
@@ -20,21 +20,21 @@ WHATSAPP     Instafix → WhatsAppService / WhatsAppOtpProvider → WasapFlow Br
 - Cuenta activa ⇔ `phone_verified_at IS NOT NULL`. El correo (`email_verified_at`) es opcional.
 - Registro: nombre, correo, WhatsApp y contraseña → OTP `PHONE_VERIFICATION` → al verificar se crea la cuenta con `phoneVerifiedAt` y se abre sesión. Los datos pendientes viven en `PhoneChallenge` (contraseña ya con hash): un registro abandonado no bloquea el número.
 - Teléfono normalizado en el backend a E.164 (`0981234519`, `593981234519` y `+593 98 123 4519` → `+593981234519`). `User.phone` es UNIQUE; una carrera entre dos registros termina con un único usuario y el mensaje «Ya existe una cuenta asociada a este número de WhatsApp», con accesos a iniciar sesión y recuperar contraseña.
-- Login con credenciales correctas y WhatsApp sin verificar (cuentas anteriores): `403 PHONE_UNVERIFIED`, se envía un OTP y no se crea sesión ni otra cuenta. Las sesiones antiguas de esas cuentas dejan de valer hasta verificar. Los administradores no están sujetos a este requisito para no perder el acceso administrativo si WasapFlow no está disponible.
+- Login con credenciales correctas y WhatsApp sin verificar (cuentas anteriores): `403 PHONE_UNVERIFIED`, se envía un OTP y no se crea sesión ni otra cuenta. Las sesiones antiguas de esas cuentas dejan de valer hasta verificar. Los administradores no están sujetos a este requisito para no perder el acceso administrativo si WhatsApp no está disponible.
 - Citas de invitado: solo después del OTP correcto se asocian las reservas con `userId = NULL`, el mismo teléfono normalizado, sin incidencia de identidad y creadas en los últimos 180 días (evita heredar reservas de un número reasignado). Cada vínculo queda en `IntegrationEvent` (`ACCOUNT_LINK`, `PHONE_OTP:<userId>`).
 
 ### OTP
 
-| Regla              | Valor                                                                               |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| Generación         | `crypto.randomInt`, 6 dígitos                                                       |
-| Almacenamiento     | hash scrypt con sal; nunca en texto plano ni en logs                                |
-| Caducidad          | 10 minutos                                                                          |
-| Intentos           | 5 por código                                                                        |
-| Reenvío            | cooldown 60 s; máximo 5 códigos por número y hora; el reenvío invalida el anterior  |
-| Uso                | único; consumo transaccional con bloqueo por teléfono                               |
-| Propósitos         | `PHONE_VERIFICATION`, `PASSWORD_RESET`, `PHONE_CHANGE`, sin intercambio entre ellos |
-| Fallo de WasapFlow | la transacción se revierte: no queda código, no se verifica nada, error 503 visible |
+| Regla          | Valor                                                                               |
+| -------------- | ----------------------------------------------------------------------------------- |
+| Generación     | `crypto.randomInt`, 6 dígitos                                                       |
+| Almacenamiento | hash scrypt con sal; nunca en texto plano ni en logs                                |
+| Caducidad      | 10 minutos                                                                          |
+| Intentos       | 5 por código                                                                        |
+| Reenvío        | cooldown 60 s; máximo 5 códigos por número y hora; el reenvío invalida el anterior  |
+| Uso            | único; consumo transaccional con bloqueo por teléfono                               |
+| Propósitos     | `PHONE_VERIFICATION`, `PASSWORD_RESET`, `PHONE_CHANGE`, sin intercambio entre ellos |
+| Fallo de Bird  | la transacción se revierte: no queda código, no se verifica nada, error 503 visible |
 
 Límites por IP (Nest Throttler): registro 5/min, login 10/min, verificar 10/min, reenviar 3/min, recuperar 5/min, completar recuperación 5/min, verificar correo 10/min, enviar verificación 3/min. A esto se suman los límites por número, correo y usuario guardados en PostgreSQL.
 
@@ -55,15 +55,13 @@ WhatsApp (enmascarado, verificado), correo (enmascarado, verificado/sin verifica
 
 ## Citas y correos de Instafix
 
-| Evento            | Disparador                                                                | Correo                                                                                  | WhatsApp                                                             |
-| ----------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Creada            | API Instafix tras crear en Cal.com y guardar en PostgreSQL                | «Recibimos tu solicitud de visita» (pendiente de confirmación; nunca dice «confirmada») | Solicitud de ubicación existente (`instafix_solicitar_ubicacion`)    |
-| Confirmada        | Un técnico pulsa «Confirmar cita» en su panel (ver `docs/technicians.md`) | «Tu visita está confirmada ✓» con técnico, fecha, hora y solicitud                      | `instafix_cita_confirmada` + recordatorios                           |
-| Reprogramada      | API Instafix o webhook `BOOKING_RESCHEDULED` hecho en Cal.com             | Fecha anterior y nueva                                                                  | `instafix_cita_reprogramada` si está configurada                     |
-| Cancelada         | API Instafix o webhook `BOOKING_CANCELLED`/`BOOKING_REJECTED`             | «Tu cita fue cancelada»                                                                 | `instafix_cita_cancelada` si está configurada                        |
-| Técnico asignado  | Administración cambia el técnico                                          | —                                                                                       | `instafix_tecnico_asignado`                                          |
-| Técnico en camino | Botón en Administración → Citas                                           | —                                                                                       | `instafix_tecnico_en_camino`                                         |
-| Recordatorio      | 08:00 Ecuador                                                             | —                                                                                       | `instafix_recordatorio_visita` (texto nuevo) o la plantilla anterior |
+| Evento       | Disparador                                                                | Correo                                                                                  | WhatsApp                                          |
+| ------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Creada       | API Instafix tras crear en Cal.com y guardar en PostgreSQL                | «Recibimos tu solicitud de visita» (pendiente de confirmación; nunca dice «confirmada») | `appointment_requested` (pide la ubicación)       |
+| Confirmada   | Un técnico pulsa «Confirmar cita» en su panel (ver `docs/technicians.md`) | «Tu visita está confirmada ✓» con técnico, fecha, hora y solicitud                      | `appointment_confirmed` + recordatorios           |
+| Reprogramada | API Instafix o webhook `BOOKING_RESCHEDULED` hecho en Cal.com             | Fecha anterior y nueva                                                                  | `appointment_rescheduled`                         |
+| Cancelada    | API Instafix o webhook `BOOKING_CANCELLED`/`BOOKING_REJECTED`             | «Tu cita fue cancelada»                                                                 | `appointment_cancelled`                           |
+| Recordatorio | 08:00 Ecuador                                                             | —                                                                                       | `appointment_reminder` (día anterior y mismo día) |
 
 El correo muestra «Solicitud: “…”» con lo que describió el cliente; nunca un servicio realizado. Los invitados reciben «Tu cita ha sido creada correctamente» y una invitación a crear la cuenta con el mismo WhatsApp, sin botón que exija iniciar sesión.
 
@@ -93,7 +91,7 @@ INSTAFIX_INTEGRATION=1 pnpm --filter @instafix/api exec tsx --test --test-concur
   src/tests/otp-auth.integration.test.ts src/tests/booking-communications.integration.test.ts
 ```
 
-Usan PostgreSQL de desarrollo, WasapFlow/Brevo/Cal.com simulados en memoria y datos temporales que se eliminan. `dependency-injection.test.ts` arranca el módulo Nest con `tsx` (como en producción) y falla si alguna dependencia queda sin inyectar.
+Usan PostgreSQL de desarrollo, Bird/Brevo/Cal.com simulados en memoria y datos temporales que se eliminan. `dependency-injection.test.ts` arranca el módulo Nest con `tsx` (como en producción) y falla si alguna dependencia queda sin inyectar.
 
 Prueba manual local sin WhatsApp real: `NODE_ENV=development WHATSAPP_OTP_PROVIDER=console WHATSAPP_OTP_ENABLED=true` imprime el código en la consola de la API. Fuera de `NODE_ENV=development` ese proveedor está bloqueado.
 

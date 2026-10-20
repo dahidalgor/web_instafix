@@ -48,9 +48,9 @@ Los estados se expresan con clases o atributos; el JSX no declara estilos visual
 - `database/client.ts` comparte un cliente Prisma entre controladores.
 - `auth/session.ts` verifica origen, sesión y permisos. La cuenta del cliente se obtiene siempre de la sesión.
 - `media/media.controller.ts` autoriza las subidas y sirve archivos locales; `media-processor.ts` valida y convierte; `media-storage.ts` guarda en disco o R2.
-- `whatsapp/` contiene el módulo de WasapFlow, onboarding Coexistence, cola y recepción; `integrations/` mantiene Cal.com y la verificación de firmas. Consulta [la guía](whatsapp-setup.md).
+- `whatsapp/` contiene el contrato neutral (`provider.ts`), el proveedor Bird (`bird/`, único uso del SDK), la cola, la bandeja de webhooks y la recepción; `integrations/` mantiene Cal.com y la verificación de firmas. Consulta [la guía](whatsapp-setup.md).
 - `booking/` genera referencias de cuenta para Cal; `site/` administra diapositivas; `analytics/` recibe y agrega métricas públicas.
-- `auth/verification.service.ts` genera y valida OTP; `whatsapp/otp.provider.ts` los transporta por WasapFlow. `account/security.controller.ts` gestiona correo, número y contraseña desde Mi cuenta.
+- `auth/verification.service.ts` genera y valida OTP; `whatsapp/otp.provider.ts` los transporta por el proveedor de WhatsApp (Bird). `account/security.controller.ts` gestiona correo, número y contraseña desde Mi cuenta.
 - `mail/` centraliza el envío por Brevo (`email.service.ts`) y las plantillas; `notifications/` contiene los eventos de cita y la bandeja de correos; `communications/log.ts` el historial enmascarado.
 - `booking/booking.service.ts` crea, reprograma y cancela reservas mediante la API de Cal.com.
 - `scripts/` contiene tareas manuales para crear el administrador y cargar el catálogo.

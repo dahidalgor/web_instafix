@@ -1,135 +1,116 @@
-# WhatsApp de InstaFix · WasapFlow Bridge + Coexistence
+# WhatsApp de Instafix · Bird + Coexistence
 
-Arquitectura única: **negocio/cola → WhatsAppService → WasapFlowClient → WasapFlow Bridge → WhatsApp**. El número **+593984703819** continúa en WhatsApp Business App mediante Coexistence. No hay transporte directo a Meta, registro manual de WABA ni SDK de Facebook en React.
+Arquitectura única:
 
-Contratos verificados contra [WasapFlow Bridge API v2.9.2](https://partner.wasapflow.com/bridge/docs), actualizada el 1 de septiembre de 2026. No se llamó a endpoints reales de envío o registro durante las pruebas.
+```text
+Citas / OTP ─► WhatsAppService · WhatsAppCodeSender      (Instafix: qué aviso y qué datos)
+                  └─► WhatsAppProvider                   (contrato neutral: whatsapp/provider.ts)
+                         └─► BirdWhatsAppProvider        (plantillas, errores, webhooks)
+                                └─► BirdClient           (@messagebird/sdk, único import del SDK)
+```
 
-## Configuración del backend
+El número **+593984703819** sigue en WhatsApp Business App mediante **Coexistence**. Se conectó una sola vez desde el panel de Bird; Instafix no tiene botón de conexión ni popup.
 
-En `.env` (desarrollo) o `.env.production` (servidor), nunca en Vite:
+## Variables del backend
+
+En `.env` (desarrollo) o `.env.production` (servidor). Nunca en Vite, en Git, en logs ni en tests:
 
 ```dotenv
-WASAPFLOW_BASE_URL=https://officialapi.wasapflow.com/bridge/v1
-WASAPFLOW_PARTNER_KEY=
-WASAPFLOW_WABA_ID=
-WASAPFLOW_WEBHOOK_SECRET=
-WHATSAPP_ENABLED=false
-WHATSAPP_BUSINESS_PHONE=+593984703819
-WHATSAPP_TEMPLATE_LANGUAGE=es
-WHATSAPP_TEMPLATE_INITIAL=instafix_solicitar_ubicacion
-WHATSAPP_TEMPLATE_CONFIRMED=instafix_cita_confirmada
-WHATSAPP_TEMPLATE_DAY_BEFORE=instafix_recordatorio_manana
-WHATSAPP_TEMPLATE_SAME_DAY=instafix_recordatorio_hoy
+BIRD_API_KEY=                 # Bird → Settings → API keys (bk_<región>_…)
+BIRD_WEBHOOK_SECRET=          # secreto de firma del webhook (whsec_…), se ve una sola vez al crearlo
+WHATSAPP_BUSINESS_PHONE=+593984703819   # número emisor conectado en Bird
+WHATSAPP_ENABLED=false        # avisos de citas
+WHATSAPP_OTP_ENABLED=false    # códigos de verificación
 ```
 
-La Partner Key viene del panel de WasapFlow y se transmite exclusivamente en `x-partner-key`. Obtén el Webhook Secret en **Settings → Webhook Security**. La URL está restringida al origen HTTPS oficial y no se siguen redirecciones. No se imprimen claves, respuestas completas del proveedor ni tokens temporales.
+`WHATSAPP_ENABLED` y `WHATSAPP_OTP_ENABLED` son independientes. Las antiguas `WASAPFLOW_*` y `WHATSAPP_TEMPLATE_*` ya no se leen: las plantillas se definen en el código y se resuelven en Bird.
 
-`WASAPFLOW_WABA_ID` es opcional: limita qué WABA puede conectarse. La WABA operativa se persiste en `WhatsAppConnection` al completar el onboarding. Poner un ID en el entorno **no activa** una conexión sin verificar. No necesitas tokens, App Secret ni Phone Number ID de Meta en Instafix.
+Permisos de la API key: lectura y envío de WhatsApp, números y plantillas. `workspace:read` es opcional (solo el diagnóstico muestra el nombre del workspace).
 
-## Diagnóstico de envíos
+## Plantillas
+
+| Aviso de Instafix                                                 | Plantilla en Bird                | Categoría      |
+| ----------------------------------------------------------------- | -------------------------------- | -------------- |
+| Solicitud recibida (pide ubicación)                               | `appointment_requested`          | Utility        |
+| Técnico confirma la visita                                        | `appointment_confirmed`          | Utility        |
+| Reprogramada                                                      | `appointment_rescheduled`        | Utility        |
+| Cancelada                                                         | `appointment_cancelled`          | Utility        |
+| Recordatorio día anterior y mismo día (08:00 Ecuador)             | `appointment_reminder`           | Utility        |
+| Código de verificación (registro, recuperación, cambio de número) | `bird_otp` (gestionada por Bird) | Authentication |
+
+- **Idioma**: se usa el idioma aprobado de cada plantilla (`es-EC`, `es`…), leído de Bird. No se configura.
+- **Variables con nombre**: Instafix ofrece `{{nombre}}` (primer nombre), `{{servicio}}` (lo que escribió el cliente), `{{fecha}}` («viernes 24 de octubre»), `{{hora}}` («10:00»), `{{tecnico}}` y `{{cuando}}` («mañana»/«hoy» en recordatorios, la fecha en el resto). Cada plantilla usa las que quiera; el proveedor envía solo las que declara su versión aprobada (caché de 10 minutos). Una plantilla con variables posicionales (`{{1}}`) o con nombres distintos **no se envía** y Administración → WhatsApp lo indica.
+- **OTP**: `bird_otp` ya está aprobada por Meta y sale desde un número de Bird (no desde el de Instafix): «Tu código de verificación es _123456_. Por tu seguridad, no lo compartas.» + botón «Copiar código». Si Meta aprueba una plantilla propia, basta con cambiar `BIRD_OTP_TEMPLATE` en `whatsapp/bird/bird.provider.ts`.
+- Se retiraron los avisos «técnico asignado» y «técnico en camino» (sin plantilla). Los trabajos antiguos de esos tipos se cancelan sin enviarse.
+
+Editar el texto de una plantilla en Bird no requiere cambiar código mientras use esas variables.
+
+## Webhook de Bird
+
+1. **Bird → Developers → Webhooks → Crear**: URL `https://api.instafix.ec/api/v1/webhooks/bird` (o la URL pública de la API).
+2. Eventos: `whatsapp.sent`, `whatsapp.delivered`, `whatsapp.read`, `whatsapp.failed`, `whatsapp.rejected`, `whatsapp.received` (opcional `whatsapp.accepted`, se ignora).
+3. Copia el secreto (`whsec_…`) que aparece **una sola vez** y guárdalo como `BIRD_WEBHOOK_SECRET` en el servidor; reinicia la API.
+4. Usa «Enviar prueba» de Bird: debe responder 200. Con firma incorrecta la API responde 403; sin secreto configurado, 503.
+
+Funcionamiento:
+
+- Firma **Standard Webhooks** (`webhook-id`, `webhook-timestamp`, `webhook-signature`) verificada con el SDK sobre el cuerpo crudo; marcas de tiempo antiguas se rechazan.
+- Idempotencia: la fila de la bandeja `WhatsAppWebhook` usa `BIRD:<webhook-id>`; los reintentos de Bird no se procesan dos veces. Los estados y mensajes entrantes también se deduplican por id de mensaje.
+- Se guarda solo el evento normalizado; al procesarlo se vacía el contenido de la bandeja.
+- Estados normalizados en `AutomationJob.deliveryStatus`: `SENT`, `DELIVERED`, `READ`, `FAILED` (failed y rejected), monótonos aunque lleguen desordenados o antes de guardar el envío. «Aceptado por Bird» (`status = SENT` del trabajo) **no es entregado**.
+- Mensajes entrantes (`whatsapp.received`): texto, remitente, id, fecha, ubicación, media (tipo, MIME, pie; no se descarga) y respuesta citada. Fuente:
+  - `customer_live`: el cliente escribió ahora. Solo esta fuente puede aportar la ubicación de una cita.
+  - `business_app`: eco de lo que escribes desde el teléfono (Coexistence).
+  - `history`: historial sincronizado. Nunca dispara automatizaciones.
+- La ubicación se asigna a la cita respondida (`in_reply_to_message_id` = id del aviso) o a la única cita pendiente de ese teléfono; con varias, se marca para revisión.
+
+## Errores normalizados
+
+`CONFIG`, `AUTH` (clave inválida), `PERMISSION`, `CHANNEL`, `RECIPIENT`, `TEMPLATE`, `TEMPLATE_NOT_APPROVED`, `BILLING`, `RATE_LIMIT`, `META_REJECTED` (llega como entrega `FAILED` con código Meta), `PROVIDER_UNAVAILABLE`, `NETWORK`, `UNKNOWN`.
+
+- Límite de envíos, Bird no disponible (503) o sin conexión → se reintenta solo.
+- Tiempo agotado o error interno de Bird → **revisión**: Bird pudo haberlo enviado; compruébalo en Bird → WhatsApp → Mensajes antes de reintentar.
+- Resto → fallo definitivo hasta corregir la causa; «Reintentar envío fallido» en Administración.
+
+Logs (`whatsapp.accepted`, `whatsapp.send_failed`, `whatsapp.webhook_*`): proveedor, operación, id de cita, id del mensaje, estado y código normalizado. Nunca la clave, el código OTP, el teléfono completo ni respuestas crudas.
+
+## Diagnóstico
 
 ```sh
-pnpm --filter @instafix/api whatsapp:diagnose
-pnpm --filter @instafix/api whatsapp:diagnose --to +5939XXXXXXXX --send   # envío real de la plantilla OTP
+pnpm --filter @instafix/api whatsapp:diagnose          # solo lectura
+pnpm --filter @instafix/api whatsapp:diagnose --to +5939XXXXXXXX --template appointment_confirmed \
+  --param "fecha=viernes 24 de octubre" --param hora=10:00 --param tecnico=David --send
+pnpm --filter @instafix/api whatsapp:diagnose --message wam_…   # estado y línea de tiempo
 ```
 
-Revisa variables, conexión guardada, Partner Key y WABAs de la cuenta (`GET /clients`) y, con `--send`, envía un código de prueba mostrando el error exacto de WasapFlow/Meta. No imprime claves ni códigos. Los fallos también quedan en Administración → Comunicaciones y en la consola de la API (`WhatsApp OTP no enviado: …`).
+Muestra clave (solo región), WABA, números (estado, Coexistence, calidad, límite), plantillas con su idioma, texto y variables, y la línea de tiempo accepted → sent → delivered → read. No envíes al propio número de Instafix: WhatsApp no entrega mensajes de un número a sí mismo.
 
-**WABA registrada directamente en WasapFlow** (panel o `POST /clients/register`): configura `WASAPFLOW_WABA_ID` con su ID. Al arrancar, y antes de cada envío si hace falta, Instafix confirma en `GET /clients` que pertenece a tu partner y está activa, y la guarda como conexión. No hace falta repetir el alta con el botón de Administración.
-
-## Conectar el número sin quitarlo de la aplicación
-
-1. Configura Partner Key y Webhook Secret en el servidor; deja `WHATSAPP_ENABLED=false`.
-2. En WasapFlow configura **Settings → Webhook URL** con `https://instafix.ec/api/v1/webhooks/wasapflow`. La web/API necesitan estar publicadas con HTTPS. No existe el desafío GET de Meta: este endpoint recibe POST de WasapFlow firmados con `x-wasapflow-signature: sha256=…`.
-3. En **Administración → WhatsApp**, pulsa **Conectar WhatsApp Business**. El backend comprueba que `/embedded-signup/config` anuncie `connection_mode: coexistence` y llama a `POST /connect/session` con `display_name: Instafix` y un `state` aleatorio por intento. Abre el `connect_url` temporal devuelto; nunca se incluye la Partner Key en una URL.
-4. Completa el onboarding alojado por WasapFlow y elige conectar el número que ya usa WhatsApp Business App. No borres la cuenta ni desconectes la aplicación. Si el proveedor no ofrece Coexistence, detén ese alta y consulta con WasapFlow.
-5. El popup debe devolver `WASAPFLOW_CONNECT_SUCCESS` y `connection_mode: coexistence`. El navegador valida origen, ventana y `state`; el backend valida la sesión administrativa, caducidad y uso único, y consulta `/clients` para comprobar que la WABA esté activa y pertenezca al partner. Si la respuesta incluye un modo distinto, se rechaza. El contrato publicado de `/clients` puede omitir el modo: por eso también se exige el modo de la configuración previa y del callback del onboarding alojado. No se sustituye una WABA operativa por otra desde este flujo.
-6. El panel mostrará **Conectado con Coexistence**. Confirma que sigues enviando manualmente desde tu teléfono y que aparece la actividad como **WhatsApp Business App**. Verifica la sincronización inicial el mismo día; el proveedor documenta límites temporales para iniciarla. Instafix no ejecuta operaciones de desconexión ni re-registro para forzarla.
-
-El enlace dura 30 minutos; WasapFlow admite finalizar un flujo abierto a tiempo durante otros 30 minutos. Cerrar/cancelar la ventana permite repetir con un nuevo estado. Solo se guarda el hash del estado, vinculado al administrador; no el token del enlace.
-
-## Plantilla de verificación (OTP)
-
-La verificación de cuentas, la recuperación de contraseña y el cambio de número usan una plantilla de categoría **AUTHENTICATION** (`instafix_codigo_verificacion`, idioma `es`, botón «Copiar código», caducidad 10 minutos, recomendación de seguridad activada). Meta fija su texto. Configura `WHATSAPP_TEMPLATE_OTP` y `WHATSAPP_OTP_ENABLED=true` cuando esté aprobada. Es independiente de `WHATSAPP_ENABLED`, que controla los avisos de citas. Detalles en [Comunicaciones](communications.md).
-
-Plantillas UTILITY adicionales, opcionales (sin plantilla configurada no se envía el aviso): `instafix_recordatorio_visita` (`WHATSAPP_TEMPLATE_VISIT_REMINDER`, sustituye al recordatorio del mismo día e incluye la hora), `instafix_cita_reprogramada`, `instafix_cita_cancelada`, `instafix_tecnico_asignado` y `instafix_tecnico_en_camino`. Sus cuerpos están en [whatsapp-templates.json](whatsapp-templates.json).
-
-## Textos y plantillas conservados
-
-Los cuatro cuerpos de [whatsapp-templates.json](whatsapp-templates.json) se mantienen sin cambios:
-
-| Momento                                    | Plantilla                      | Parámetros                   |
-| ------------------------------------------ | ------------------------------ | ---------------------------- |
-| Reserva pendiente                          | `instafix_solicitar_ubicacion` | Nombre, trabajo, fecha, hora |
-| Ubicación recibida y confirmación correcta | `instafix_cita_confirmada`     | Nombre                       |
-| Día anterior, 08:00 Ecuador                | `instafix_recordatorio_manana` | Trabajo, hora                |
-| Mismo día, 08:00 Ecuador                   | `instafix_recordatorio_hoy`    | Nombre                       |
-
-Crea o revisa estas plantillas mediante WasapFlow, idioma `es`, con los cuerpos y ejemplos del archivo. La aprobación de Meta sigue siendo necesaria. El archivo es una especificación de contenidos, **no** un body para enviar directamente a Bridge: el adaptador construye `POST /messages/template` con `template.language` como cadena.
-
-Los avisos automáticos usan templates incluso si hay una ventana abierta. `WhatsAppService.replyText` utiliza `POST /messages/send` solo si existe un mensaje entrante nuevo del cliente dentro de las últimas 24 horas; no se cuentan ecos, historial ni recibos. BSUID se guarda separado del teléfono y nunca se transforma en un número. Una ubicación sin teléfono no se asigna automáticamente a una cita.
-
-La hora estimada de llegada y la explicación de trabajos anteriores/traslados conservan su redacción. No había disparadores implementados de «técnico asignado», «técnico en camino» o «cancelación notificada»: el mensaje del mismo día anuncia comunicación humana del técnico. La cancelación existente **detiene recordatorios**, sin inventar nuevos avisos. Los tipos y parámetros se centralizan en `messages.ts`, para ampliar el mapeo a templates cuando se defina ese flujo.
-
-## Cal.com: conservar el flujo de citas
+## Cal.com
 
 En el evento `instafix/agenda-tu-cita-con-instafix`:
 
-1. Activa **requiere confirmación**. La reserva debe permanecer pendiente hasta recibir la ubicación; no la confirmes manualmente si quieres mantener este flujo.
-2. Establece `America/Guayaquil` como zona operativa. El ejemplo de agenda contempla una visita individual por reserva.
-3. Haz obligatorio el teléfono del asistente (`attendeePhoneNumber`), con código internacional.
-4. Añade un campo de texto obligatorio cuyo identificador sea **`servicio`**, con el equipo y trabajo solicitado. No es suficiente cambiar solamente la etiqueta visible.
-5. Añade una casilla obligatoria cuyo identificador sea **`whatsappConsent`**: «Autorizo a InstaFix a enviarme por WhatsApp la confirmación y los recordatorios de esta cita». El webhook debe entregar su valor booleano `true`.
-6. Crea una clave de API de la cuenta propietaria del evento y guárdala en `CAL_API_KEY`. Configura `CAL_EVENT_TYPE_ID` con el identificador numérico del evento. La versión de los endpoints de consulta/confirmación revisada es `CAL_API_VERSION=2026-02-25`.
-7. Crea el webhook con cuerpo JSON predeterminado, sin plantilla personalizada, y un secreto aleatorio compartido con `CAL_WEBHOOK_SECRET`. Selecciona `BOOKING_REQUESTED`, `BOOKING_CREATED`, `BOOKING_RESCHEDULED`, `BOOKING_CANCELLED` y `BOOKING_REJECTED`.
+1. Activa **requiere confirmación**: la reserva queda pendiente hasta que un técnico la confirma en Instafix ([Técnicos](technicians.md)).
+2. Zona operativa `America/Guayaquil`.
+3. Teléfono del asistente (`attendeePhoneNumber`) obligatorio, con código internacional.
+4. Campo de texto obligatorio con identificador **`servicio`**.
+5. Casilla obligatoria **`whatsappConsent`**: «Autorizo a InstaFix a enviarme por WhatsApp la confirmación y los recordatorios de esta cita».
+6. `CAL_API_KEY` de la cuenta propietaria, `CAL_EVENT_TYPE_ID` numérico, `CAL_API_VERSION=2026-02-25`.
+7. Webhook JSON predeterminado con secreto `CAL_WEBHOOK_SECRET` y eventos `BOOKING_REQUESTED`, `BOOKING_CREATED`, `BOOKING_RESCHEDULED`, `BOOKING_CANCELLED`, `BOOKING_REJECTED`.
 
-El calendario incrustado continúa usando tus horarios. La selección del catálogo no modifica automáticamente el precio en Cal.com: el campo `servicio` aporta la descripción del mensaje. Los webhooks incompletos se guardan como citas que requieren atención y no generan envíos.
+## Operación
 
-## Recepción, persistencia y operación
+- Cola `AutomationJob` revisada cada 15 s; bandeja de webhooks cada 3 s. Sobreviven reinicios y se coordinan con PostgreSQL.
+- Cancelar o reprogramar invalida los avisos pendientes de la revisión anterior.
+- Los recordatorios solo se envían mientras son pertinentes (no «mañana» el mismo día, nada después del inicio).
+- Mensajes solo con autorización del cliente (`whatsappConsentAt`).
 
-- El webhook verifica HMAC sobre los bytes originales y guarda solo campos permitidos en `BridgeWebhook` antes de responder. No ejecuta llamadas externas al recibirlo. Si falla la persistencia devuelve error para que el proveedor reintente.
-- Un worker revisa la bandeja cada 3 segundos. La cola de recordatorios conserva su intervalo de 15 segundos. Ambos sobreviven reinicios y coordinan ejecuciones con PostgreSQL.
-- `message.received`: guarda el mensaje nuevo; una ubicación del mismo teléfono activa el flujo existente. Primero confirma Cal.com; solo tras éxito marca la cita confirmada y encola su mensaje.
-- `message.sent/delivered/read/failed`: correlaciona `message_id`/wamid y conserva estados monotónicos, aunque lleguen antes de persistir la respuesta del envío.
-- `message.echo`: almacena salida manual, origen `business_app`. Nunca llama al transporte ni confirma citas.
-- `message.history`: almacena fecha original y dirección. Nunca abre ventanas de conversación, dispara respuestas ni sustituye un mensaje nuevo ya guardado.
-- `contact.synced`: sincroniza contactos propios de WhatsApp, incluida baja lógica. No elimina usuarios ni clientes de Instafix.
-- Se guardan teléfono y BSUID por separado, contenido permitido e identificador del mensaje. Los tipos no textuales aparecen como tales en el panel; esta entrega no descarga medios históricos ni incorpora un chat completo con adjuntos.
-- Durante un onboarding pendiente pueden recibirse eventos antes del callback; se almacenan en espera, pero solo se procesan para la WABA finalmente verificada. Otras WABAs no disparan lógica de negocio. Los eventos procesados conservan su huella y eliminan el payload temporal. Los errores repetidos aparecen como revisión en administración.
-- Las citas canceladas/reprogramadas invalidan sus mensajes pendientes. Los resultados de envío inciertos se revisan en WasapFlow antes de repetirlos; no se reenvían automáticamente a ciegas.
-- Si hay varias citas pendientes de un teléfono, pide compartir la ubicación respondiendo al mensaje de la cita correcta. No se elige una al azar.
-- Los recordatorios se recuperan tras reinicio solo mientras sean pertinentes: no se envía «mañana» el mismo día ni recordatorios después del inicio. Una cita a las 08:00 o antes no recibe el aviso de ese mismo día.
-- No se ha añadido validación geográfica, asignación automática de técnicos ni vinculación de invitados por teléfono no verificado. Los permisos de cuentas existentes se conservan.
-
-## Activación y primer mensaje seguro
-
-Aplica las migraciones antes de iniciar la nueva API y conecta el webhook a la nueva URL. Retira cualquier configuración antigua que apuntase directamente a Instafix desde Meta; la conexión de Meta la administra WasapFlow. No des de baja la cuenta ni la WABA.
-
-1. Mantén `WHATSAPP_ENABLED=false` en el servidor para no activar citas reales.
-2. Completa Coexistence y envía un saludo **desde un teléfono tuyo de prueba, distinto del empresarial**, al número de Instafix. Comprueba que aparezca como **Cliente** en administración. Eso abre la ventana de respuesta.
-3. Desde la raíz del proyecto, ensaya sin enviar (sustituye el teléfono de ejemplo por el de prueba):
+## Pruebas
 
 ```sh
-pnpm --filter @instafix/api whatsapp:test --to +593999123456
-```
-
-4. Solo cuando decidas enviar, ejecuta:
-
-```sh
-WHATSAPP_ENABLED=true pnpm --filter @instafix/api whatsapp:test --to +593999123456 --send
-```
-
-El flag habilita **únicamente ese proceso**, no cambia `.env` ni arranca workers. Envía un único texto explícito de prueba, verifica la ventana de 24 horas y no crea citas. Sin `--send` no llama a WasapFlow. Revisa la entrega en tu teléfono y en el panel del proveedor. Los mensajes aceptados no equivalen a entregados.
-
-5. Con las plantillas aprobadas, prueba una cita controlada antes de habilitar el worker para clientes. Revisa la cola pendiente y la configuración de Cal.com; luego cambia `WHATSAPP_ENABLED=true` en el servidor y reinicia la API.
-
-## Comprobaciones de desarrollo
-
-```sh
-pnpm build
 pnpm test
-pnpm format:check
-INSTAFIX_INTEGRATION=1 pnpm --filter @instafix/api exec tsx --test --test-concurrency=1 src/tests/wasapflow.integration.test.ts src/tests/webhooks.integration.test.ts src/tests/whatsapp.integration.test.ts
+INSTAFIX_INTEGRATION=1 pnpm --filter @instafix/api exec tsx --test --test-concurrency=1 \
+  src/tests/bird-provider.test.ts src/tests/bird-webhooks.integration.test.ts \
+  src/tests/webhooks.integration.test.ts src/tests/whatsapp.integration.test.ts
 ```
 
-Las pruebas usan mocks de WasapFlow y datos propios temporales. La prueba de onboarding requiere una base de desarrollo sin conexión real; se omite si detecta una WABA o alta pendiente. La cuenta y el número reales no se modifican.
+Usan un doble del SDK de Bird y webhooks firmados como Bird; nunca llaman a Bird ni envían mensajes reales.
