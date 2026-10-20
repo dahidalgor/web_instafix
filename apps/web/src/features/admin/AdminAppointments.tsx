@@ -8,7 +8,7 @@ import {
   type PerformedService,
 } from '@instafix/contracts';
 import { AppointmentCard } from '../../components/appointments/AppointmentCard';
-import { money } from '../../lib/format';
+import { mapsLink, money } from '../../lib/format';
 import {
   dateFilters,
   filterAppointments,
@@ -417,6 +417,15 @@ export function AdminAppointments(_props: { services: Offering[] }) {
                 rel="noreferrer"
               >
                 Ver ubicación del cliente
+              </a>
+            ))}
+          {list
+            .filter(
+              (item) => item.id === id && item.locationLatitude == null && mapsLink(item.address),
+            )
+            .map((item) => (
+              <a key={item.id} href={mapsLink(item.address)!} target="_blank" rel="noreferrer">
+                Abrir el enlace de ubicación del cliente
               </a>
             ))}
           <BusyButton

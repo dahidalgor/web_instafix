@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { config } from 'dotenv';
+import { locationFromText } from '../whatsapp/maps-link';
 import { birdClient, birdKeyRegion, describeBirdError } from '../whatsapp/bird/bird.client';
 
 config({ path: resolve(process.cwd(), '../../.env') });
@@ -13,6 +14,7 @@ config({ path: resolve(process.cwd(), '../../.env') });
  *   pnpm --filter @instafix/api bird:spike --to +5939XXXXXXXX --template <slug> \
  *     [--lang es-EC] [--param valor | --param nombre=valor …] [--from +593…] --send
  *   pnpm --filter @instafix/api bird:spike --message <id>     (estado y línea de tiempo)
+ *   pnpm --filter @instafix/api bird:spike --maps-link "<enlace o texto>"   (ubicación detectada)
  */
 const { values } = parseArgs({
   options: {
@@ -24,6 +26,7 @@ const { values } = parseArgs({
     'button-param': { type: 'string' },
     send: { type: 'boolean', default: false },
     message: { type: 'string' },
+    'maps-link': { type: 'string' },
     wait: { type: 'string', default: '60' },
   },
 });
@@ -117,6 +120,12 @@ async function inspectTemplate(slug: string, wanted?: string) {
 }
 
 async function main() {
+  if (values['maps-link']) {
+    // Prueba local de cómo se interpreta un enlace de mapas enviado por WhatsApp (sin Bird).
+    const found = await locationFromText(values['maps-link']);
+    console.log(found ? JSON.stringify(found, null, 2) : 'No se detectó ninguna ubicación.');
+    return;
+  }
   console.log('\nBird · spike de WhatsApp para Instafix\n');
 
   console.log('1. Configuración');

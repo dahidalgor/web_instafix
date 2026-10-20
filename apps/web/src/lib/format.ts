@@ -15,3 +15,15 @@ export function warranty(days: number) {
   if (days >= 30 && days % 30 === 0) return days === 30 ? '1 mes' : `${days / 30} meses`;
   return days === 1 ? '1 día' : `${days} días`;
 }
+
+/** Enlace de mapas (Google/Apple) guardado en la dirección de una cita, si lo hay. */
+export function mapsLink(address?: string | null) {
+  const url = address?.match(/https:\/\/[^\s]+/)?.[0];
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname;
+    return /(^|\.)(google\.[a-z.]+|goo\.gl|maps\.apple\.com)$/.test(host) ? url : null;
+  } catch {
+    return null;
+  }
+}

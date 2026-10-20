@@ -132,17 +132,18 @@ export function AccountSecurity({
             <button type="button" className="btn btn-ghost btn-small" onClick={() => open(null)}>
               Cancelar
             </button>
-          ) : (
+          ) : user.phoneVerifiedAt ? null : (
+            // Un número verificado no muestra el botón: cada código cuesta un mensaje.
             <BusyButton
               type="button"
-              className={`btn btn-small ${user.phoneVerifiedAt ? 'btn-ghost' : 'btn-primary'}`}
+              className="btn btn-small btn-primary"
               disabled={busy}
               busy={busyAction === 'whatsapp'}
               busyLabel="Enviando código…"
               aria-controls="security-verify"
               onClick={startWhatsAppVerification}
             >
-              {user.phoneVerifiedAt ? 'Verificar de nuevo' : 'Verificar WhatsApp'}
+              Verificar WhatsApp
             </BusyButton>
           )}
           <button

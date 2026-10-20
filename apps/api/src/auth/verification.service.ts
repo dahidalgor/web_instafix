@@ -1,4 +1,10 @@
-import { BadRequestException, HttpException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import type { PhoneChallenge, Prisma } from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import { maskPhone } from '@instafix/contracts/src/phone';
@@ -75,6 +81,19 @@ export class VerificationService {
 
   /** Genera, guarda (hash con sal) y envía un OTP aplicando cooldown y límite por hora. */
   async start(input: StartInput, now = new Date()): Promise<VerificationTicket> {
+    // Un número ya verificado no se vuelve a verificar: cada código cuesta un mensaje.
+    if (input.purpose === 'PHONE_VERIFICATION' && input.userId) {
+      const user = await db.user.findUnique({
+        where: { id: input.userId },
+        select: { phone: true, phoneVerifiedAt: true },
+      });
+      if (user?.phoneVerifiedAt && user.phone === input.phone)
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'PHONE_ALREADY_VERIFIED',
+          message: 'Tu WhatsApp ya está verificado.',
+        });
+    }
     const deliver = input.deliver !== false;
     const code = newCode();
     const codeHash = await hashPassword(code);

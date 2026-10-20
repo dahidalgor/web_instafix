@@ -9,7 +9,14 @@ export async function receiveCustomerMessage(message: {
   timestamp: string;
   type: string;
   context?: { id: string };
-  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  /** Ubicación nativa de WhatsApp o sacada de un enlace de mapas (puede venir sin coordenadas). */
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    name?: string;
+    address?: string;
+    url?: string;
+  };
 }) {
   const phone = normalizePhone(`+${message.from}`, 'EC');
   if (!phone) return;
@@ -60,12 +67,16 @@ export async function receiveCustomerMessage(message: {
           const updated = await tx.appointment.update({
             where: { id: current.id },
             data: {
-              locationLatitude: message.location.latitude,
-              locationLongitude: message.location.longitude,
+              locationLatitude: message.location.latitude ?? null,
+              locationLongitude: message.location.longitude ?? null,
+              // Con coordenadas basta el nombre; sin ellas se guarda el enlace para abrirlo.
               address:
                 message.location.address ||
-                message.location.name ||
-                `${message.location.latitude}, ${message.location.longitude}`,
+                (message.location.latitude !== undefined
+                  ? message.location.name ||
+                    `${message.location.latitude}, ${message.location.longitude}`
+                  : [message.location.name, message.location.url].filter(Boolean).join(' · ') ||
+                    'Ubicación enviada por WhatsApp'),
               locationReceivedAt: receivedAt,
               automationIssue: null,
             },
