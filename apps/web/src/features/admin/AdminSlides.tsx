@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { SiteSlide } from '@instafix/contracts/src/site';
+import { Skeleton, SkeletonGroup } from '../../components/ui/Skeleton';
 import { api } from '../../lib/api';
 import { MediaEditor } from '../media/MediaEditor';
 
@@ -14,7 +15,7 @@ const empty: Omit<SiteSlide, 'id'> = {
   published: false,
 };
 export function AdminSlides({ onUploading }: { onUploading: (busy: boolean) => void }) {
-  const [slides, setSlides] = useState<SiteSlide[]>([]);
+  const [slides, setSlides] = useState<SiteSlide[] | null>(null);
   const [draft, setDraft] = useState({ ...empty, id: '' });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -47,11 +48,20 @@ export function AdminSlides({ onUploading }: { onUploading: (busy: boolean) => v
     <section>
       <h2>Presentación de nuestro trabajo</h2>
       <p>
-        Administra las diapositivas de «Quiénes somos». Menor posición aparece primero. Desmarca
-        «Publicada» para retirar una diapositiva sin perderla.
+        Administra las diapositivas de «Nuestro trabajo», en Inicio. Menor posición aparece primero.
+        Desmarca «Publicada» para retirar una diapositiva sin perderla.
       </p>
+      {slides === null && !message && (
+        <div className="filters">
+          <SkeletonGroup label="Cargando diapositivas…">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} width={120} height={38} radius={999} />
+            ))}
+          </SkeletonGroup>
+        </div>
+      )}
       <div className="filters">
-        {slides.map((s) => (
+        {slides?.map((s) => (
           <button
             key={s.id}
             disabled={busy || uploading}

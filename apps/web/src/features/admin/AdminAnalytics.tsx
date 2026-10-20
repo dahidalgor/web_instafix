@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useState } from 'react';
 import type { AnalyticsSummary } from '@instafix/contracts/src/site';
 import { api } from '../../lib/api';
@@ -23,7 +24,7 @@ export function AdminAnalytics() {
         Actualizar
       </button>
       {error && <p role="alert">{error}</p>}
-      {!data && !error && <p role="status">Cargando estadísticas…</p>}
+      {!data && !error && <ListSkeleton label="Cargando estadísticas…" count={4} />}
       {data && (
         <>
           <p>

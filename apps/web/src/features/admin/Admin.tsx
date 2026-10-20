@@ -14,6 +14,7 @@ import { AdminWarranty } from './AdminWarranty';
 import { AdminWhatsApp } from './AdminWhatsApp';
 import { AdminTeam } from './AdminTeam';
 import { TechnicianPanel } from '../technician/TechnicianPanel';
+import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton';
 export default function Admin() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -26,6 +27,8 @@ export default function Admin() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Catálogo, equipos, clientes y política se cargan juntos; hasta entonces, skeletons.
+  const [loaded, setLoaded] = useState(false);
   const update = <K extends keyof ServiceDraft>(key: K, value: ServiceDraft[K]) =>
     setDraft((previous) => ({ ...previous, [key]: value }));
   async function load() {
@@ -39,6 +42,7 @@ export default function Admin() {
     setEquipment(devices);
     setUsers(customers);
     setPolicy(terms.text);
+    setLoaded(true);
   }
   const [sessionError, setSessionError] = useState('');
   const checkSession = () => {
@@ -82,7 +86,17 @@ export default function Admin() {
       setDraft({ ...emptyService });
     });
   }
-  if (checking) return <main>Cargando…</main>;
+  if (checking)
+    return (
+      <main className="admin-page">
+        <div className="skeleton-row is-start admin-skeleton-tabs">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} width={96} height={38} radius={999} />
+          ))}
+        </div>
+        <ListSkeleton label="Cargando administración…" count={3} />
+      </main>
+    );
   if (sessionError)
     return (
       <main className="account-panel">
@@ -197,13 +211,26 @@ export default function Admin() {
             setUploading={setUploading}
             save={save}
             busy={busy}
+            loading={!loaded}
           />
         )}
         {tab === 'Equipos' && (
-          <AdminEquipment equipment={equipment} run={run} load={load} busy={busy} />
+          <AdminEquipment
+            equipment={equipment}
+            run={run}
+            load={load}
+            busy={busy}
+            loading={!loaded}
+          />
         )}
         {tab === 'Garantías' && (
-          <AdminWarranty policy={policy} setPolicy={setPolicy} run={run} busy={busy} />
+          <AdminWarranty
+            policy={policy}
+            setPolicy={setPolicy}
+            run={run}
+            busy={busy}
+            loading={!loaded}
+          />
         )}
         {tab === 'Trabajos' && <AdminJobs items={items} users={users} run={run} busy={busy} />}
       </main>

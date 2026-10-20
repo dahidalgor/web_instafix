@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 
@@ -262,6 +263,7 @@ export function AdminWhatsApp() {
         Actualizar estado
       </button>
       {message && <p role="status">{message}</p>}
+      {!data && !message && <ListSkeleton label="Cargando WhatsApp…" count={3} />}
       {data && (
         <>
           <div className="whatsapp-status">

@@ -134,18 +134,44 @@ export const staffMemberSchema = z
     password: z.string().min(12, 'Usa al menos 12 caracteres').max(128),
   })
   .strict();
+/**
+ * Edición de un técnico por un administrador. Solo datos de perfil y estado: nunca id, rol,
+ * hashes ni relaciones. La contraseña se cambia por su propia acción.
+ */
 export const staffUpdateSchema = z
   .object({
+    firstName: z.string().trim().min(2).max(50).optional(),
+    lastName: z.string().trim().min(2).max(50).optional(),
+    phone: z.string().trim().min(6).max(30).optional(),
+    email: z.union([z.string().trim().toLowerCase().email().max(254), z.literal('')]).optional(),
     active: z.boolean().optional(),
+    /** Confirma desactivar aunque tenga citas futuras asignadas (se conservan tal cual). */
+    confirmFutureAppointments: z.literal(true).optional(),
     password: z.string().min(12, 'Usa al menos 12 caracteres').max(128).optional(),
   })
   .strict();
+
+/** Orden del listado de citas de administración; el backend lo traduce a campos reales. */
+export const appointmentSorts = [
+  { id: 'created_desc', label: 'Creación: más recientes primero' },
+  { id: 'created_asc', label: 'Creación: más antiguas primero' },
+  { id: 'starts_asc', label: 'Fecha de la cita: próximas primero' },
+  { id: 'starts_desc', label: 'Fecha de la cita: más lejanas primero' },
+] as const;
+export type AppointmentSort = (typeof appointmentSorts)[number]['id'];
+export const appointmentSortSchema = z
+  .enum(appointmentSorts.map((s) => s.id) as [AppointmentSort, ...AppointmentSort[]])
+  .default('starts_desc');
 export type StaffMember = {
   id: string;
   name: string;
+  firstName?: string | null;
+  lastName?: string | null;
   phone: string;
   email: string | null;
   role: 'ADMIN' | 'TECHNICIAN';
   active: boolean;
   createdAt: string;
+  /** Citas futuras activas asignadas (solo técnicos). */
+  upcomingAppointments?: number;
 };

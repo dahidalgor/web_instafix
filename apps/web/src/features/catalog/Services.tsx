@@ -2,7 +2,9 @@ import { serviceCover, type Offering } from '@instafix/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
+import { ServiceCardSkeleton, SkeletonGroup } from '../../components/ui/Skeleton';
 import { MediaCarousel } from '../media/MediaCarousel';
+import { ServiceFacts } from './ServiceFacts';
 import { availabilityLabels } from './catalog.constants';
 
 export function Services() {
@@ -57,47 +59,73 @@ export function Services() {
           </button>
         ))}
       </div>
-      {loading && <p role="status">Cargando servicios…</p>}
+      {loading && (
+        <div className="cards">
+          <SkeletonGroup label="Cargando servicios…">
+            {Array.from({ length: 6 }, (_, i) => (
+              <ServiceCardSkeleton key={i} />
+            ))}
+          </SkeletonGroup>
+        </div>
+      )}
       {error && (
         <p role="alert">
-          {error} <button onClick={load}>Reintentar</button>
+          {error}{' '}
+          <button className="btn btn-ghost btn-small" onClick={load}>
+            Reintentar
+          </button>
         </p>
       )}
       {!loading && !error && !items.length && <p>Pronto publicaremos nuestros servicios.</p>}
-      <div className="cards">
-        {items
-          .filter((item) => device === 'Todos' || item.device === device)
-          .map((item) => (
-            <button className="card" key={item.id} onClick={() => setSelected(item)}>
-              {serviceCover(item) ? (
-                <img
-                  className="service-cover"
-                  src={serviceCover(item)!.thumbnail || serviceCover(item)!.url}
-                  srcSet={
-                    serviceCover(item)!.thumbnail
-                      ? `${serviceCover(item)!.thumbnail} 640w, ${serviceCover(item)!.url} 1600w`
-                      : undefined
-                  }
-                  sizes="(max-width: 700px) 90vw, 380px"
-                  alt=""
-                  loading="lazy"
-                />
-              ) : (
-                <div className="card-icon">
-                  ✦<span>Ver detalles ↗</span>
-                </div>
-              )}
-              <span className={'badge ' + item.availability}>
-                {availabilityLabels[item.availability]}
-              </span>
-              <p className="eyebrow">{item.device}</p>
-              <h3>{item.title}</h3>
-              <div className="price">
-                <strong>{money(item.priceMinor)}</strong>
-              </div>
-            </button>
-          ))}
-      </div>
+      {!loading && !error && (
+        <div className="cards">
+          {items
+            .filter((item) => device === 'Todos' || item.device === device)
+            .map((item) => {
+              const cover = serviceCover(item);
+              return (
+                <button
+                  className="card service-card"
+                  key={item.id}
+                  onClick={() => setSelected(item)}
+                  aria-label={`${item.title}, ${item.device}, ${money(item.priceMinor)}, ${availabilityLabels[item.availability]}. Ver detalles`}
+                >
+                  {cover ? (
+                    <img
+                      className="service-cover"
+                      src={cover.thumbnail || cover.url}
+                      srcSet={
+                        cover.thumbnail ? `${cover.thumbnail} 640w, ${cover.url} 1600w` : undefined
+                      }
+                      sizes="(max-width: 700px) 90vw, 380px"
+                      alt=""
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="card-icon" aria-hidden="true">
+                      ✦
+                    </span>
+                  )}
+                  <span className="service-card-top">
+                    <span className="eyebrow">{item.device}</span>
+                    <span className={'badge ' + item.availability}>
+                      {availabilityLabels[item.availability]}
+                    </span>
+                  </span>
+                  <span className="service-card-title">{item.title}</span>
+                  <span className="service-card-bottom">
+                    <strong className="service-card-price">{money(item.priceMinor)}</strong>
+                    <ServiceFacts
+                      durationMinutes={item.durationMinutes}
+                      warrantyDays={item.warrantyDays}
+                      compact
+                    />
+                  </span>
+                </button>
+              );
+            })}
+        </div>
+      )}
       <dialog
         ref={dialog}
         className="service-dialog"
@@ -123,12 +151,15 @@ export function Services() {
             </span>
             <MediaCarousel media={selected.media} />
             <p className="service-description">{selected.description}</p>
-            <strong className="service-price">{money(selected.priceMinor)}</strong>
-            <p>{selected.durationMinutes} minutos estimados</p>
+            <div className="service-summary">
+              <strong className="service-price">{money(selected.priceMinor)}</strong>
+              <ServiceFacts
+                durationMinutes={selected.durationMinutes}
+                warrantyDays={selected.warrantyDays}
+              />
+            </div>
             {selected.warrantyDays > 0 && (
-              <p>
-                Garantía: {selected.warrantyDays} días. Consulta las condiciones antes de contratar.
-              </p>
+              <p className="small">Consulta las condiciones de la garantía antes de contratar.</p>
             )}
             {selected.availability === 'AVAILABLE' ? (
               <a className="button" href="#agenda" onClick={() => setSelected(null)}>
