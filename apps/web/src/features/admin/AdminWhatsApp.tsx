@@ -1,13 +1,21 @@
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 
-type Configuration = {
-  configured: boolean;
-  missing: string[];
-  enabled?: boolean;
-  connected?: boolean;
+type Configuration = { configured: boolean; missing: string[]; enabled?: boolean };
+type Account = {
+  provider: string;
+  number: {
+    phone: string | null;
+    status: string;
+    coexistence: boolean | null;
+    quality: string | null;
+    messagingLimit: string | null;
+  } | null;
+  templates: { name: string; status: string; language: string | null; problem: string | null }[];
+  authenticationTemplate: { name: string; status: string } | null;
+  error: string | null;
 };
 type Job = {
   id: string;
@@ -21,7 +29,8 @@ type Job = {
 };
 type Overview = {
   messages: {
-    messageId: string;
+    provider: string;
+    providerMessageId: string;
     phone: string | null;
     bsuid: string | null;
     source: string;
@@ -31,204 +40,78 @@ type Overview = {
     occurredAt: string;
   }[];
   webhookIssues: number;
-  whatsapp: Configuration;
+  whatsapp: Configuration & { businessPhone: string };
+  account: Account | null;
+  otp: Configuration & { template: string };
   cal: Configuration;
   jobs: Job[];
   issues: { id: string; contactName: string; title: string; automationIssue: string }[];
 };
 const kinds: Record<string, string> = {
-  INITIAL: 'Solicitar ubicación',
+  INITIAL: 'Solicitud recibida (pide ubicación)',
   CAL_CONFIRM: 'Confirmar en Cal.com',
-  CONFIRMED: 'Confirmación al cliente',
+  CONFIRMED: 'Cita confirmada',
   DAY_BEFORE: 'Recordatorio del día anterior',
   SAME_DAY: 'Recordatorio del mismo día',
+  RESCHEDULED: 'Cita reprogramada',
+  CANCELLED: 'Cita cancelada',
+  TECHNICIAN_ASSIGNED: 'Técnico asignado (retirado)',
+  TECHNICIAN_ON_THE_WAY: 'Técnico en camino (retirado)',
 };
 const statuses: Record<string, string> = {
   PENDING: 'Pendiente',
   RETRY: 'Reintento programado',
   SENDING: 'Procesando',
-  SENT: 'Aceptado por el proveedor',
+  SENT: 'Aceptado por Bird',
   CANCELLED: 'Cancelado',
   FAILED: 'Fallido',
   REVIEW: 'Requiere revisión',
-  sent: 'Enviado',
-  delivered: 'Entregado',
-  read: 'Leído',
-  failed: 'Entrega fallida',
+};
+const deliveries: Record<string, string> = {
+  SENT: 'Enviado',
+  DELIVERED: 'Entregado',
+  READ: 'Leído',
+  FAILED: 'Entrega fallida',
+};
+const numberStatuses: Record<string, string> = {
+  connected: 'Conectado',
+  awaiting_signup: 'Falta terminar el registro en Bird',
+  pending: 'Pendiente',
+  preparing: 'Preparando',
+  disconnected: 'Desconectado',
+  restricted: 'Restringido por Meta',
+  flagged: 'Marcado por Meta',
+  banned: 'Bloqueado por Meta',
+  rate_limited: 'Límite de envíos',
+};
+const templateStatuses: Record<string, string> = {
+  active: 'Aprobada',
+  pending: 'En revisión',
+  draft: 'Borrador',
+  rejected: 'Rechazada',
+  inactive: 'Inactiva',
+  missing: 'No existe en Bird',
+  error: 'No se pudo leer',
+};
+const sources: Record<string, string> = {
+  customer_live: 'Cliente',
+  business_app: 'WhatsApp Business App',
+  api: 'Instafix (automático)',
+  history: 'Historial',
 };
 
 export function AdminWhatsApp() {
   const [data, setData] = useState<Overview | null>(null);
   const [message, setMessage] = useState('');
-  // Acción en curso («complete», «refresh» o el id del envío): solo su botón muestra la espera.
+  // Acción en curso («refresh» o el id del envío): solo su botón muestra la espera.
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const busy = busyAction !== null;
-  const connection = useRef<{
-    popup: Window;
-    state: string;
-    expiresAt: number;
-    openedAt: number;
-  } | null>(null);
-  /** Ventana de conexión abierta y último error, para mostrarlo dentro del popup. */
-  const popupRef = useRef<Window | null>(null);
-  const popupError = useRef<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  // Resultado del intento para los registros del servidor (sin datos sensibles).
-  const report = (outcome: string, detail?: string) =>
-    api('admin/whatsapp/connect/event', {
-      method: 'POST',
-      body: JSON.stringify({ outcome, ...(detail ? { detail: detail.slice(0, 300) } : {}) }),
-    }).catch(() => {});
-  function showPopupError(popup: Window, reason: string) {
-    popupError.current = reason;
-    if (!popup.closed)
-      popup.postMessage({ type: 'INSTAFIX_WA_ERROR', message: reason }, window.location.origin);
-  }
   async function load() {
     setData(await api<Overview>('admin/whatsapp'));
   }
   useEffect(() => {
     load().catch((error) => setMessage(error.message));
-    function onMessage(event: MessageEvent) {
-      // Mensajes de la página intermedia propia (/whatsapp-connect.html).
-      if (
-        event.origin === window.location.origin &&
-        event.source &&
-        event.source === popupRef.current &&
-        event.data?.type
-      ) {
-        if (event.data.type === 'INSTAFIX_WA_READY' && popupError.current)
-          showPopupError(popupRef.current, popupError.current);
-        if (event.data.type === 'INSTAFIX_WA_RETRY') void startSession(popupRef.current);
-        return;
-      }
-      const pending = connection.current;
-      if (
-        !pending ||
-        event.origin !== 'https://officialapi.wasapflow.com' ||
-        event.source !== pending.popup ||
-        event.data?.state !== pending.state
-      )
-        return;
-      if (
-        ![
-          'WASAPFLOW_CONNECT_SUCCESS',
-          'WASAPFLOW_CONNECT_CANCEL',
-          'WASAPFLOW_CONNECT_ERROR',
-        ].includes(event.data.type)
-      )
-        return;
-      connection.current = null;
-      setConnecting(false);
-      if (event.data.type !== 'WASAPFLOW_CONNECT_SUCCESS') {
-        const reason =
-          typeof event.data.error?.message === 'string'
-            ? event.data.error.message
-            : typeof event.data.message === 'string'
-              ? event.data.message
-              : '';
-        const cancelled = event.data.type === 'WASAPFLOW_CONNECT_CANCEL';
-        void report(cancelled ? 'WASAPFLOW_CANCEL' : 'WASAPFLOW_ERROR', reason);
-        setMessage(
-          cancelled
-            ? 'Cancelaste la conexión en WasapFlow. Puedes volver a intentarlo.'
-            : `WasapFlow no completó la conexión${reason ? `: ${reason}` : '.'} Puedes volver a intentarlo.`,
-        );
-        return;
-      }
-      if (event.data.connection_mode !== 'coexistence') {
-        setMessage(
-          'Conexión no aceptada: es obligatorio conservar WhatsApp Business App mediante Coexistence.',
-        );
-        return;
-      }
-      setBusyAction('complete');
-      api('admin/whatsapp/connect/complete', {
-        method: 'POST',
-        body: JSON.stringify({
-          state: pending.state,
-          waba_id: event.data.waba_id,
-          connection_mode: event.data.connection_mode,
-        }),
-      })
-        .then(() => {
-          setMessage('Número conectado mediante WasapFlow Coexistence.');
-          return load();
-        })
-        .catch((error) => {
-          void report('COMPLETE_FAILED', error.message);
-          setMessage(error.message);
-        })
-        .finally(() => setBusyAction(null));
-    }
-    window.addEventListener('message', onMessage);
-    const timer = window.setInterval(() => {
-      const pending = connection.current;
-      if (pending && (pending.popup.closed || Date.now() > pending.expiresAt)) {
-        connection.current = null;
-        setConnecting(false);
-        const seconds = Math.round((Date.now() - pending.openedAt) / 1000);
-        void report(
-          pending.popup.closed ? 'POPUP_CLOSED_WITHOUT_RESULT' : 'SESSION_EXPIRED',
-          `${seconds}s`,
-        );
-        setMessage(
-          pending.popup.closed && seconds < 15
-            ? 'La ventana de WasapFlow se cerró sin devolver un resultado a los pocos segundos. Suele deberse a que el navegador bloqueó la ventana de Meta o a una restricción del sitio de WasapFlow. Vuelve a intentarlo; si se repite, revisa el diagnóstico de WhatsApp.'
-            : 'La ventana se cerró o la sesión caducó sin completar la conexión. Vuelve a conectar para continuar.',
-        );
-      }
-    }, 1000);
-    return () => {
-      window.removeEventListener('message', onMessage);
-      window.clearInterval(timer);
-    };
   }, []);
-  async function startSession(popup: Window) {
-    setConnecting(true);
-    setMessage('');
-    popupError.current = null;
-    try {
-      const result = await api<{ connect_url: string; state: string; expires_in: number }>(
-        'admin/whatsapp/connect/session',
-        { method: 'POST' },
-      );
-      if (popup.closed) {
-        setConnecting(false);
-        setMessage('Cerraste la ventana antes de abrir WasapFlow. Vuelve a intentarlo.');
-        return;
-      }
-      connection.current = {
-        popup,
-        state: result.state,
-        expiresAt: Date.now() + (result.expires_in + 1800) * 1000,
-        openedAt: Date.now(),
-      };
-      popup.location.replace(result.connect_url);
-    } catch (error) {
-      // La ventana NO se cierra: muestra el motivo y permite reintentar o cerrar.
-      const reason = error instanceof Error ? error.message : 'No se pudo iniciar la conexión';
-      showPopupError(popup, reason);
-      setConnecting(false);
-      setMessage(reason);
-    }
-  }
-  async function connect() {
-    if (connecting) return;
-    const popup = window.open(
-      '/whatsapp-connect.html',
-      'instafix-wasapflow',
-      'width=700,height=800',
-    );
-    if (!popup) {
-      setMessage(
-        `El navegador bloqueó la ventana emergente. Permite ventanas emergentes para ${window.location.host} y vuelve a pulsar el botón.`,
-      );
-      return;
-    }
-    popupRef.current = popup;
-    await startSession(popup);
-  }
   async function refresh(id?: string) {
     setBusyAction(id ?? 'refresh');
     setMessage('');
@@ -241,20 +124,21 @@ export function AdminWhatsApp() {
       setBusyAction(null);
     }
   }
+  const number = data?.account?.number;
+  const ready =
+    data &&
+    data.whatsapp.enabled &&
+    data.whatsapp.configured &&
+    number?.status === 'connected' &&
+    data.cal.configured;
+  const missing = data ? [...data.whatsapp.missing, ...data.cal.missing] : [];
   return (
     <section className="whatsapp-admin">
       <h2>WhatsApp y citas</h2>
-      <p>WasapFlow Bridge · Coexistence. Tu número seguirá funcionando en WhatsApp Business App.</p>
-      <BusyButton
-        type="button"
-        className="btn btn-primary"
-        disabled={busy || data?.whatsapp.connected}
-        busy={connecting || busyAction === 'complete'}
-        busyLabel="Conectando…"
-        onClick={connect}
-      >
-        {data?.whatsapp.connected ? 'Conectado con Coexistence' : 'Conectar WhatsApp Business'}
-      </BusyButton>
+      <p>
+        Bird · Coexistence: el número sigue funcionando en WhatsApp Business App. Se conecta una
+        sola vez desde el panel de Bird; aquí solo se muestra su estado.
+      </p>
       <p>
         Recordatorios a las 08:00, hora de Ecuador continental. Los mensajes se envían únicamente
         con autorización del cliente.
@@ -274,22 +158,40 @@ export function AdminWhatsApp() {
         <>
           <div className="whatsapp-status">
             <h3>
-              {data.whatsapp.enabled &&
-              data.whatsapp.configured &&
-              data.whatsapp.connected &&
-              data.cal.configured
-                ? 'Automatización habilitada'
-                : 'Automatización pendiente de activación'}
+              {ready ? 'Automatización habilitada' : 'Automatización pendiente de activación'}
             </h3>
+            {!data.whatsapp.enabled && (
+              <p>
+                Envíos desactivados: <code>WHATSAPP_ENABLED</code> no es <code>true</code>.
+              </p>
+            )}
+            {data.account?.error && <p role="alert">{data.account.error}</p>}
+            {number ? (
+              <p>
+                <strong>{number.phone}</strong> · {numberStatuses[number.status] || number.status}
+                {' · '}
+                Coexistence: {number.coexistence ? 'sí' : number.coexistence === false ? 'no' : '—'}
+                {number.quality && ` · calidad ${number.quality}`}
+                {number.messagingLimit && ` · límite ${number.messagingLimit}`}
+              </p>
+            ) : (
+              data.account &&
+              !data.account.error && (
+                <p>
+                  El número {data.whatsapp.businessPhone} no aparece conectado en este workspace de
+                  Bird.
+                </p>
+              )
+            )}
             <p>
               La configuración completa no garantiza la entrega: comprueba abajo el resultado de
               cada mensaje.
             </p>
-            {[...data.whatsapp.missing, ...data.cal.missing].length > 0 && (
+            {missing.length > 0 && (
               <details>
                 <summary>Configuración pendiente</summary>
                 <ul>
-                  {[...data.whatsapp.missing, ...data.cal.missing].map((key) => (
+                  {missing.map((key) => (
                     <li key={key}>
                       <code>{key}</code>
                     </li>
@@ -298,6 +200,27 @@ export function AdminWhatsApp() {
               </details>
             )}
           </div>
+          {data.account && data.account.templates.length > 0 && (
+            <div>
+              <h3>Plantillas</h3>
+              <ul>
+                {data.account.templates.map((template) => (
+                  <li key={template.name}>
+                    <code>{template.name}</code> ·{' '}
+                    {templateStatuses[template.status] || template.status}
+                    {template.language && ` · ${template.language}`}
+                    {template.problem && <span className="small"> · {template.problem}</span>}
+                  </li>
+                ))}
+              </ul>
+              <p className="small">
+                Código de verificación: <code>{data.otp.template}</code> (plantilla de Bird) ·{' '}
+                {data.otp.enabled ? 'activado' : 'desactivado (WHATSAPP_OTP_ENABLED)'}
+                {data.account.authenticationTemplate &&
+                  ` · ${templateStatuses[data.account.authenticationTemplate.status] || data.account.authenticationTemplate.status}`}
+              </p>
+            </div>
+          )}
           {data.issues.length > 0 && (
             <div>
               <h3>Citas que necesitan atención</h3>
@@ -324,7 +247,8 @@ export function AdminWhatsApp() {
                 </p>
                 <p>
                   <strong>{statuses[job.status] || job.status}</strong>
-                  {job.deliveryStatus && ` · ${statuses[job.deliveryStatus] || job.deliveryStatus}`}
+                  {job.deliveryStatus &&
+                    ` · ${deliveries[job.deliveryStatus.toUpperCase()] || job.deliveryStatus}`}
                 </p>
                 <p className="small">
                   Programado:{' '}
@@ -334,11 +258,11 @@ export function AdminWhatsApp() {
                 {job.lastError && <p>{job.lastError}</p>}
                 {job.status === 'REVIEW' && (
                   <p className="small">
-                    Comprueba el envío en WasapFlow antes de contactar al cliente manualmente, para
-                    evitar duplicados.
+                    Comprueba el envío en Bird (WhatsApp → Mensajes) antes de contactar al cliente
+                    manualmente, para evitar duplicados.
                   </p>
                 )}
-                {(job.status === 'FAILED' || job.deliveryStatus === 'failed') &&
+                {(job.status === 'FAILED' || job.deliveryStatus?.toUpperCase() === 'FAILED') &&
                   new Date(job.expiresAt) > new Date() && (
                     <BusyButton
                       className="btn btn-secondary btn-small"
@@ -354,9 +278,7 @@ export function AdminWhatsApp() {
             ))}
           </div>
           {data.webhookIssues > 0 && (
-            <p role="status">
-              Hay {data.webhookIssues} eventos de WasapFlow que requieren revisión.
-            </p>
+            <p role="status">Hay {data.webhookIssues} eventos de Bird que requieren revisión.</p>
           )}
           <h3>Actividad reciente del chat</h3>
           <p className="small">
@@ -364,22 +286,16 @@ export function AdminWhatsApp() {
             ecos e históricos no disparan automatizaciones.
           </p>
           {!data.messages.length && (
-            <p>Los mensajes aparecerán cuando conectes el número y actives el webhook.</p>
+            <p>Los mensajes aparecerán cuando el webhook de Bird esté registrado.</p>
           )}
           <div className="whatsapp-jobs">
             {data.messages.map((item) => (
-              <article key={item.messageId}>
+              <article key={`${item.provider}:${item.providerMessageId}`}>
                 <strong>{item.phone || item.bsuid || 'Contacto sin teléfono'}</strong>
                 <p className="small">
-                  {(
-                    {
-                      customer_live: 'Cliente',
-                      business_app: 'WhatsApp Business App',
-                      api: 'API',
-                      history: 'Historial',
-                    } as Record<string, string>
-                  )[item.source] || item.source}{' '}
-                  · {new Date(item.occurredAt).toLocaleString('es-EC')}
+                  {sources[item.source] || item.source} ·{' '}
+                  {new Date(item.occurredAt).toLocaleString('es-EC')}
+                  {item.provider !== 'BIRD' && ` · ${item.provider}`}
                 </p>
                 <p>{item.text || `[${item.type}]`}</p>
               </article>
