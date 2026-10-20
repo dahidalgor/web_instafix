@@ -1,7 +1,5 @@
-import { Injectable, Inject } from '@nestjs/common';
 import { ProviderError } from '../integrations/provider-error';
-import { requireConnectedWaba } from './connection';
-import { WasapFlowClient } from './wasapflow.client';
+import type { WhatsAppProvider } from './provider';
 
 /**
  * Transporte de códigos. Generar y validar el OTP pertenece a Instafix (VerificationService);
@@ -14,14 +12,13 @@ export interface WhatsAppOtpProvider {
 export const WHATSAPP_OTP_PROVIDER = Symbol('WHATSAPP_OTP_PROVIDER');
 
 export function otpConfiguration() {
-  const missing = ['WASAPFLOW_PARTNER_KEY', 'WHATSAPP_TEMPLATE_OTP'].filter(
-    (key) => !process.env[key],
-  );
+  const missing = ['BIRD_API_KEY'].filter((key) => !process.env[key]?.trim());
   return {
     enabled: process.env.WHATSAPP_OTP_ENABLED === 'true',
     configured: !missing.length,
     missing,
-    template: process.env.WHATSAPP_TEMPLATE_OTP || null,
+    // Plantilla de autenticación gestionada por Bird (sale desde un número de Bird).
+    template: 'bird_otp',
     devConsole: devConsoleAllowed(),
   };
 }
@@ -30,32 +27,19 @@ export function otpConfiguration() {
 const devConsoleAllowed = () =>
   process.env.NODE_ENV === 'development' && process.env.WHATSAPP_OTP_PROVIDER === 'console';
 
-@Injectable()
-export class WasapFlowOtpProvider implements WhatsAppOtpProvider {
-  readonly name = 'WASAPFLOW';
-  constructor(@Inject(WasapFlowClient) private readonly bridge: WasapFlowClient) {}
+export class WhatsAppCodeSender implements WhatsAppOtpProvider {
+  constructor(private readonly provider: WhatsAppProvider) {}
+  get name() {
+    return this.provider.name;
+  }
   async sendAuthenticationCode(to: string, code: string) {
-    const config = otpConfiguration();
-    if (!config.enabled)
+    if (!otpConfiguration().enabled)
       throw new ProviderError(
         'Verificación por WhatsApp desactivada (WHATSAPP_OTP_ENABLED≠true)',
         'FAILED',
       );
-    if (!config.template)
-      throw new ProviderError(
-        'Falta WHATSAPP_TEMPLATE_OTP (plantilla de autenticación aprobada)',
-        'FAILED',
-      );
-    const wabaId = await requireConnectedWaba(this.bridge);
-    const messageId = await this.bridge.sendAuthenticationTemplate(
-      wabaId,
-      to.replace(/^\+/, ''),
-      config.template,
-      // Debe coincidir con el idioma con que Meta aprobó la plantilla (es, es_MX, es_ES…).
-      process.env.WHATSAPP_TEMPLATE_OTP_LANGUAGE || process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'es',
-      code,
-    );
-    return { messageId };
+    const sent = await this.provider.sendAuthenticationCode({ to, code });
+    return { messageId: sent.providerMessageId };
   }
 }
 
@@ -69,6 +53,6 @@ export class ConsoleOtpProvider implements WhatsAppOtpProvider {
   }
 }
 
-export function otpProviderFactory(bridge: WasapFlowClient): WhatsAppOtpProvider {
-  return devConsoleAllowed() ? new ConsoleOtpProvider() : new WasapFlowOtpProvider(bridge);
+export function otpProviderFactory(provider: WhatsAppProvider): WhatsAppOtpProvider {
+  return devConsoleAllowed() ? new ConsoleOtpProvider() : new WhatsAppCodeSender(provider);
 }

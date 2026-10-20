@@ -22,7 +22,7 @@ class FakeWhatsApp implements WhatsAppOtpProvider {
   sent: { to: string; code: string }[] = [];
   fail = false;
   async sendAuthenticationCode(to: string, code: string) {
-    if (this.fail) throw new ProviderError('WasapFlow simulado caído', 'RETRY');
+    if (this.fail) throw new ProviderError('Bird simulado caído', 'RETRY');
     this.sent.push({ to, code });
     return { messageId: `wamid.test.${randomUUID()}` };
   }
@@ -255,7 +255,7 @@ test(
         (e: any) => e.getStatus() === 429,
       );
 
-      // Fallo de WasapFlow: no queda desafío ni cuenta verificada, y se informa el error.
+      // Fallo del proveedor de WhatsApp: no queda desafío ni cuenta verificada, y se informa el error.
       const failing = testPhone();
       wa.fail = true;
       await assert.rejects(

@@ -7,8 +7,9 @@ import { SecurityController } from '../account/security.controller';
 import { AppModule } from '../app.module';
 import { AuthController } from '../auth/auth.controller';
 import { VerificationService } from '../auth/verification.service';
+import { WebhooksController } from '../integrations/webhooks.controller';
 import { WhatsAppAdminController } from '../whatsapp/admin.controller';
-import { WhatsAppOnboardingService } from '../whatsapp/onboarding.service';
+import { WhatsAppWebhookWorker } from '../whatsapp/webhook-inbox';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { WhatsAppWorker } from '../whatsapp/worker';
 
@@ -22,9 +23,10 @@ test('every constructor dependency is injected when running under tsx', async ()
       [app.get(SecurityController), 'verification'],
       [app.get(VerificationService), 'provider'],
       [app.get(WhatsAppWorker), 'whatsapp'],
-      [app.get(WhatsAppService), 'bridge'],
-      [app.get(WhatsAppOnboardingService), 'bridge'],
-      [app.get(WhatsAppAdminController), 'onboarding'],
+      [app.get(WhatsAppService), 'provider'],
+      [app.get(WhatsAppWebhookWorker), 'provider'],
+      [app.get(WhatsAppAdminController), 'whatsapp'],
+      [app.get(WebhooksController), 'whatsapp'],
     ];
     for (const [instance, key] of checks)
       assert.ok(

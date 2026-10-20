@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { AppModule } from '../app.module';
 import { db } from '../database/client';
 import { newToken, tokenHash } from '../auth/security';
+import { signedWebhook, webhookSecret } from './support/bird-webhooks';
 
 test(
   'HTTP webhooks verify raw signatures and admin endpoints require the admin role',
@@ -14,7 +15,7 @@ test(
     const saved = { ...process.env };
     Object.assign(process.env, {
       WHATSAPP_ENABLED: 'false',
-      WASAPFLOW_WEBHOOK_SECRET: 'test-secret',
+      BIRD_WEBHOOK_SECRET: webhookSecret,
       CAL_WEBHOOK_SECRET: 'test-secret',
       CAL_EVENT_TYPE_ID: '987654320',
     });
@@ -47,7 +48,7 @@ test(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          [path === 'cal' ? 'x-cal-signature-256' : 'x-wasapflow-signature']: signature || '',
+          'x-cal-signature-256': signature || '',
         },
         body: raw,
       });
@@ -72,23 +73,41 @@ test(
     assert.equal((await signedPost('cal', payload, signature)).status, 200);
     assert.equal((await signedPost('cal', payload, signature)).status, 200);
     assert.equal(await db.appointment.count({ where: { calUid: uid } }), 1);
-    const ignored = JSON.stringify({
-      event: 'message.received',
-      waba_id: '998877',
-      timestamp: Math.floor(Date.now() / 1000),
-      data: { message_id: 'http-fixture' },
-    });
-    assert.equal((await signedPost('wasapflow', ignored)).status, 403);
-    assert.equal(
-      (
-        await signedPost(
-          'wasapflow',
-          ignored,
-          'sha256=' + createHmac('sha256', 'test-secret').update(ignored).digest('hex'),
-        )
-      ).status,
-      200,
+    // Bird: firma Standard Webhooks sobre el cuerpo crudo; un reintento (mismo webhook-id) no
+    // crea otra fila en la bandeja.
+    const birdPost = (raw: string, headers: Record<string, string>) =>
+      fetch(`${base}/webhooks/bird`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: raw,
+      });
+    const deliveryId = `msg_${uid}`;
+    const delivered = signedWebhook(
+      webhookSecret,
+      {
+        type: 'whatsapp.delivered',
+        timestamp: new Date().toISOString(),
+        data: {
+          whatsapp_id: `wam_${uid}`,
+          workspace_id: 'ws_test',
+          direction: 'outbound',
+          from: { phone_number: '+593984703819' },
+          to: { phone_number: '+593998686244' },
+          tags: null,
+          metadata: null,
+        },
+      },
+      deliveryId,
     );
+    t.after(() =>
+      db.whatsAppWebhook.deleteMany({ where: { id: `BIRD:${deliveryId}` } }).then(() => undefined),
+    );
+    assert.equal((await birdPost(delivered.raw, {})).status, 403);
+    assert.equal((await birdPost(delivered.raw + ' ', delivered.headers)).status, 403);
+    assert.equal((await birdPost(delivered.raw, delivered.headers)).status, 200);
+    assert.equal((await birdPost(delivered.raw, delivered.headers)).status, 200);
+    assert.equal(await db.whatsAppWebhook.count({ where: { id: `BIRD:${deliveryId}` } }), 1);
+    assert.equal((await signedPost('wasapflow', '{}')).status, 404);
     assert.equal((await fetch(`${base}/webhooks/whatsapp`)).status, 404);
     assert.equal((await fetch(`${base}/admin/whatsapp`)).status, 401);
     assert.equal(

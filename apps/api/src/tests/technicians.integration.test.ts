@@ -23,7 +23,6 @@ Object.assign(process.env, {
   SMTP_FROM: process.env.SMTP_FROM || 'Instafix <test@instafix.ec>',
   SMTP_USER: process.env.SMTP_USER || 'test',
   SMTP_PASSWORD: process.env.SMTP_PASSWORD || 'test',
-  WHATSAPP_TEMPLATE_CONFIRMED: 'instafix_cita_confirmada',
 });
 const emails: { to: string; subject: string; text: string }[] = [];
 setEmailProvider({

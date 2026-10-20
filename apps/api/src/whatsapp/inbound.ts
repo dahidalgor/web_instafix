@@ -36,7 +36,7 @@ export async function receiveCustomerMessage(message: {
       let candidate = candidates.length === 1 ? candidates[0] : undefined;
       if (message.context?.id) {
         const repliedTo = await tx.automationJob.findUnique({
-          where: { providerId: message.context.id },
+          where: { providerMessageId: message.context.id },
         });
         candidate = candidates.find(
           (a) => a.id === repliedTo?.appointmentId && a.automationRevision === repliedTo.revision,
