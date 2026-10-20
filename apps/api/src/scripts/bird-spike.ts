@@ -11,7 +11,7 @@ config({ path: resolve(process.cwd(), '../../.env') });
  *
  *   pnpm --filter @instafix/api bird:spike
  *   pnpm --filter @instafix/api bird:spike --to +5939XXXXXXXX --template <slug> \
- *     [--lang es] [--param valor | --param nombre=valor …] [--from +593…] --send
+ *     [--lang es-EC] [--param valor | --param nombre=valor …] [--from +593…] --send
  *   pnpm --filter @instafix/api bird:spike --message <id>     (estado y línea de tiempo)
  */
 const { values } = parseArgs({
@@ -19,7 +19,7 @@ const { values } = parseArgs({
     to: { type: 'string' },
     from: { type: 'string' },
     template: { type: 'string' },
-    lang: { type: 'string', default: 'es' },
+    lang: { type: 'string' },
     param: { type: 'string', multiple: true, default: [] },
     'button-param': { type: 'string' },
     send: { type: 'boolean', default: false },
@@ -30,14 +30,11 @@ const { values } = parseArgs({
 
 // Plantillas que Instafix necesita (ver docs/whatsapp-bird.md).
 const REQUIRED = [
-  'phone_verification',
-  'password_reset',
   'appointment_requested',
   'appointment_confirmed',
   'appointment_rescheduled',
   'appointment_cancelled',
   'appointment_reminder',
-  'technician_on_the_way',
 ];
 
 const ok = (m: string) => console.log(`  ✓ ${m}`);
@@ -78,6 +75,45 @@ async function timeline(id: string) {
       `  ${event.occurred_at ?? ''} ${event.type}${event.error ? ` · ${event.error.code}` : ''}`,
     );
   return message;
+}
+
+/** Idioma, texto y variables reales de una plantilla (contenido de su versión en vivo). */
+async function inspectTemplate(slug: string, wanted?: string) {
+  const bird = birdClient();
+  const template = await bird.whatsapp.templates.get(slug);
+  const language = wanted ?? template.default_language;
+  info(
+    `«${slug}»: idioma por defecto ${template.default_language} · disponibles [${template.available_languages.join(', ')}]` +
+      ` · si falta el idioma: ${template.on_missing_language}`,
+  );
+  if (!template.available_languages.includes(language))
+    bad(`la plantilla no tiene el idioma «${language}»`);
+  if (!template.live_version_id) {
+    bad('la plantilla no tiene versión aprobada en vivo');
+    return { language, variables: [] as string[] };
+  }
+  const content = await bird.whatsapp.templates.versions.languages.get(
+    slug,
+    template.live_version_id,
+    language,
+  );
+  const variables: string[] = [];
+  for (const component of content.components) {
+    if (component.text) {
+      info(`${component.type}: ${component.text.replace(/\s+/g, ' ')}`);
+      for (const [, name] of component.text.matchAll(/\{\{\s*([^}\s]+)\s*\}\}/g))
+        if (component.type.toLowerCase() === 'body') variables.push(name);
+    } else info(`${component.type}${component.format ? ` (${component.format})` : ''}`);
+    for (const button of component.buttons ?? [])
+      info(`  botón: ${JSON.stringify(button).slice(0, 160)}`);
+  }
+  const named = variables.some((v) => !/^\d+$/.test(v));
+  info(
+    variables.length
+      ? `variables del cuerpo (${named ? 'con nombre' : 'posicionales'}): ${variables.join(', ')}`
+      : 'el cuerpo no tiene variables',
+  );
+  return { language, variables, named };
 }
 
 async function main() {
@@ -207,6 +243,10 @@ async function main() {
 
   console.log('\n6. Envío real');
   if (!values.send) {
+    if (values.template)
+      await inspectTemplate(values.template, values.lang).catch((error) =>
+        bad(`no se pudo leer la plantilla: ${failure(error)}`),
+      );
     info('Omitido (solo lectura). Añade --to +593… --template <slug> --send para probarlo.');
     record('Envío real de plantilla', 'no verificable', 'sin --send');
     return summary();
@@ -220,6 +260,24 @@ async function main() {
   if (!managed && !from) {
     bad('No hay número de origen conectado; pasa --from o conecta el número.');
     process.exit(1);
+  }
+  if (values.to === from)
+    bad(
+      'Origen y destino son el mismo número: WhatsApp no entrega mensajes de un número a sí mismo. Usa --to con otro número tuyo.',
+    );
+  let language = values.lang;
+  try {
+    const template = await inspectTemplate(values.template, values.lang);
+    language = template.language;
+    const given = values.param.length;
+    if (given !== template.variables.length)
+      bad(`la plantilla espera ${template.variables.length} variable(s) y pasaste ${given}`);
+    if (template.named && values.param.some((p) => !p.includes('=')))
+      bad(
+        `la plantilla usa variables con nombre: pásalas como --param ${template.variables[0]}=valor`,
+      );
+  } catch (error) {
+    bad(`no se pudo leer la plantilla: ${failure(error)}`);
   }
   const parameters = values.param.map((p) => {
     const at = p.indexOf('=');
@@ -239,7 +297,7 @@ async function main() {
       ...(from ? { from } : {}),
       template: {
         slug: values.template,
-        language: values.lang,
+        ...(language ? { language } : {}),
         ...(components.length ? { components } : {}),
       },
     } as any);
