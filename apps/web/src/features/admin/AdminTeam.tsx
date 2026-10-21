@@ -1,3 +1,4 @@
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import type { StaffMember } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { BusyButton } from '../../components/ui/BusyButton';
@@ -175,9 +176,8 @@ export function AdminTeam() {
           </label>
           <label>
             Contraseña inicial (mínimo 12 caracteres)
-            <input
+            <PasswordInput
               required
-              type="password"
               minLength={12}
               maxLength={128}
               autoComplete="new-password"
@@ -371,8 +371,7 @@ export function AdminTeam() {
               >
                 <label>
                   Nueva contraseña (mínimo 12 caracteres)
-                  <input
-                    type="password"
+                  <PasswordInput
                     minLength={12}
                     maxLength={128}
                     required

@@ -1,3 +1,4 @@
+import { AppointmentLocation } from '../../components/appointments/AppointmentLocation';
 import {
   appointmentLabels,
   appointmentSorts,
@@ -8,7 +9,7 @@ import {
   type PerformedService,
 } from '@instafix/contracts';
 import { AppointmentCard } from '../../components/appointments/AppointmentCard';
-import { mapsLink, money } from '../../lib/format';
+import { money } from '../../lib/format';
 import {
   dateFilters,
   filterAppointments,
@@ -28,9 +29,6 @@ type AdminAppointment = Appointment & {
   calUid?: string;
   whatsappConsentAt?: string;
   automationIssue?: string;
-  locationLatitude?: number;
-  locationArea?: string | null;
-  locationLongitude?: number;
   assignedTechnician?: { id: string; name: string; active?: boolean } | null;
   services: PerformedService[];
   technicianNotes?: string;
@@ -105,6 +103,7 @@ export function AdminAppointments(_props: { services: Offering[] }) {
       }),
     );
     setId(item.id);
+    setConfirmDelete(false);
     setLinkUserId('');
     setIdentityVerified(false);
     setDraft({
@@ -121,6 +120,32 @@ export function AdminAppointments(_props: { services: Offering[] }) {
       technician: item.technician,
       status: item.status,
     });
+  }
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  async function remove() {
+    if (!id) return;
+    setBusyAction('delete');
+    setMessage('');
+    try {
+      const result = await api<{ calReleased: boolean }>(`admin/appointments/${id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirm: true }),
+      });
+      await load();
+      setId(null);
+      setDraft({ ...empty });
+      setFormOpen(false);
+      setConfirmDelete(false);
+      setMessage(
+        result.calReleased
+          ? 'Cita eliminada. Su horario quedó libre en Cal.com.'
+          : 'Cita eliminada.',
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo eliminar la cita.');
+    } finally {
+      setBusyAction(null);
+    }
   }
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -406,35 +431,11 @@ export function AdminAppointments(_props: { services: Offering[] }) {
             El cliente autorizó recibir mensajes de esta cita por WhatsApp.
           </label>
           {list
-            .filter((item) => item.id === id && item.locationArea)
+            .filter((item) => item.id === id)
             .map((item) => (
-              <p key={`area-${item.id}`} className="small">
-                Sector de la ubicación: <strong>{item.locationArea}</strong>
-              </p>
-            ))}
-          {list
-            .filter(
-              (item) =>
-                item.id === id && item.locationLatitude != null && item.locationLongitude != null,
-            )
-            .map((item) => (
-              <a
-                key={item.id}
-                href={`https://www.google.com/maps?q=${item.locationLatitude},${item.locationLongitude}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Ver ubicación del cliente
-              </a>
-            ))}
-          {list
-            .filter(
-              (item) => item.id === id && item.locationLatitude == null && mapsLink(item.address),
-            )
-            .map((item) => (
-              <a key={item.id} href={mapsLink(item.address)!} target="_blank" rel="noreferrer">
-                Abrir el enlace de ubicación del cliente
-              </a>
+              <dl key={`location-${item.id}`} className="appt-meta">
+                <AppointmentLocation appointment={item} pending="Pendiente por WhatsApp" />
+              </dl>
             ))}
           <BusyButton
             type="submit"
@@ -445,6 +446,45 @@ export function AdminAppointments(_props: { services: Offering[] }) {
           >
             Guardar cita
           </BusyButton>
+          {id && !confirmDelete && (
+            <button
+              type="button"
+              className="btn btn-danger admin-delete-appt"
+              disabled={busy}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Eliminar cita
+            </button>
+          )}
+          {id && confirmDelete && (
+            <div className="security-panel" role="alertdialog" aria-labelledby="delete-appt-title">
+              <p id="delete-appt-title">
+                <strong>¿Eliminar esta cita?</strong> Eliminar no es cancelar: la cita desaparece de
+                todos los paneles y no se avisa al cliente. Si sigue activa, se libera su horario en
+                Cal.com. El historial se conserva.
+              </p>
+              <div className="confirm-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Mantener cita
+                </button>
+                <BusyButton
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={busy}
+                  busy={busyAction === 'delete'}
+                  busyLabel="Eliminando…"
+                  onClick={() => void remove()}
+                >
+                  Sí, eliminar
+                </BusyButton>
+              </div>
+            </div>
+          )}
         </form>
       </Disclosure>
       <div className="appt-organizer" ref={organizer}>
@@ -599,12 +639,10 @@ export function AdminAppointments(_props: { services: Offering[] }) {
                       highlight={item.id === id ? 'Editando' : undefined}
                       details={
                         <>
-                          {item.locationArea && (
-                            <div>
-                              <dt>Ubicación</dt>
-                              <dd>{item.locationArea}</dd>
-                            </div>
-                          )}
+                          <AppointmentLocation
+                            appointment={item}
+                            pending="Pendiente por WhatsApp"
+                          />
                           {!!item.services?.length && (
                             <div>
                               <dt>Servicios realizados</dt>

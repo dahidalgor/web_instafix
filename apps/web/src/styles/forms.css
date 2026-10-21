@@ -114,3 +114,49 @@ input[type='checkbox'] {
     gap: 0;
   }
 }
+
+/* Contraseña con botón ver/ocultar (PasswordInput). */
+.password-field {
+  position: relative;
+  display: block;
+  margin-top: 8px;
+}
+.password-field input {
+  margin-top: 0;
+  padding-right: 52px;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.password-toggle:hover {
+  color: var(--text);
+  background: transparent;
+}
+.password-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+.password-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.password-toggle svg {
+  width: 20px;
+  height: 20px;
+}

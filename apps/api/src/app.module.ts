@@ -6,7 +6,8 @@ import { BookingController } from './booking/booking.controller';
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ProviderErrorFilter } from './common/provider-error.filter';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ClientIpThrottlerGuard, throttlerOptions } from './security/rate-limits';
 import { AccountController } from './account/account.controller';
 import { SecurityController } from './account/security.controller';
 import { VerificationService } from './auth/verification.service';
@@ -23,9 +24,10 @@ import { WebhooksController } from './integrations/webhooks.controller';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { StaffController } from './staff/staff.controller';
 import { TeamController } from './staff/team.controller';
+import { PeopleAdminController } from './admin/people-admin.controller';
 
 @Module({
-  imports: [WhatsAppModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])],
+  imports: [WhatsAppModule, ThrottlerModule.forRoot(throttlerOptions)],
   controllers: [
     BookingAdminController,
     EmailAdminController,
@@ -45,11 +47,12 @@ import { TeamController } from './staff/team.controller';
     WebhooksController,
     StaffController,
     TeamController,
+    PeopleAdminController,
   ],
   providers: [
     VerificationService,
     NotificationWorker,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: ClientIpThrottlerGuard },
     { provide: APP_FILTER, useClass: ProviderErrorFilter },
   ],
 })

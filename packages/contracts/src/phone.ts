@@ -23,3 +23,10 @@ export function maskEmail(value: string): string {
   if (!local || !domain) return '***';
   return `${local[0]}***@${domain}`;
 }
+
+/** E.164 → país y número nacional para mostrarlo en un campo con selector de país. */
+export function splitPhone(value: string): { country: CountryCode; national: string } | null {
+  const parsed = parsePhoneNumberFromString(value);
+  if (!parsed?.country) return null;
+  return { country: parsed.country, national: parsed.formatNational().replace(/\s+/g, '') };
+}

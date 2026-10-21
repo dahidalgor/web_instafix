@@ -98,7 +98,7 @@ test(
     assert.ok(located.locationReceivedAt);
     assert.equal(located.locationLatitude, -0.1801234);
     assert.equal(located.locationLongitude, -78.4805678);
-    assert.equal(located.address, 'Edificio Torres');
+    assert.equal(located.locationName, 'Edificio Torres');
     // Calle y sector desde las coordenadas (OpenStreetMap simulado; sin red en las pruebas).
     const { fillLocationArea } = await import('../whatsapp/location-area');
     process.env.REVERSE_GEOCODING_ENABLED = 'true';
@@ -280,7 +280,7 @@ test(
       'https://www.google.com/maps/place/Casa+Cliente/@-0.2,-78.5,17z/data=!3d-0.2012345!4d-78.5012345',
     );
     assert.equal(result.locationLatitude, -0.2012345);
-    assert.equal(result.address, 'Casa Cliente');
+    assert.equal(result.locationName, 'Casa Cliente');
     await assert.rejects(
       setLocation(asTech, appointment.id, 'hola'),
       (e: any) => e.getStatus() === 400,

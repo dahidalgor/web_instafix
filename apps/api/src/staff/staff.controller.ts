@@ -17,7 +17,7 @@ import {
   Put,
   Req,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { RateLimit } from '../security/rate-limits';
 import type { Request } from 'express';
 import { authenticatedStaff, checkOrigin } from '../auth/session';
 import {
@@ -70,7 +70,7 @@ export class StaffController {
 
   @Post('appointments/:id/confirm')
   @HttpCode(200)
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @RateLimit('staff')
   async confirm(@Param('id') id: string, @Req() req: Request) {
     checkOrigin(req);
     checkId(id);
@@ -131,7 +131,7 @@ export class StaffController {
   }
 
   @Put('appointments/:id/location')
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit('staff')
   async location(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     checkId(id);

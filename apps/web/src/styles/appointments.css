@@ -325,3 +325,50 @@
 .public-header nav.is-open a:nth-child(6) {
   animation-delay: 100ms;
 }
+
+/* Ubicación de la cita (componente común AppointmentLocation). */
+.appt-location dd {
+  display: grid;
+  gap: 3px;
+}
+.appt-location-detail {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.appt-location-source {
+  color: #1f7a55;
+  font-size: 12px;
+  font-weight: 600;
+}
+.appt-location-pending {
+  color: var(--muted);
+  font-weight: 500;
+}
+.appt-location-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 2px;
+}
+.appt-location-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.appt-location-actions a span[aria-hidden] {
+  margin-left: 4px;
+}
+.appt-location-actions a:hover,
+.appt-location-actions a:focus-visible {
+  text-decoration: underline;
+}
+@media (prefers-color-scheme: dark) {
+  .appt-location-source {
+    color: #a7e9cb;
+  }
+}

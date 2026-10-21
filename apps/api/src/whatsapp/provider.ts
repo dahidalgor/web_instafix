@@ -90,7 +90,13 @@ export type WhatsAppMessageEvent = {
   text: string | null;
   occurredAt: Date;
   inReplyTo: string | null;
-  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    name?: string;
+    address?: string;
+    url?: string;
+  };
   media?: { type: string; mimeType?: string; caption?: string; filename?: string };
 };
 export type WhatsAppWebhookEvent =

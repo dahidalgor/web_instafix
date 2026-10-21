@@ -161,6 +161,8 @@ export function HowItWorks() {
         <p className="intro">
           Elige el día y la hora, cuéntanos qué le pasa a tu equipo y un técnico va a tu domicilio.
         </p>
+        {/* Teléfono: baja hacia los pasos. */}
+        <ScribbleArrow direction="down" className="arrow-steps" />
       </div>
       {reduced ? (
         <ol className="story-static">
@@ -182,6 +184,7 @@ export function HowItWorks() {
           Tu equipo, atendido <em>en casa.</em>
         </h2>
         <p>Elige el día y la hora. Del resto nos encargamos nosotros.</p>
+        <ScribbleArrow direction="down" className="arrow-cta" />
         <div className="journey-actions">
           <a className="button journey-cta" href="#agenda" ref={cta}>
             Agendar visita <span aria-hidden="true">↗</span>

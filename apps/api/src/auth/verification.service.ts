@@ -13,6 +13,9 @@ import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
 import { WHATSAPP_OTP_PROVIDER, type WhatsAppOtpProvider } from '../whatsapp/otp.provider';
 import { hashPassword, verifyPassword } from './security';
+import { logEvent } from '../common/log-event';
+import { assertPhoneAllowed, isPhoneBlocked } from '../security/blocked-phones';
+import type { RequestOrigin } from '../security/client-identity';
 
 /** Cada propósito es independiente: un código de verificación nunca restablece contraseñas. */
 export const otpPurposes = ['PHONE_VERIFICATION', 'PASSWORD_RESET', 'PHONE_CHANGE'] as const;
@@ -22,6 +25,15 @@ export const OTP_TTL_SECONDS = 600;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_COOLDOWN_SECONDS = 60;
 export const OTP_MAX_PER_HOUR = 5;
+/** Presupuesto propio de OTP (independiente del de avisos de citas). */
+export const OTP_LIMITS = {
+  perPhoneDay: 8,
+  perIpHour: 8,
+  perIpDay: 20,
+  perSessionHour: 5,
+  /** Reenvíos de una misma solicitud (además del código inicial). */
+  maxResends: 3,
+};
 
 type Registration = {
   firstName: string;
@@ -37,6 +49,8 @@ export type StartInput = {
   registration?: Registration;
   /** false para respuestas señuelo: misma forma, sin envío, para no revelar cuentas. */
   deliver?: boolean;
+  /** Origen (IP y sesión con hash) para los límites por IP y por sesión. */
+  origin?: RequestOrigin | null;
 };
 export type VerificationTicket = {
   verificationId: string;
@@ -94,7 +108,11 @@ export class VerificationService {
           message: 'Tu WhatsApp ya está verificado.',
         });
     }
-    const deliver = input.deliver !== false;
+    // Número bloqueado: la recuperación responde igual que siempre (señuelo, sin envío) para no
+    // revelar nada; registrar o verificar se rechaza.
+    const blocked = await isPhoneBlocked(input.phone);
+    if (blocked && input.purpose !== 'PASSWORD_RESET') await assertPhoneAllowed(input.phone, 'otp');
+    const deliver = input.deliver !== false && !blocked;
     const code = newCode();
     const codeHash = await hashPassword(code);
     let messageId: string | null = null;
@@ -123,6 +141,41 @@ export class VerificationService {
               ),
             );
           }
+          // Límites por día, IP y sesión: cambiar de número o borrar cookies no multiplica envíos.
+          const ago = (ms: number) => ({ gt: new Date(now.getTime() - ms) });
+          const origin = input.origin;
+          const [phoneDay, ipHour, ipDay, sessionHour] = await Promise.all([
+            tx.phoneChallenge.count({ where: { phone: input.phone, createdAt: ago(86400000) } }),
+            origin?.ipHash
+              ? tx.phoneChallenge.count({
+                  where: { ipHash: origin.ipHash, createdAt: ago(3600000) },
+                })
+              : 0,
+            origin?.ipHash
+              ? tx.phoneChallenge.count({
+                  where: { ipHash: origin.ipHash, createdAt: ago(86400000) },
+                })
+              : 0,
+            origin?.sessionKey
+              ? tx.phoneChallenge.count({
+                  where: { sessionKey: origin.sessionKey, createdAt: ago(3600000) },
+                })
+              : 0,
+          ]);
+          const exceeded =
+            phoneDay >= OTP_LIMITS.perPhoneDay
+              ? 'phone_day'
+              : ipHour >= OTP_LIMITS.perIpHour
+                ? 'ip_hour'
+                : ipDay >= OTP_LIMITS.perIpDay
+                  ? 'ip_day'
+                  : sessionHour >= OTP_LIMITS.perSessionHour
+                    ? 'session_hour'
+                    : null;
+          if (exceeded) {
+            logEvent('security.otp_excessive', { scope: exceeded, purpose: input.purpose }, 'warn');
+            throw new OtpRateLimitError(3600);
+          }
           const created = await tx.phoneChallenge.create({
             data: {
               purpose: input.purpose,
@@ -132,6 +185,8 @@ export class VerificationService {
               expiresAt: new Date(now.getTime() + OTP_TTL_SECONDS * 1000),
               delivered: deliver,
               createdAt: now,
+              ipHash: input.origin?.ipHash ?? null,
+              sessionKey: input.origin?.sessionKey ?? null,
               ...input.registration,
             },
           });
@@ -192,7 +247,12 @@ export class VerificationService {
   }
 
   /** Reenvía con un código nuevo conservando el propósito y los datos de la solicitud. */
-  async resend(verificationId: string, purposes: readonly OtpPurpose[], userId?: string) {
+  async resend(
+    verificationId: string,
+    purposes: readonly OtpPurpose[],
+    userId?: string,
+    origin?: RequestOrigin | null,
+  ) {
     const c = await db.phoneChallenge.findUnique({ where: { id: verificationId } });
     if (
       !c ||
@@ -202,7 +262,20 @@ export class VerificationService {
       (userId !== undefined && c.userId !== userId)
     )
       throw new BadRequestException('Inicia una nueva solicitud.');
+    // Máximo de reenvíos de la misma solicitud (mismo número y propósito en la última hora).
+    const sent = await db.phoneChallenge.count({
+      where: {
+        phone: c.phone,
+        purpose: c.purpose,
+        createdAt: { gt: new Date(Date.now() - 3600000) },
+      },
+    });
+    if (sent > OTP_LIMITS.maxResends) {
+      logEvent('security.otp_excessive', { scope: 'resends', purpose: c.purpose }, 'warn');
+      throw new OtpRateLimitError(3600);
+    }
     return this.start({
+      origin,
       purpose: c.purpose as OtpPurpose,
       phone: c.phone,
       userId: c.userId ?? undefined,

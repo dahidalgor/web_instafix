@@ -54,10 +54,14 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     // El contacto directo solo lo ve quien atiende la visita.
     contactPhone: manage ? a.contactPhone : '',
     contactEmail: manage ? a.contactEmail : null,
-    address: a.address,
+    // La ubicación exacta solo la ve quien atiende la visita; para decidir si confirmarla basta
+    // el sector.
+    address: manage ? a.address : '',
     locationArea: a.locationArea || null,
-    locationLatitude: a.locationLatitude,
-    locationLongitude: a.locationLongitude,
+    locationName: manage ? a.locationName : null,
+    locationLatitude: manage ? a.locationLatitude : null,
+    locationLongitude: manage ? a.locationLongitude : null,
+    locationSource: manage ? a.locationSource : null,
     locationReceivedAt: a.locationReceivedAt?.toISOString() ?? null,
     automationIssue: a.automationIssue,
     bookingIdentityIssue: a.bookingIdentityIssue,
@@ -100,7 +104,7 @@ async function deliverNow(ids: string[]) {
 
 export async function myAppointments(user: StaffUser) {
   const items = await db.appointment.findMany({
-    where: { assignedTechnicianId: user.id },
+    where: { assignedTechnicianId: user.id, deletedAt: null },
     orderBy: { startsAt: 'asc' },
     include,
   });
@@ -109,7 +113,12 @@ export async function myAppointments(user: StaffUser) {
 
 export async function pendingAppointments(user: StaffUser, now = new Date()) {
   const items = await db.appointment.findMany({
-    where: { status: 'PENDING_LOCATION', assignedTechnicianId: null, endsAt: { gt: now } },
+    where: {
+      status: 'PENDING_LOCATION',
+      assignedTechnicianId: null,
+      deletedAt: null,
+      endsAt: { gt: now },
+    },
     orderBy: { startsAt: 'asc' },
     include,
   });
@@ -119,7 +128,7 @@ export async function pendingAppointments(user: StaffUser, now = new Date()) {
 export async function staffAppointment(user: StaffUser, id: string) {
   const a = await db.appointment.findUnique({ where: { id }, include });
   // Un técnico solo ve sus visitas y las pendientes que puede confirmar.
-  if (!a || !(canManage(user, a) || isClaimable(a)))
+  if (!a || a.deletedAt || !(canManage(user, a) || isClaimable(a)))
     throw new NotFoundException('Cita no encontrada');
   return serializeStaff(user, a);
 }
@@ -184,7 +193,7 @@ export async function confirmAppointment(user: StaffUser, id: string, now = new 
   const outcome = await db.$transaction(async (tx) => {
     await lockAppointment(tx, id);
     const current = await tx.appointment.findUnique({ where: { id } });
-    if (!current) throw new NotFoundException('Cita no encontrada');
+    if (!current || current.deletedAt) throw new NotFoundException('Cita no encontrada');
     // Repetir la acción (doble pulsación, reintento de red) no genera otra confirmación.
     if (current.status === 'CONFIRMED' && current.assignedTechnicianId === user.id)
       return { already: true, notifications: [] as string[] };
@@ -226,7 +235,7 @@ export async function confirmAppointment(user: StaffUser, id: string, now = new 
 async function editable(tx: Prisma.TransactionClient, user: StaffUser, id: string) {
   await lockAppointment(tx, id);
   const a = await tx.appointment.findUnique({ where: { id } });
-  if (!a) throw new NotFoundException('Cita no encontrada');
+  if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
   if (!canManage(user, a)) throw new ForbiddenException('Esta cita está asignada a otro técnico.');
   if (!['CONFIRMED', 'IN_PROGRESS'].includes(a.status))
     throw new BadRequestException(
@@ -336,7 +345,7 @@ export async function setLocation(user: StaffUser, id: string, text: string) {
   await db.$transaction(async (tx) => {
     await lockAppointment(tx, id);
     const a = await tx.appointment.findUnique({ where: { id } });
-    if (!a) throw new NotFoundException('Cita no encontrada');
+    if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
     if (!canManage(user, a))
       throw new ForbiddenException('Esta cita está asignada a otro técnico.');
     if (!['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'].includes(a.status))
@@ -347,10 +356,10 @@ export async function setLocation(user: StaffUser, id: string, text: string) {
       data: {
         locationLatitude: coords ? location.latitude : null,
         locationLongitude: coords ? location.longitude : null,
-        address: coords
-          ? location.name || `${location.latitude}, ${location.longitude}`
-          : [location.name, location.url].filter(Boolean).join(' · '),
+        locationName: coords ? location.name || null : null,
+        ...(coords ? {} : { address: [location.name, location.url].filter(Boolean).join(' · ') }),
         locationReceivedAt: new Date(),
+        locationSource: 'STAFF',
         locationArea: null,
       },
     });
@@ -369,7 +378,7 @@ export async function completeAppointment(user: StaffUser, id: string, now = new
   const already = await db.$transaction(async (tx) => {
     await lockAppointment(tx, id);
     const a = await tx.appointment.findUnique({ where: { id }, include: { services: true } });
-    if (!a) throw new NotFoundException('Cita no encontrada');
+    if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
     if (!canManage(user, a))
       throw new ForbiddenException('Esta cita está asignada a otro técnico.');
     if (a.status === 'COMPLETED') return true;

@@ -197,6 +197,19 @@ model Appointment {
   // Calle y sector calculados a partir de las coordenadas (geocodificación inversa). '' = sin resultado.
   locationArea String?
   locationRequestedAt DateTime @default(now())
+  // Origen de la ubicación guardada: WHATSAPP (webhook firmado de Bird), STAFF (pegada por el
+  // equipo) o ADMIN. El navegador nunca puede declarar WHATSAPP.
+  locationSource String?
+  // Nombre o dirección del lugar que envió WhatsApp (distinto de la dirección escrita).
+  locationName String?
+  // Reprogramaciones reales (cambio de fecha/hora). Máximo 2 por cita, comprobado en backend.
+  rescheduleCount Int @default(0)
+  // Sesión e IP (con hash) que crearon la cita: presupuesto de WhatsApp y límites por origen.
+  originSessionKey String?
+  originIpHash String?
+  // Eliminación lógica desde administración: la cita deja de mostrarse, el historial se conserva.
+  deletedAt DateTime?
+  deletedById String?
   automationIssue String?
   bookingIdentityIssue String?
   automationRevision Int @default(0)
@@ -232,6 +245,9 @@ model Appointment {
   @@index([contactPhone, status])
   @@index([assignedTechnicianId, startsAt])
   @@index([status, startsAt])
+  @@index([originSessionKey, createdAt])
+  @@index([originIpHash, createdAt])
+  @@index([contactPhone, createdAt])
 }
 
 // Trabajo realmente realizado en una visita. Distinto de la solicitud del cliente (Appointment.title).
@@ -289,10 +305,20 @@ model AutomationJob {
   providerMessageId String? @unique
   // Estado normalizado del webhook: SENT, DELIVERED, READ o FAILED.
   deliveryStatus String?
+  // Quién provocó el aviso (sesión/IP con hash). Los avisos del equipo heredan los de la cita.
+  originSessionKey String?
+  originIpHash String?
+  // Teléfono de destino al evaluar el presupuesto (E.164).
+  recipient String?
+  // Motivo de un aviso no enviado a propósito (SUPPRESSED_*): nunca se reintenta.
+  suppressedReason String?
   lastError String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([status, dueAt])
+  @@index([originSessionKey, startedAt])
+  @@index([originIpHash, startedAt])
+  @@index([recipient, startedAt])
 }
 
 // No guardamos payloads completos de terceros ni credenciales en el historial.
@@ -401,9 +427,14 @@ model PhoneChallenge {
   name String?
   email String?
   passwordHash String?
+  // Origen de la solicitud (hash): límites de OTP por IP y por sesión además del teléfono.
+  ipHash String?
+  sessionKey String?
   createdAt DateTime @default(now())
   @@index([phone, createdAt])
   @@index([userId, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([sessionKey, createdAt])
 }
 
 // Tokens de un solo uso fuera de la sesión: recuperación de contraseña y verificación de correo.
@@ -457,4 +488,44 @@ model CommunicationLog {
   createdAt DateTime @default(now())
   @@index([createdAt])
   @@index([kind, createdAt])
+}
+
+
+// Números bloqueados por administración (E.164). El motivo es interno: nunca sale al público.
+model BlockedPhone {
+  phone String @id
+  reason String?
+  blockedById String?
+  createdAt DateTime @default(now())
+}
+
+// Contadores de seguridad (p. ej. inicios de sesión fallidos por teléfono o IP con hash).
+model RateEvent {
+  id String @id @default(uuid())
+  scope String
+  key String
+  createdAt DateTime @default(now())
+  @@index([scope, key, createdAt])
+}
+
+// Auditoría de acciones administrativas sensibles (eliminar citas, bloquear números…).
+model AdminAction {
+  id String @id @default(uuid())
+  actorId String?
+  action String
+  target String
+  detail Json @default("{}")
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
+// Idempotencia de acciones (doble clic, recarga, reintento) y bloqueo de operaciones en curso.
+// key = ámbito + sesión + Idempotency-Key. Se guarda solo la respuesta pública de la acción.
+model IdempotencyRecord {
+  key String @id
+  status String
+  response Json?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
 }

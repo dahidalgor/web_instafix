@@ -6,6 +6,7 @@ import { calConfiguration, whatsappConfiguration } from './config';
 import { otpConfiguration } from './otp.provider';
 import { lockAppointment } from './queue';
 import { WhatsAppService } from './whatsapp.service';
+import { WHATSAPP_BUDGET, eventTypeOf } from './budget';
 
 /**
  * El número se conecta una sola vez en el panel de Bird (Coexistence); Instafix solo muestra su
@@ -28,7 +29,7 @@ export class WhatsAppAdminController {
         },
       }),
       db.appointment.findMany({
-        where: { automationIssue: { not: null }, status: { not: 'CANCELLED' } },
+        where: { automationIssue: { not: null }, status: { not: 'CANCELLED' }, deletedAt: null },
         take: 50,
         orderBy: { startsAt: 'asc' },
       }),
@@ -70,7 +71,9 @@ export class WhatsAppAdminController {
       account,
       otp: otpConfiguration(),
       cal: calConfiguration(),
-      jobs,
+      // Auditoría: cita, evento, canal, proveedor, estado (SENT, FAILED, PENDING o SUPPRESSED_*).
+      jobs: jobs.map((job) => ({ ...job, channel: 'WHATSAPP', eventType: eventTypeOf(job.kind) })),
+      budget: WHATSAPP_BUDGET,
       issues,
       events,
       messages: messages.map((m) => ({ ...m, outcome: outcomes.get(m.providerMessageId) ?? null })),

@@ -5,7 +5,8 @@ import type { Offering, StaffAppointment } from '@instafix/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StatusPill, visitDay, visitTime } from '../../components/appointments/AppointmentCard';
 import { api, ApiError } from '../../lib/api';
-import { mapsLink, money } from '../../lib/format';
+import { money } from '../../lib/format';
+import { AppointmentLocation } from '../../components/appointments/AppointmentLocation';
 
 const CAL_ISSUE = 'Confirmada en Instafix; pendiente de confirmar en Cal.com.';
 const plain = (value: string) =>
@@ -173,13 +174,14 @@ export function AppointmentSheet({
 
             <div className="tech-block">
               <h3>Ubicación</h3>
-              {item.locationArea && <p className="tech-strong">{item.locationArea}</p>}
-              <p>
-                {item.address ||
-                  (item.locationReceivedAt
-                    ? 'Ubicación recibida por WhatsApp.'
-                    : 'Pendiente: el cliente aún no compartió su ubicación por WhatsApp.')}
-              </p>
+              {/* Mismo componente que Mi cuenta y Administración; aquí con el mapa debajo. */}
+              <dl className="appt-meta tech-location-meta">
+                <AppointmentLocation
+                  appointment={item}
+                  directions={item.canManage}
+                  pending="Pendiente: el cliente aún no compartió su ubicación por WhatsApp."
+                />
+              </dl>
               {item.locationLatitude != null && item.locationLongitude != null && (
                 // Mapa para saber a dónde ir antes de salir (sin clave de API).
                 <iframe
@@ -189,27 +191,6 @@ export function AppointmentSheet({
                   referrerPolicy="no-referrer"
                   src={`https://www.google.com/maps?q=${item.locationLatitude},${item.locationLongitude}&z=16&output=embed`}
                 />
-              )}
-              {item.locationLatitude != null && item.locationLongitude != null && (
-                <a
-                  className="btn btn-secondary"
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${item.locationLatitude},${item.locationLongitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Cómo llegar
-                </a>
-              )}
-              {item.locationLatitude == null && mapsLink(item.address) && (
-                // Enlace de mapas sin coordenadas legibles: se abre tal como lo envió el cliente.
-                <a
-                  className="btn btn-secondary"
-                  href={mapsLink(item.address)!}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Abrir en Google Maps
-                </a>
               )}
               {item.canManage &&
                 ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'].includes(item.status) && (

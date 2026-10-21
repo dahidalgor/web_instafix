@@ -23,6 +23,7 @@ export class BookingAdminController {
     const appointments = await db.appointment.findMany({
       where: {
         userId: null,
+        deletedAt: null,
         calUid: { in: intents.map((i) => i.calUid!) },
         bookingIdentityIssue: null,
       },

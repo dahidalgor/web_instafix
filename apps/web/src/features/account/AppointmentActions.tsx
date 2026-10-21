@@ -1,7 +1,7 @@
-import type { Appointment } from '@instafix/contracts';
-import { useCallback, useState } from 'react';
+import { MAX_RESCHEDULES, type Appointment } from '@instafix/contracts';
+import { useCallback, useRef, useState } from 'react';
 import { BusyLabel } from '../../components/ui/BusyLabel';
-import { api } from '../../lib/api';
+import { api, newIdempotencyKey } from '../../lib/api';
 import { dayKey, formatDay, formatTime } from '../booking/booking-time';
 import { ScheduleStep, type BookingSlot, type FetchAvailability } from '../booking/ScheduleStep';
 
@@ -26,6 +26,9 @@ export function AppointmentActions({
   }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Una clave por intento: un reintento (doble clic, red caída) no repite la acción.
+  const attempt = useRef<{ action: string; key: string } | null>(null);
+  const limitReached = (appointment.rescheduleCount ?? 0) >= MAX_RESCHEDULES;
   const changeable =
     appointment.calUid &&
     ['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status) &&
@@ -35,7 +38,15 @@ export function AppointmentActions({
     setBusy(true);
     setError('');
     try {
-      await api(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
+      const action = `${path}:${JSON.stringify(body ?? null)}`;
+      if (attempt.current?.action !== action)
+        attempt.current = { action, key: newIdempotencyKey() };
+      await api(path, {
+        method: 'POST',
+        body: body ? JSON.stringify(body) : undefined,
+        headers: { 'Idempotency-Key': attempt.current.key },
+      });
+      attempt.current = null;
       setMode(null);
       onChanged();
     } catch (e) {
@@ -48,9 +59,20 @@ export function AppointmentActions({
     <div className="appointment-actions">
       {!mode && (
         <>
-          <button type="button" className="btn btn-secondary" onClick={() => setMode('reschedule')}>
-            Reprogramar
-          </button>
+          {limitReached ? (
+            <p className="appt-hint">
+              Esta cita alcanzó el límite de reagendamientos. Si necesitas otro horario, cancela la
+              cita y solicita una nueva.
+            </p>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setMode('reschedule')}
+            >
+              Reprogramar
+            </button>
+          )}
           <button type="button" className="btn btn-danger" onClick={() => setMode('cancel')}>
             Cancelar cita
           </button>

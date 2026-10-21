@@ -10,10 +10,13 @@ import {
   Post,
   Query,
   Req,
+  Res,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
-import type { Request } from 'express';
+import { RateLimit } from '../security/rate-limits';
+import type { Request, Response } from 'express';
+import { requestOrigin } from '../security/client-identity';
+import { idempotencyKey, idempotent } from '../security/idempotency';
 import { authenticated, checkOrigin, sessionToken } from '../auth/session';
 import { newToken, tokenHash } from '../auth/security';
 import { db } from '../database/client';
@@ -47,7 +50,7 @@ export class BookingController {
   /** Disponibilidad real de Cal.com, sin exponer su API key al navegador. */
   @Get('booking/slots')
   @Header('Cache-Control', 'no-store')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @RateLimit('slots')
   async slots(@Query('from') from: string, @Query('to') to: string) {
     if (!day.test(from || '') || !day.test(to || ''))
       throw new BadRequestException('Indica un rango de fechas válido');
@@ -73,8 +76,12 @@ export class BookingController {
 
   @Post('booking')
   @HttpCode(201)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async create(@Body() body: unknown, @Req() req: Request) {
+  @RateLimit('booking')
+  async create(
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
     checkOrigin(req);
     const parsed = bookingRequestSchema.safeParse(body);
     if (!parsed.success)
@@ -84,28 +91,40 @@ export class BookingController {
     // Con sesión, los datos de contacto vienen de la cuenta verificada, nunca del formulario.
     const customer = sessionToken(req) ? await authenticated(req) : null;
     slotCache.clear();
-    return createBooking(parsed.data, customer);
+    const origin = requestOrigin(req, res);
+    const key = idempotencyKey(req);
+    return idempotent(key && `booking:create:${origin.sessionKey}:${key}`, () =>
+      createBooking(parsed.data, customer, origin),
+    );
   }
 
   @Post('my/appointments/:id/cancel')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('cancel')
   async cancel(@Param('id') id: string, @Req() req: Request) {
     checkOrigin(req);
     const user = await authenticated(req);
     slotCache.clear();
-    return cancelBooking(user.id, id);
+    const origin = requestOrigin(req);
+    const key = idempotencyKey(req);
+    return idempotent(key && `booking:cancel:${user.id}:${id}:${key}`, () =>
+      cancelBooking(user.id, id, origin),
+    );
   }
 
   @Post('my/appointments/:id/reschedule')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('reschedule')
   async reschedule(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const user = await authenticated(req);
     const parsed = rescheduleSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException('Elige un horario válido');
     slotCache.clear();
-    return rescheduleBooking(user.id, id, parsed.data.start);
+    const origin = requestOrigin(req);
+    const key = idempotencyKey(req);
+    return idempotent(key && `booking:reschedule:${user.id}:${id}:${key}`, () =>
+      rescheduleBooking(user.id, id, parsed.data.start, origin),
+    );
   }
 }

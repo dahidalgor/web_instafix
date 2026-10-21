@@ -8,7 +8,7 @@ Consulta la [guía de organización del código](docs/code-organization.md) para
 
 ## WhatsApp y Cal.com (14 de octubre de 2026)
 
-Implementados los webhooks firmados, reservas de invitados, solicitud de ubicación, confirmación por técnico, cola persistente de mensajes y recordatorios a las 08:00 de Ecuador continental. Administración → WhatsApp muestra el número, las plantillas y el resultado de cada envío. La única integración de mensajería es **Bird** (`@messagebird/sdk`) con Coexistence: el número sigue en WhatsApp Business App. Requiere `BIRD_API_KEY`, el webhook de Bird registrado y plantillas aprobadas: consulta [la guía](docs/whatsapp-setup.md) y [la migración desde WasapFlow](docs/whatsapp-bird.md). Los envíos permanecen desactivados por defecto.
+Implementados los webhooks firmados, reservas de invitados, solicitud de ubicación, confirmación por técnico, cola persistente de mensajes y recordatorios a las 08:00 de Ecuador continental. Administración → WhatsApp muestra el número, las plantillas y el resultado de cada envío. La única integración de mensajería es **Bird** (`@messagebird/sdk`) con Coexistence: el número sigue en WhatsApp Business App. Requiere `BIRD_API_KEY`, el webhook de Bird registrado y plantillas aprobadas: consulta [la guía](docs/whatsapp-setup.md) y [la migración desde WasapFlow](docs/whatsapp-bird.md). Los envíos permanecen desactivados por defecto. Límites, presupuesto de WhatsApp y Cloudflare: [Seguridad y control de costos](docs/security-costs.md).
 
 ## Subida de archivos y despliegue (6 de octubre de 2026)
 

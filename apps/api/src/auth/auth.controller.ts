@@ -25,7 +25,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { logEvent } from '../common/log-event';
-import { Throttle } from '@nestjs/throttler';
+import { RateLimit } from '../security/rate-limits';
 import type { Request, Response } from 'express';
 import { claimGuestAppointments } from '../account/guest-appointments';
 import { db } from '../database/client';
@@ -44,6 +44,12 @@ import {
   sessionToken,
 } from './session';
 import { OtpRateLimitError, VerificationService } from './verification.service';
+import { assertPhoneAllowed } from '../security/blocked-phones';
+import { hashIdentifier, ipHash, requestOrigin } from '../security/client-identity';
+import { countRateEvents, rateLimited, recordRateEvent } from '../security/rate-events';
+
+/** Fuerza bruta: intentos fallidos por número (cuenta) y por IP en 15 minutos. */
+export const LOGIN_LIMITS = { perPhone: 8, perIp: 30, windowMs: 15 * 60000 };
 
 export const genericRecoveryMessage =
   'Si existe una cuenta verificada asociada a estos datos, recibirás instrucciones para continuar.';
@@ -72,7 +78,7 @@ export class AuthController {
   constructor(@Inject(VerificationService) private readonly verification: VerificationService) {}
 
   @Post('register')
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('register')
   async register(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const parsed = registrationSchema.safeParse(body);
@@ -82,6 +88,7 @@ export class AuthController {
         'Revisa nombre, correo, WhatsApp y contraseña (mínimo 12 caracteres)',
       );
     const data = parsed.data;
+    await assertPhoneAllowed(phone, 'register');
     if (await db.user.findUnique({ where: { phone } })) throw phoneInUse();
     if (await db.user.findUnique({ where: { email: data.email } })) throw emailInUse();
     // La cuenta queda pendiente dentro del desafío y se crea solo al verificar el número:
@@ -89,6 +96,7 @@ export class AuthController {
     return this.verification.start({
       purpose: 'PHONE_VERIFICATION',
       phone,
+      origin: requestOrigin(req),
       registration: {
         firstName: data.firstName,
         lastName: data.lastName,
@@ -101,7 +109,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit('login')
   async login(
     @Body() body: unknown,
     @Req() req: Request,
@@ -110,13 +118,34 @@ export class AuthController {
     checkOrigin(req);
     const parsed = loginSchema.safeParse(body);
     const phone = parsed.success ? serverPhone(parsed.data.phone) : null;
+    // Mismo bloqueo exista o no la cuenta: no permite averiguar qué números están registrados.
+    const phoneKey = hashIdentifier(`phone:${phone ?? 'invalid'}`);
+    const ipKey = ipHash(req);
+    const [phoneFailures, ipFailures] = await Promise.all([
+      countRateEvents('login_failed_phone', phoneKey, LOGIN_LIMITS.windowMs),
+      countRateEvents('login_failed_ip', ipKey, LOGIN_LIMITS.windowMs),
+    ]);
+    if (phoneFailures >= LOGIN_LIMITS.perPhone || ipFailures >= LOGIN_LIMITS.perIp)
+      throw rateLimited(
+        'LOGIN_LOCKED',
+        'Demasiados intentos fallidos. Espera 15 minutos o recupera tu contraseña.',
+        { scope: phoneFailures >= LOGIN_LIMITS.perPhone ? 'account' : 'ip' },
+      );
     const user = phone ? await db.user.findUnique({ where: { phone } }) : null;
     const valid = await verifyPassword(
       parsed.success ? parsed.data.password : '',
       user?.passwordHash ?? dummyHash,
     );
     if (!user || !valid) {
-      logEvent('auth.login_failed', { reason: 'INVALID_CREDENTIALS', status: 401 });
+      await Promise.all([
+        recordRateEvent('login_failed_phone', phoneKey),
+        recordRateEvent('login_failed_ip', ipKey),
+      ]);
+      logEvent('auth.login_failed', {
+        reason: 'INVALID_CREDENTIALS',
+        status: 401,
+        recentFailures: phoneFailures + 1,
+      });
       throw new UnauthorizedException({
         statusCode: 401,
         code: 'INVALID_CREDENTIALS',
@@ -136,6 +165,7 @@ export class AuthController {
           purpose: 'PHONE_VERIFICATION',
           phone: user.phone,
           userId: user.id,
+          origin: requestOrigin(req),
         });
       } catch (error) {
         if (error instanceof OtpRateLimitError) {
@@ -174,7 +204,7 @@ export class AuthController {
 
   @Post('phone/verify')
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit('otpVerify')
   async verifyPhone(
     @Body() body: unknown,
     @Req() req: Request,
@@ -239,20 +269,22 @@ export class AuthController {
 
   @Post('phone/resend')
   @HttpCode(200)
-  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @RateLimit('otp')
   async resend(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const parsed = resendVerificationSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException('Solicitud inválida');
-    return this.verification.resend(parsed.data.verificationId, [
-      'PHONE_VERIFICATION',
-      'PASSWORD_RESET',
-    ]);
+    return this.verification.resend(
+      parsed.data.verificationId,
+      ['PHONE_VERIFICATION', 'PASSWORD_RESET'],
+      undefined,
+      requestOrigin(req),
+    );
   }
 
   @Post('password-reset/whatsapp')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('recovery')
   async resetByWhatsApp(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const parsed = phoneRequestSchema.safeParse(body);
@@ -267,13 +299,14 @@ export class AuthController {
       phone,
       userId: eligible ? user!.id : undefined,
       deliver: eligible,
+      origin: requestOrigin(req),
     });
     return { ...ticket, message: genericRecoveryMessage };
   }
 
   @Post('password-reset/whatsapp/verify')
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit('otpVerify')
   async verifyResetCode(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const parsed = verifyPhoneSchema.safeParse(body);
@@ -300,7 +333,7 @@ export class AuthController {
 
   @Post('password-reset/email')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('recovery')
   async resetByEmail(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const parsed = emailRequestSchema.safeParse(body);
@@ -338,7 +371,7 @@ export class AuthController {
 
   @Post('password-reset/complete')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('recovery')
   async completeReset(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const parsed = completeResetSchema.safeParse(body);
@@ -368,7 +401,7 @@ export class AuthController {
 
   @Post('email/verify')
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit('otpVerify')
   async verifyEmail(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const parsed = tokenSchema.safeParse(body);

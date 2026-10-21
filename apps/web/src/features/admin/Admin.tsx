@@ -19,6 +19,8 @@ import { AdminServices } from './AdminServices';
 import { AdminWarranty } from './AdminWarranty';
 import { AdminWhatsApp } from './AdminWhatsApp';
 import { AdminTeam } from './AdminTeam';
+import { AdminUsers } from './AdminUsers';
+import { AdminBlockedPhones } from './AdminBlockedPhones';
 import { TechnicianPanel } from '../technician/TechnicianPanel';
 import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton';
 export default function Admin() {
@@ -177,6 +179,8 @@ export default function Admin() {
             'Citas',
             'Panel técnico',
             'Equipo',
+            'Usuarios',
+            'Números',
             'WhatsApp',
             'Garantías',
             'Trabajos',
@@ -205,6 +209,8 @@ export default function Admin() {
         {tab === 'Correo' && <AdminEmail />}
         {tab === 'Panel técnico' && <TechnicianPanel user={user} />}
         {tab === 'Equipo' && <AdminTeam />}
+        {tab === 'Usuarios' && <AdminUsers />}
+        {tab === 'Números' && <AdminBlockedPhones />}
         {tab === 'Presentaciones' && <AdminSlides onUploading={setUploading} />}
         {tab === 'Estadísticas' && <AdminAnalytics />}
         {tab === 'Citas' && <AdminAppointments services={items} />}

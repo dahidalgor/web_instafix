@@ -75,14 +75,20 @@ async function handleEvent(event: WhatsAppWebhookEvent, provider: string) {
   await recordMessage(event, provider);
   // Solo un mensaje nuevo del cliente puede aportar la ubicación: nunca un eco ni el historial.
   if (event.source !== 'customer_live' || !event.phone) return;
-  // Ubicación nativa de WhatsApp, o un enlace de Google/Apple Maps o coordenadas en el texto.
+  // Se lee el tipo real del mensaje. Ubicación nativa de WhatsApp (objeto estructurado de
+  // Bird): se usa tal cual, sin interpretar texto. Solo un texto puede traer un enlace de
+  // Google/Apple Maps o coordenadas escritas; cualquier otro tipo no aporta ubicación.
   const location =
-    event.location ?? (event.text ? await locationFromText(event.text) : null) ?? undefined;
+    event.type === 'location'
+      ? event.location
+      : event.type === 'text' && event.text
+        ? ((await locationFromText(event.text)) ?? undefined)
+        : undefined;
   const located = await receiveCustomerMessage({
     id: event.providerMessageId,
     from: event.phone.slice(1),
     timestamp: String(Math.floor(event.occurredAt.getTime() / 1000)),
-    type: location ? 'location' : event.type,
+    type: event.type === 'location' || location ? 'location' : event.type,
     ...(event.inReplyTo ? { context: { id: event.inReplyTo } } : {}),
     ...(location ? { location } : {}),
   });

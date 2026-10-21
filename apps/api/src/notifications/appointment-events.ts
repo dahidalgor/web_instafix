@@ -1,6 +1,7 @@
 import type { Appointment, Prisma } from '@prisma/client';
 import { queueJob, queueReminders } from '../whatsapp/queue';
 import type { MessageKind } from '../whatsapp/messages';
+import type { RequestOrigin } from '../security/client-identity';
 import { enqueueAppointmentEmail } from './notification.service';
 
 /**
@@ -21,6 +22,8 @@ export async function publishAppointmentEvent(
   appointment: Appointment,
   event: AppointmentEvent,
   now = new Date(),
+  /** Sesión/IP que provocó el hecho (presupuesto de WhatsApp). Sin él, el de la cita. */
+  origin?: RequestOrigin | null,
 ) {
   const notifications: string[] = [];
   const email = async (
@@ -33,7 +36,7 @@ export async function publishAppointmentEvent(
   // WhatsApp solo con consentimiento del cliente; cada aviso tiene su plantilla aprobada.
   const whatsapp = async (kind: MessageKind) => {
     if (appointment.whatsappConsentAt && appointment.contactPhone)
-      await queueJob(tx, appointment, kind, now, appointment.startsAt);
+      await queueJob(tx, appointment, kind, now, appointment.startsAt, origin);
   };
   switch (event.type) {
     case 'appointment.created':
