@@ -184,6 +184,9 @@ header nav a[aria-current] {
     /* Reserva espacio para el acceso fijo y el indicador de inicio de iOS. */
     padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
   }
+  footer > span {
+    order: 1;
+  }
   footer .footer-links {
     order: -1;
     justify-content: center;
