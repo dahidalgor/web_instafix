@@ -7,7 +7,6 @@ import {
 } from '../../components/ui/Skeleton';
 import { type AccountUser, type Appointment, type CompletedJob } from '@instafix/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BusyButton } from '../../components/ui/BusyButton';
 import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
 import { LOGOUT_EVENT } from '../../components/layout/AccountMenu';
@@ -213,14 +212,6 @@ export function AccountDashboard() {
         <button aria-pressed={section === 'jobs'} onClick={() => setSection('jobs')}>
           Servicios y garantías
         </button>
-        <BusyButton
-          className="refresh-account btn btn-ghost btn-small"
-          busy={loading}
-          busyLabel="Actualizando…"
-          onClick={() => void load()}
-        >
-          Actualizar
-        </BusyButton>
       </div>
       {/* Cambiar de sección o de filtro anima el contenido, como la navegación de la página. */}
       <div className="account-section" key={`${section}-${appointmentFilter}`}>
@@ -338,29 +329,54 @@ export function AccountDashboard() {
               </div>
             )}
             {jobs.map((job) => {
+              const done = new Date(job.completedAt).getTime();
               const expires = job.warrantyEndsAt ? new Date(job.warrantyEndsAt).getTime() : null;
               const days = expires ? Math.max(0, Math.ceil((expires - now) / 86400000)) : 0;
+              const state = expires === null ? 'none' : days ? 'active' : 'expired';
+              // Parte de la garantía que queda (barra), entre la fecha del trabajo y su vencimiento.
+              const left =
+                expires && expires > done
+                  ? Math.min(100, Math.max(0, ((expires - now) / (expires - done)) * 100))
+                  : 0;
               return (
-                <article className="history-card" key={job.id}>
-                  <p className="eyebrow">{job.device}</p>
-                  <h2>{job.title}</h2>
-                  <p>
-                    {format(job.completedAt)} · {money(job.priceMinor)}
-                  </p>
-                  <strong>
-                    {expires === null
-                      ? 'Sin garantía registrada'
-                      : days
-                        ? `Garantía vigente · ${days} días restantes`
-                        : 'Garantía vencida'}
-                  </strong>
-                  {job.warrantyEndsAt && <p>Vence: {format(job.warrantyEndsAt)}</p>}
-                  <p className="service-description">
-                    {job.warrantyTerms || 'Consulta las condiciones con Instafix.'}
-                  </p>
-                  <a className="btn btn-ghost" href="#garantia">
-                    Políticas de garantía
-                  </a>
+                <article className={`history-card job-card is-${state}`} key={job.id}>
+                  <div className="job-card-head">
+                    <div>
+                      <p className="eyebrow">{job.device}</p>
+                      <h2>{job.title}</h2>
+                      <p className={`warranty-label is-${state}`}>
+                        {state === 'active'
+                          ? 'Garantía vigente'
+                          : state === 'expired'
+                            ? 'Garantía vencida'
+                            : 'Sin garantía'}
+                      </p>
+                    </div>
+                    {state !== 'none' && <WarrantyRing left={left} days={days} />}
+                  </div>
+                  <dl className="job-card-facts">
+                    <div>
+                      <dt>Realizado</dt>
+                      <dd>{dateOnly(job.completedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Importe</dt>
+                      <dd>{money(job.priceMinor)}</dd>
+                    </div>
+                    <div>
+                      <dt>Garantía hasta</dt>
+                      <dd>{job.warrantyEndsAt ? dateOnly(job.warrantyEndsAt) : '—'}</dd>
+                    </div>
+                  </dl>
+                  <details className="job-card-terms">
+                    <summary>Condiciones de garantía</summary>
+                    <p className="service-description">
+                      {job.warrantyTerms || 'Consulta las condiciones con Instafix.'}
+                    </p>
+                    <a className="text-button" href="#garantia">
+                      Ver políticas de garantía
+                    </a>
+                  </details>
                 </article>
               );
             })}
@@ -370,3 +386,42 @@ export function AccountDashboard() {
     </section>
   );
 }
+
+/** Anillo de garantía restante: se va vaciando hasta el vencimiento. */
+function WarrantyRing({ left, days }: { left: number; days: number }) {
+  const radius = 26;
+  const length = 2 * Math.PI * radius;
+  const tone = !days ? 'expired' : left <= 20 ? 'low' : 'ok';
+  return (
+    <div
+      className={`warranty-ring is-${tone}`}
+      role="img"
+      aria-label={days ? `Garantía restante: ${Math.round(left)} %` : 'Garantía vencida'}
+    >
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <circle className="warranty-ring-track" cx="32" cy="32" r={radius} />
+        <circle
+          className="warranty-ring-value"
+          cx="32"
+          cy="32"
+          r={radius}
+          strokeDasharray={length}
+          strokeDashoffset={length * (1 - left / 100)}
+        />
+      </svg>
+      <span aria-hidden="true">
+        <strong>{days}</strong>
+        {days === 1 ? 'día' : 'días'}
+      </span>
+    </div>
+  );
+}
+
+/** Fecha sin hora (servicios y garantías). */
+const dateOnly = (value: string) =>
+  new Intl.DateTimeFormat('es-EC', {
+    timeZone: 'America/Guayaquil',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value));

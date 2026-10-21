@@ -1,3 +1,6 @@
+import { fillLocationArea } from '../whatsapp/location-area';
+import { locationFromText } from '../whatsapp/maps-link';
+import { recordCompletedJob } from '../jobs/completed-job';
 import {
   BadRequestException,
   ConflictException,
@@ -318,6 +321,49 @@ export async function saveNotes(user: StaffUser, id: string, notes: string) {
   return staffAppointment(user, id);
 }
 
+/**
+ * Ubicación pegada por el técnico (enlace de Google/Apple Maps o coordenadas), p. ej. cuando el
+ * cliente la mandó por otro medio. Solo quien gestiona la visita.
+ */
+export async function setLocation(user: StaffUser, id: string, text: string) {
+  // Fuera de la transacción: un enlace corto puede requerir consultar a Google.
+  const location = await locationFromText(text);
+  if (!location)
+    throw new BadRequestException(
+      'No reconocimos la ubicación. Pega un enlace de Google Maps o coordenadas como -0.1807, -78.4678.',
+    );
+  await db.$transaction(async (tx) => {
+    await lockAppointment(tx, id);
+    const a = await tx.appointment.findUnique({ where: { id } });
+    if (!a) throw new NotFoundException('Cita no encontrada');
+    if (!canManage(user, a))
+      throw new ForbiddenException('Esta cita está asignada a otro técnico.');
+    if (!['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'].includes(a.status))
+      throw new BadRequestException('Esta cita ya no admite cambios de ubicación.');
+    const coords = location.latitude !== undefined && location.longitude !== undefined;
+    await tx.appointment.update({
+      where: { id },
+      data: {
+        locationLatitude: coords ? location.latitude : null,
+        locationLongitude: coords ? location.longitude : null,
+        address: coords
+          ? location.name || `${location.latitude}, ${location.longitude}`
+          : [location.name, location.url].filter(Boolean).join(' · '),
+        locationReceivedAt: new Date(),
+        locationArea: null,
+      },
+    });
+    // Ya no hace falta pedirla por WhatsApp.
+    await tx.automationJob.updateMany({
+      where: { appointmentId: id, kind: 'INITIAL', status: { in: ['PENDING', 'RETRY'] } },
+      data: { status: 'CANCELLED' },
+    });
+    await activity(tx, id, user.id, 'LOCATION_SET', { coordinates: coords });
+  });
+  await fillLocationArea(id);
+  return staffAppointment(user, id);
+}
+
 export async function completeAppointment(user: StaffUser, id: string, now = new Date()) {
   const already = await db.$transaction(async (tx) => {
     await lockAppointment(tx, id);
@@ -339,6 +385,8 @@ export async function completeAppointment(user: StaffUser, id: string, now = new
     if (!done.count) return true;
     await cancelPendingJobs(tx, id);
     await activity(tx, id, user.id, 'COMPLETED', { services: a.services.length });
+    // La cuenta del cliente recibe el trabajo realizado con su garantía.
+    await recordCompletedJob(tx, id);
     const updated = await tx.appointment.findUniqueOrThrow({ where: { id } });
     await publishAppointmentEvent(tx, updated, { type: 'appointment.completed' }, now);
     return false;

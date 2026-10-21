@@ -1,3 +1,4 @@
+import { recordCompletedJob } from '../jobs/completed-job';
 import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { lockAppointment } from '../whatsapp/queue';
@@ -33,6 +34,7 @@ export async function claimGuestAppointments(
     });
     if (!updated.count) continue;
     claimed++;
+    await recordCompletedJob(tx, id);
     await tx.integrationEvent.create({
       data: {
         id: `account-link:${randomUUID()}`,
