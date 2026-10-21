@@ -1,3 +1,4 @@
+import { AppointmentLocation } from '../../components/appointments/AppointmentLocation';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import type { AccountUser, Offering, StaffAppointment } from '@instafix/contracts';
@@ -183,26 +184,11 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
                       : undefined
                 }
                 details={
-                  <div>
-                    <dt>Ubicación</dt>
-                    <dd>
-                      {a.locationArea ||
-                        a.address ||
-                        (a.locationReceivedAt ? 'Recibida' : 'Pendiente')}
-                      {a.locationLatitude != null && a.locationLongitude != null && (
-                        <>
-                          {' · '}
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&destination=${a.locationLatitude},${a.locationLongitude}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Cómo llegar
-                          </a>
-                        </>
-                      )}
-                    </dd>
-                  </div>
+                  <AppointmentLocation
+                    appointment={a}
+                    directions={a.canManage}
+                    pending="Pendiente por WhatsApp"
+                  />
                 }
               >
                 {tab === 'pending' && (

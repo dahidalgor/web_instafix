@@ -1,3 +1,4 @@
+import type { Appointment } from '@prisma/client';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -143,6 +144,8 @@ export async function receiveCalWebhook(body: unknown) {
             startsAt,
             endsAt,
             automationRevision: { increment: 1 },
+            // Reprogramada desde Cal.com (equipo): cuenta, pero no se bloquea.
+            rescheduleCount: { increment: 1 },
             ...unassignedForReschedule,
             locationRequestedAt: occurredAt,
           },
@@ -306,12 +309,13 @@ export async function receiveCalWebhook(body: unknown) {
       whatsappConsentAt: consent ? occurredAt : null,
       calStatus,
       automationIssue: issue,
-      locationLatitude: null,
-      locationArea: null,
-      locationLongitude: null,
-      locationReceivedAt: null,
-      locationRequestedAt: occurredAt,
+      // La ubicación ya recibida sigue valiendo si el cliente (teléfono) es el mismo: un cambio
+      // de horario o de estado en Cal.com no debe borrarla.
+      ...keptLocation(existing ?? rescheduledFrom, phone, occurredAt),
     };
+    const rescheduleCount = rescheduledFrom
+      ? { rescheduleCount: rescheduledFrom.rescheduleCount + 1 }
+      : {};
     const attendeeEmail = p.attendees[0].email?.trim().toLowerCase() || null;
     const contactEmail =
       (identity.userId ? owner?.email : null) ||
@@ -327,6 +331,7 @@ export async function receiveCalWebhook(body: unknown) {
           data: {
             ...dataToSave,
             contactEmail,
+            ...rescheduleCount,
             calUid: uid,
             // Respuesta de la API perdida: la reserva sí es de Instafix y se avisa una vez.
             source: fromApi ? 'INSTAFIX_API' : 'CAL_EMBED',
@@ -338,4 +343,31 @@ export async function receiveCalWebhook(body: unknown) {
     await saveEvent(issue ? 'NEEDS_REVIEW' : 'IMPORTED');
     return { ok: true };
   });
+}
+
+/** Ubicación de la reserva anterior (misma persona) o vacía si cambia el teléfono. */
+function keptLocation(
+  previous: Appointment | null | undefined,
+  phone: string | null | undefined,
+  occurredAt: Date,
+) {
+  if (previous?.locationReceivedAt && previous.contactPhone === (phone || ''))
+    return {
+      locationLatitude: previous.locationLatitude,
+      locationLongitude: previous.locationLongitude,
+      locationArea: previous.locationArea,
+      locationReceivedAt: previous.locationReceivedAt,
+      locationSource: previous.locationSource,
+      locationName: previous.locationName,
+      locationRequestedAt: previous.locationRequestedAt,
+    };
+  return {
+    locationLatitude: null,
+    locationArea: null,
+    locationLongitude: null,
+    locationReceivedAt: null,
+    locationSource: null,
+    locationName: null,
+    locationRequestedAt: occurredAt,
+  };
 }

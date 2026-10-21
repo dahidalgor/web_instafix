@@ -13,6 +13,7 @@ import { LOGOUT_EVENT } from '../../components/layout/AccountMenu';
 import { linkToken } from './account-links';
 import { AppointmentActions } from './AppointmentActions';
 import { AppointmentCard } from '../../components/appointments/AppointmentCard';
+import { AppointmentLocation } from '../../components/appointments/AppointmentLocation';
 import { Login } from './Login';
 
 export function AccountDashboard() {
@@ -272,13 +273,12 @@ export function AccountDashboard() {
                   technician={item.assignedTechnician?.name || item.technician || null}
                   details={
                     <>
-                      <div>
-                        <dt>Ubicación</dt>
-                        <dd>
-                          {item.address ||
-                            (item.locationReceivedAt ? 'Recibida' : 'Pendiente por WhatsApp')}
-                        </dd>
-                      </div>
+                      {item.status !== 'CANCELLED' || item.locationReceivedAt ? (
+                        <AppointmentLocation
+                          appointment={item}
+                          pending="Pendiente: envíanos tu ubicación por WhatsApp"
+                        />
+                      ) : null}
                       {!!item.services?.length && (
                         <div className="appt-meta-wide">
                           <dt>Servicios realizados</dt>

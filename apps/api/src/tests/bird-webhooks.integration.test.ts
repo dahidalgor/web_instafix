@@ -144,7 +144,8 @@ test(
     );
     const located = await db.appointment.findUniqueOrThrow({ where: { id: first.id } });
     assert.ok(located.locationReceivedAt);
-    assert.equal(located.address, 'Av. Amazonas N24');
+    assert.equal(located.locationName, 'Av. Amazonas N24');
+    assert.equal(located.locationSource, 'WHATSAPP');
     assert.equal(located.status, 'PENDING_LOCATION');
 
     // 5. Historial de chat con fuente y tipo; el texto entrante se guarda.

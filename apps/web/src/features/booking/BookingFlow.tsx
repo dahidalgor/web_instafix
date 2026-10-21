@@ -2,7 +2,8 @@ import type { AccountUser, BookingResult } from '@instafix/contracts';
 import { maskPhone, normalizePhone, type CountryCode } from '@instafix/contracts/src/phone';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { BusyButton } from '../../components/ui/BusyButton';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, newIdempotencyKey } from '../../lib/api';
+import { REGISTER_PREFILL_KEY, type RegisterPrefill } from '../account/register-prefill';
 import { PhoneField } from '../account/PhoneField';
 import { dayKey, formatDay, formatTime } from './booking-time';
 import { ScheduleStep, type BookingSlot, type FetchAvailability } from './ScheduleStep';
@@ -56,6 +57,8 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<BookingResult | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  // Misma clave mientras se reintenta la misma reserva: el servidor no crea otra.
+  const attempt = useRef<{ start: string; key: string } | null>(null);
 
   useEffect(() => writeSession(DRAFT_KEY, null), []);
   const shownStep = useRef(step);
@@ -119,6 +122,19 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
     go('review');
   }
 
+  /** Datos del invitado para el registro: nombre, teléfono y correo ya escritos. */
+  function prefillRegistration() {
+    const phone = guestPhone();
+    if (!phone) return;
+    const prefill: RegisterPrefill = {
+      firstName: guest.firstName.trim(),
+      lastName: guest.lastName.trim(),
+      phone,
+      email: guest.email.trim(),
+    };
+    writeSession(REGISTER_PREFILL_KEY, prefill);
+  }
+
   function goToLogin() {
     writeSession(DRAFT_KEY, { request, day });
     window.location.hash = '#cuenta';
@@ -133,8 +149,11 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
     setBusy(true);
     setError('');
     try {
+      if (attempt.current?.start !== slot.start)
+        attempt.current = { start: slot.start, key: newIdempotencyKey() };
       const created = await api<BookingResult>('booking', {
         method: 'POST',
+        headers: { 'Idempotency-Key': attempt.current.key },
         body: JSON.stringify({
           start: slot.start,
           request: request.trim(),
@@ -150,6 +169,7 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
         }),
       });
       setResult(created);
+      attempt.current = null;
       go('done');
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.code === 'SLOT_UNAVAILABLE') {
@@ -204,18 +224,30 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
               : `Estamos enviando el resumen de tu solicitud a ${result.email.maskedEmail}.`}
           </p>
         )}
-        {result.account === 'GUEST' ? (
-          <div className="done-invite">
-            <h4>Crea tu cuenta de InstaFix</h4>
+        {result.account === 'GUEST' && (
+          <div className="done-invite" role="region" aria-labelledby="done-invite-title">
+            <p className="done-invite-eyebrow">Solicitud recibida ✓</p>
+            <h4 id="done-invite-title">Gestiona tu cita desde tu cuenta</h4>
             <p>
-              Consulta tus citas, gestiona futuras reservas y mantén tu información guardada. Usa el
-              mismo número de WhatsApp: al verificarlo, esta cita aparecerá en tu cuenta.
+              Crea tu cuenta para consultar esta visita, próximas citas e historial. Ya tenemos tus
+              datos: solo eliges una contraseña y verificas tu WhatsApp con un código.
             </p>
-            <a className="button" href="#cuenta">
-              Crear mi cuenta <span>→</span>
+            <a className="button done-invite-cta" href="#cuenta" onClick={prefillRegistration}>
+              Crear mi cuenta <span aria-hidden="true">→</span>
             </a>
           </div>
-        ) : (
+        )}
+        {result.account === 'EXISTING_ACCOUNT' && (
+          <div className="done-invite" role="region" aria-labelledby="done-invite-title">
+            <p className="done-invite-eyebrow">Solicitud recibida ✓</p>
+            <h4 id="done-invite-title">Este número ya está asociado a una cuenta</h4>
+            <p>Inicia sesión para continuar y ver esta cita en Mis citas.</p>
+            <a className="button done-invite-cta" href="#cuenta">
+              Iniciar sesión <span aria-hidden="true">→</span>
+            </a>
+          </div>
+        )}
+        {result.account === 'LINKED' && (
           <>
             <p>Puedes consultar esta cita desde Mi cuenta.</p>
             <a className="button" href="#cuenta">

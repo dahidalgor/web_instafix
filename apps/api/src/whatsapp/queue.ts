@@ -1,14 +1,21 @@
 import type { Appointment, Prisma } from '@prisma/client';
+import type { RequestOrigin } from '../security/client-identity';
 import { reminderTimes } from './messages';
 
+/**
+ * Encola un aviso (outbox): se guarda en la misma transacción que el cambio de la cita y lo
+ * envía el worker, que antes comprueba el presupuesto. `origin` = quien lo provocó; los avisos
+ * del equipo o del sistema heredan la sesión/IP que creó la cita.
+ */
 export async function queueJob(
   tx: Prisma.TransactionClient,
   appointment: Appointment,
   kind: string,
   dueAt: Date,
   expiresAt = appointment.startsAt,
+  origin?: RequestOrigin | null,
 ) {
-  if (appointment.bookingIdentityIssue || expiresAt <= dueAt) return;
+  if (appointment.bookingIdentityIssue || appointment.deletedAt || expiresAt <= dueAt) return;
   const dedupeKey = `${appointment.id}:${appointment.automationRevision}:${kind}`;
   await tx.automationJob.upsert({
     where: { dedupeKey },
@@ -20,6 +27,9 @@ export async function queueJob(
       kind,
       dueAt,
       expiresAt,
+      recipient: appointment.contactPhone || null,
+      originSessionKey: origin?.sessionKey ?? appointment.originSessionKey,
+      originIpHash: origin?.ipHash ?? appointment.originIpHash,
     },
   });
 }

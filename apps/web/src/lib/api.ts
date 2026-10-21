@@ -45,6 +45,9 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
     const structured = body && typeof body === 'object' && typeof body.message === 'string';
     if (import.meta.env.DEV)
       console.warn('[api] error', { path, status: response.status, code: body?.code ?? null });
+    // 429 con motivo propio (p. ej. OTP_RATE_LIMIT, LOGIN_LOCKED): se conserva su código y texto.
+    if (response.status === 429 && structured && typeof body.code === 'string')
+      throw new ApiError(body.message, 429, body);
     if (response.status === 429)
       throw new ApiError(
         'Demasiados intentos seguidos. Espera un minuto y vuelve a intentarlo.',
@@ -76,3 +79,9 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
     throw new ApiError(serverMessage(response.status), response.status, { code: 'BAD_RESPONSE' });
   });
 }
+
+/** Clave de idempotencia para una acción del usuario (se reutiliza si la reintenta). */
+export const newIdempotencyKey = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;

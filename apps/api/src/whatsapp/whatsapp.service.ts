@@ -4,6 +4,7 @@ import { logEvent } from '../common/log-event';
 import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
 import { whatsappConfiguration } from './config';
+import { whatsappSendingEnabled } from './budget';
 import { messageVariables, templateFor, type MessageKind } from './messages';
 import {
   WHATSAPP_PROVIDER,
@@ -24,7 +25,7 @@ export class WhatsAppService {
   }
 
   async sendAppointmentMessage(appointment: Appointment, kind: MessageKind): Promise<SentMessage> {
-    if (!whatsappConfiguration().enabled)
+    if (!whatsappConfiguration().enabled || !whatsappSendingEnabled())
       throw new ProviderError('Envíos de WhatsApp desactivados', 'FAILED');
     if (!appointment.whatsappConsentAt)
       throw new ProviderError('Falta autorización del cliente', 'FAILED');

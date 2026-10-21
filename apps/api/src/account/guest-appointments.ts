@@ -19,6 +19,7 @@ export async function claimGuestAppointments(
   const candidates = await tx.appointment.findMany({
     where: {
       userId: null,
+      deletedAt: null,
       contactPhone: verifiedPhone,
       bookingIdentityIssue: null,
       createdAt: { gte: new Date(now.getTime() - GUEST_CLAIM_DAYS * 86400000) },

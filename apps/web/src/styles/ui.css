@@ -300,12 +300,24 @@ button[aria-busy='true'] {
 }
 
 /* ---------- Flechas de trazo grueso (Inicio) ---------- */
+/* Colores por tema. Sin sombra desplazada: un drop-shadow con desplazamiento dibujaba una copia
+   de la flecha más abajo, que en modo oscuro se leía como un segundo trazo y una sombra inferior. */
+:root {
+  --arrow-ink: #fff;
+  --arrow-edge: #14152f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* El cuerpo claro se recorta sobre el fondo con un borde del mismo color que la página. */
+    --arrow-ink: #f3eef8;
+    --arrow-edge: #111222;
+  }
+}
 .scribble-arrow {
   position: absolute;
   z-index: 0;
   pointer-events: none;
   overflow: visible;
-  filter: drop-shadow(0 6px 10px rgb(20 21 47 / 16%));
 }
 .scribble-shaft {
   fill: none;
@@ -332,34 +344,24 @@ button[aria-busy='true'] {
   opacity: 1;
   transform: none;
 }
-/* Borde oscuro fino alrededor del cuerpo blanco. */
+/* Borde fino alrededor del cuerpo. */
 .scribble-outline .scribble-shaft {
-  stroke: #14152f;
+  stroke: var(--arrow-edge);
   stroke-width: 19;
 }
 .scribble-outline .scribble-head {
-  fill: #14152f;
-  stroke: #14152f;
+  fill: var(--arrow-edge);
+  stroke: var(--arrow-edge);
   stroke-width: 6;
 }
 .scribble-ink .scribble-shaft {
-  stroke: #fff;
+  stroke: var(--arrow-ink);
   stroke-width: 13;
 }
 .scribble-ink .scribble-head {
-  fill: #fff;
-  stroke: #fff;
+  fill: var(--arrow-ink);
+  stroke: var(--arrow-ink);
   stroke-width: 1;
-}
-@media (prefers-color-scheme: dark) {
-  .scribble-arrow {
-    filter: drop-shadow(0 6px 14px rgb(0 0 0 / 45%));
-  }
-  .scribble-outline .scribble-shaft,
-  .scribble-outline .scribble-head {
-    stroke: #2a2340;
-    fill: #2a2340;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .scribble-shaft,
@@ -370,13 +372,33 @@ button[aria-busy='true'] {
     transform: none;
   }
 }
+/* Versión vertical para el teléfono: en el flujo, centrada entre bloques. */
+.scribble-down {
+  position: static;
+  display: none;
+  width: 54px;
+  height: auto;
+  margin: 4px auto 10px;
+}
+.scribble-down .scribble-ink .scribble-shaft {
+  stroke-width: 11;
+}
+.scribble-down .scribble-outline .scribble-shaft {
+  stroke-width: 16;
+}
+@media (max-width: 760px) {
+  .scribble-down {
+    display: block;
+  }
+}
 /* Junto al título principal, en el espacio libre de la derecha. */
 .home-hero {
   position: relative;
 }
 .home-hero > :not(.scribble-arrow),
 .how-page > :not(.scribble-arrow),
-.journey-end > :not(.scribble-arrow) {
+.journey-end > :not(.scribble-arrow),
+.scribble-down {
   position: relative;
   z-index: 1;
 }
@@ -414,7 +436,7 @@ button[aria-busy='true'] {
   }
 }
 @media (max-width: 760px) {
-  /* En el teléfono no se muestran: el contenido ya llena la pantalla. */
+  /* En el teléfono se usan las flechas verticales (scribble-down). */
   .arrow-end {
     display: none;
   }

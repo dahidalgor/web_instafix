@@ -52,7 +52,14 @@ export type Appointment = z.infer<typeof appointmentSchema> & {
   confirmedAt?: string | null;
   completedAt?: string | null;
   locationReceivedAt?: string | null;
+  locationLatitude?: number | null;
+  locationLongitude?: number | null;
+  locationArea?: string | null;
+  locationSource?: string | null;
+  locationName?: string | null;
+  rescheduleCount?: number;
 };
+export const MAX_RESCHEDULES = 2;
 
 /** Reserva creada por Instafix. El cliente describe su necesidad; no elige un servicio. */
 export const bookingRequestSchema = z
@@ -72,7 +79,8 @@ export type BookingResult = {
   endsAt: string;
   status: (typeof appointmentStatuses)[number];
   email: { status: 'SENT' | 'PENDING' | 'NONE'; maskedEmail: string | null };
-  account: 'LINKED' | 'GUEST';
+  /** GUEST: invitado sin cuenta · EXISTING_ACCOUNT: el número ya tiene cuenta (iniciar sesión). */
+  account: 'LINKED' | 'GUEST' | 'EXISTING_ACCOUNT';
 };
 
 /** Servicio realmente realizado en una visita (distinto de la solicitud del cliente). */
@@ -116,6 +124,10 @@ export type StaffAppointment = {
   locationLatitude: number | null;
   locationLongitude: number | null;
   locationReceivedAt: string | null;
+  /** WHATSAPP (webhook firmado) o STAFF (pegada por el equipo). */
+  locationSource?: string | null;
+  /** Nombre o dirección del lugar compartido (no es la dirección escrita). */
+  locationName?: string | null;
   automationIssue: string | null;
   bookingIdentityIssue: string | null;
   calStatus: string | null;

@@ -431,6 +431,42 @@
   line-height: 1.6;
   font-size: 14px;
 }
+/* Invitación destacada a crear la cuenta (sin ventanas emergentes). */
+.done-invite {
+  border: 1.5px solid var(--accent);
+  text-align: left;
+}
+.done-invite .done-invite-eyebrow {
+  margin: 0 0 6px;
+  color: #1f7a55;
+  font-size: 13px;
+  font-weight: 700;
+}
+.done-invite-cta {
+  margin-top: 16px;
+}
+@media (max-width: 560px) {
+  .booking-done {
+    padding: 32px 18px;
+  }
+  .done-invite {
+    padding: 20px 18px;
+  }
+  .done-invite h4 {
+    font-size: 19px;
+  }
+  .done-invite-cta {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    min-height: 50px;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .done-invite .done-invite-eyebrow {
+    color: #a7e9cb;
+  }
+}
 
 /* ---------- Formulario anterior de Cal.com (modo legacy) */
 .calendar-embed {

@@ -156,6 +156,7 @@ export class TeamController {
 /** Visitas aún por atender (no terminadas ni canceladas) que empiezan desde ahora. */
 function upcomingWhere(now = new Date()): Prisma.AppointmentWhereInput {
   return {
+    deletedAt: null,
     startsAt: { gte: now },
     status: { in: ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'] },
   };

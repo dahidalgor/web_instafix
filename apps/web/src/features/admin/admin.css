@@ -291,3 +291,44 @@
   flex: 1 1 180px;
   min-width: 0;
 }
+
+/* Usuarios y Números */
+.admin-search {
+  max-width: 520px;
+}
+.user-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.user-badges .verified {
+  color: #1f7a55;
+}
+.user-badges .unverified {
+  color: #a12f26;
+}
+.admin-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+.admin-delete-appt {
+  margin-left: 10px;
+}
+@media (max-width: 560px) {
+  .admin-delete-appt {
+    margin: 10px 0 0;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .user-badges .verified {
+    color: #a7e9cb;
+  }
+  .user-badges .unverified {
+    color: #ffb1a9;
+  }
+}

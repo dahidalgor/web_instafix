@@ -1,3 +1,4 @@
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import type { AccountUser, VerificationTicket } from '@instafix/contracts';
 import {
   maskEmail,
@@ -203,7 +204,7 @@ export function AccountSecurity({
             />
             <label>
               Contraseña actual
-              <input name="password" type="password" autoComplete="current-password" required />
+              <PasswordInput name="password" autoComplete="current-password" required />
             </label>
             <div className="security-form-actions">
               <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
@@ -264,7 +265,7 @@ export function AccountSecurity({
           </label>
           <label>
             Contraseña actual
-            <input name="password" type="password" autoComplete="current-password" required />
+            <PasswordInput name="password" autoComplete="current-password" required />
           </label>
           <div className="security-form-actions">
             <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
@@ -302,18 +303,12 @@ export function AccountSecurity({
         <form className="security-panel" id="security-password" onSubmit={changePassword}>
           <label>
             Contraseña actual
-            <input
-              name="currentPassword"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
+            <PasswordInput name="currentPassword" autoComplete="current-password" required />
           </label>
           <label>
             Nueva contraseña
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="new-password"
               minLength={12}
               maxLength={128}
@@ -322,9 +317,8 @@ export function AccountSecurity({
           </label>
           <label>
             Repite la nueva contraseña
-            <input
+            <PasswordInput
               name="confirmPassword"
-              type="password"
               autoComplete="new-password"
               minLength={12}
               maxLength={128}

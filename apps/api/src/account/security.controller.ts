@@ -16,7 +16,7 @@ import {
   UnauthorizedException,
   Inject,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { RateLimit } from '../security/rate-limits';
 import type { Request } from 'express';
 import { serverPhone } from '../auth/auth.controller';
 import { issueAuthToken } from '../auth/auth-tokens';
@@ -27,6 +27,7 @@ import { db } from '../database/client';
 import { assertMailConfigured, sendEmail } from '../mail/email.service';
 import { emailVerificationEmail, webUrl } from '../mail/templates';
 import { claimGuestAppointments } from './guest-appointments';
+import { requestOrigin } from '../security/client-identity';
 
 const EMAIL_VERIFICATION_TTL = 86400;
 
@@ -47,7 +48,7 @@ export class SecurityController {
    */
   @Post('phone/verification')
   @HttpCode(200)
-  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @RateLimit('otp')
   async startPhoneVerification(@Req() req: Request) {
     checkOrigin(req);
     const user = await authenticated(req);
@@ -55,13 +56,14 @@ export class SecurityController {
       purpose: 'PHONE_VERIFICATION',
       phone: user.phone,
       userId: user.id,
+      origin: requestOrigin(req),
     });
   }
 
   /** Verificación opcional del correo: Instafix → Brevo → enlace de un solo uso. */
   @Post('email/verification')
   @HttpCode(200)
-  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @RateLimit('communications')
   async sendEmailVerification(@Req() req: Request) {
     checkOrigin(req);
     const session = await authenticated(req);
@@ -95,7 +97,7 @@ export class SecurityController {
   /** Cambiar el correo lo deja sin verificar hasta confirmar el nuevo. */
   @Post('email')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('recovery')
   async changeEmail(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const session = await authenticated(req);
@@ -131,7 +133,7 @@ export class SecurityController {
   /** Paso 1: comprobar unicidad y enviar OTP al NUEVO número. El número no cambia todavía. */
   @Post('phone/change')
   @HttpCode(200)
-  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @RateLimit('otp')
   async startPhoneChange(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const session = await authenticated(req);
@@ -143,24 +145,34 @@ export class SecurityController {
     if (user.phone === phone) throw new BadRequestException('Ese ya es tu número verificado.');
     if (await db.user.findUnique({ where: { phone } }))
       throw new ConflictException('Ya existe una cuenta asociada a este número de WhatsApp.');
-    return this.verification.start({ purpose: 'PHONE_CHANGE', phone, userId: user.id });
+    return this.verification.start({
+      purpose: 'PHONE_CHANGE',
+      phone,
+      userId: user.id,
+      origin: requestOrigin(req),
+    });
   }
 
   @Post('phone/change/resend')
   @HttpCode(200)
-  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @RateLimit('otp')
   async resendPhoneChange(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const session = await authenticated(req);
     const parsed = verifyPhoneSchema.pick({ verificationId: true }).safeParse(body);
     if (!parsed.success) throw new BadRequestException('Solicitud inválida');
-    return this.verification.resend(parsed.data.verificationId, ['PHONE_CHANGE'], session.id);
+    return this.verification.resend(
+      parsed.data.verificationId,
+      ['PHONE_CHANGE'],
+      session.id,
+      requestOrigin(req),
+    );
   }
 
   /** Paso 2: con el OTP del nuevo número se actualiza el teléfono y su verificación. */
   @Post('phone/change/verify')
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @RateLimit('otpVerify')
   async verifyPhoneChange(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const session = await authenticated(req);
@@ -197,7 +209,7 @@ export class SecurityController {
 
   @Post('password')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit('recovery')
   async changePassword(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const session = await authenticated(req);

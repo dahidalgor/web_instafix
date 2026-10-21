@@ -389,21 +389,24 @@ function inboundMessage(data: any, occurredAt: Date): Omit<WhatsAppMessageEvent,
         ...(data[type].filename ? { filename: String(data[type].filename).slice(0, 200) } : {}),
       }
     : undefined;
-  const location =
-    type === 'location' &&
-    Number.isFinite(data.location.latitude) &&
-    Number.isFinite(data.location.longitude) &&
-    Math.abs(data.location.latitude) <= 90 &&
-    Math.abs(data.location.longitude) <= 180
-      ? {
-          latitude: data.location.latitude,
-          longitude: data.location.longitude,
-          ...(data.location.name ? { name: String(data.location.name).slice(0, 200) } : {}),
-          ...(data.location.address
-            ? { address: String(data.location.address).slice(0, 500) }
-            : {}),
-        }
-      : undefined;
+  // Ubicación nativa (WhatsAppLocation de Bird: latitude, longitude, name?, address?, url?).
+  // Las coordenadas se pasan tal cual: la validación de rango la hace inbound.ts, que rechaza
+  // las inválidas sin modificar ninguna cita.
+  const raw =
+    type === 'location' && data.location && typeof data.location === 'object'
+      ? data.location
+      : null;
+  const location = raw
+    ? {
+        ...(raw.latitude !== undefined ? { latitude: Number(raw.latitude) } : {}),
+        ...(raw.longitude !== undefined ? { longitude: Number(raw.longitude) } : {}),
+        ...(raw.name ? { name: String(raw.name).slice(0, 200) } : {}),
+        ...(raw.address ? { address: String(raw.address).slice(0, 500) } : {}),
+        ...(typeof raw.url === 'string' && /^https:\/\//.test(raw.url)
+          ? { url: raw.url.slice(0, 500) }
+          : {}),
+      }
+    : undefined;
   const text =
     data.text?.body ??
     data.interactive_reply?.button?.text ??

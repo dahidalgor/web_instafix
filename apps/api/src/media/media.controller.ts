@@ -1,12 +1,12 @@
 import { BadRequestException, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { NoRateLimit } from '../security/rate-limits';
 import type { Request, Response } from 'express';
 import { authenticated, checkOrigin } from '../auth/session';
 import { processUpload } from './media-processor';
 import { directory } from './media-storage';
 @Controller('api/v1')
 export class MediaController {
-  @SkipThrottle()
+  @NoRateLimit()
   @Get('media/:key')
   file(@Param('key') key: string, @Res() res: Response) {
     if (!/^[a-f0-9-]{36}(?:-small|-poster)?\.(webp|mp4)$/.test(key))

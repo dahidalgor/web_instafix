@@ -1,5 +1,5 @@
 import { Controller, HttpCode, Inject, Post, Req, type RawBodyRequest } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { NoRateLimit } from '../security/rate-limits';
 import type { Request } from 'express';
 import { WHATSAPP_PROVIDER, type WhatsAppProvider } from '../whatsapp/provider';
 import { receiveWhatsAppWebhook } from '../whatsapp/webhook-inbox';
@@ -7,7 +7,7 @@ import { receiveCalWebhook } from './cal-webhook';
 import { verifySignature } from './signature';
 
 @Controller('api/v1/webhooks')
-@SkipThrottle() // Firmas verificadas; los reintentos del proveedor no deben perderse por el límite de clientes.
+@NoRateLimit() // Firmas verificadas; los reintentos del proveedor no deben perderse por el límite de clientes.
 export class WebhooksController {
   constructor(@Inject(WHATSAPP_PROVIDER) private readonly whatsapp: WhatsAppProvider) {}
   /** Bird: Standard Webhooks (webhook-id, webhook-timestamp, webhook-signature). */

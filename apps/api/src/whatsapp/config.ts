@@ -6,6 +6,8 @@ export function whatsappConfiguration() {
   return {
     provider: 'BIRD',
     enabled: process.env.WHATSAPP_ENABLED === 'true',
+    // Interruptor de emergencia: false = ningún mensaje llega a Bird (se registran como omitidos).
+    sendingEnabled: process.env.WHATSAPP_SENDING_ENABLED !== 'false',
     configured: !missing.length,
     missing,
     businessPhone: process.env.WHATSAPP_BUSINESS_PHONE || '+593984703819',

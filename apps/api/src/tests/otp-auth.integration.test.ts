@@ -6,7 +6,7 @@ import type { Request, Response } from 'express';
 import { AuthController } from '../auth/auth.controller';
 import { SecurityController } from '../account/security.controller';
 import { hashPassword, newToken, tokenHash, verifyPassword } from '../auth/security';
-import { VerificationService } from '../auth/verification.service';
+import { OTP_LIMITS, VerificationService } from '../auth/verification.service';
 import { db } from '../database/client';
 import { setEmailProvider } from '../mail/email.service';
 import { ProviderError } from '../integrations/provider-error';
@@ -221,12 +221,16 @@ test(
         ),
       );
 
-      // Máximo 5 códigos por hora por número.
+      // Máximo de reenvíos por solicitud (y 5 códigos por hora por número).
       await db.phoneChallenge.updateMany({
         where: { phone: other },
         data: { createdAt: new Date(Date.now() - 120000) },
       });
-      for (let i = await db.phoneChallenge.count({ where: { phone: other } }); i < 5; i++) {
+      for (
+        let i = await db.phoneChallenge.count({ where: { phone: other } });
+        i <= OTP_LIMITS.maxResends;
+        i++
+      ) {
         await auth.resend(
           {
             verificationId: (

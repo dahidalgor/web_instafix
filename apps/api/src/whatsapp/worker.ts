@@ -9,6 +9,7 @@ import { ProviderError } from '../integrations/provider-error';
 import { WhatsAppService } from './whatsapp.service';
 import { lockAppointment, queueJob, queueReminders } from './queue';
 import { deliveryState } from './delivery';
+import { budgetVerdict, logSuppressed } from './budget';
 
 type Providers = {
   send: (
@@ -61,6 +62,7 @@ export async function processJob(id: string, providers: Providers, now = new Dat
         const isConfirm = job.kind === 'CAL_CONFIRM';
         const invalid =
           Boolean(appointment.bookingIdentityIssue) ||
+          Boolean(appointment.deletedAt) ||
           job.revision !== appointment.automationRevision ||
           !appointment.whatsappConsentAt ||
           !appointment.contactPhone ||
@@ -87,6 +89,17 @@ export async function processJob(id: string, providers: Providers, now = new Dat
             });
           } else {
             if (!isMessageKind(job.kind)) throw new ProviderError('Aviso desconocido', 'FAILED');
+            // Presupuesto de WhatsApp: sin él no se llama a Bird. La cita ya quedó guardada;
+            // el aviso se marca como suprimido y jamás se reintenta (no derrota el límite).
+            const verdict = await budgetVerdict(tx, job, appointment, now);
+            if (verdict) {
+              await tx.automationJob.update({
+                where: { id },
+                data: { status: verdict.status, suppressedReason: verdict.reason, lastError: null },
+              });
+              logSuppressed(job, verdict.status, verdict.reason);
+              return;
+            }
             const sent = await providers.send(appointment, job.kind);
             const delivery = await deliveryState(tx, sent.providerMessageId);
             await tx.automationJob.update({

@@ -25,6 +25,8 @@ type Job = {
   dueAt: string;
   expiresAt: string;
   lastError: string | null;
+  suppressedReason?: string | null;
+  eventType?: string;
   appointment: { contactName: string; contactPhone: string; title: string };
 };
 type Overview = {
@@ -67,6 +69,11 @@ const statuses: Record<string, string> = {
   CANCELLED: 'Cancelado',
   FAILED: 'Fallido',
   REVIEW: 'Requiere revisión',
+  // Omitidos a propósito (control de costos): la cita siguió su curso; nunca se reintentan.
+  SUPPRESSED_BUDGET: 'Omitido: presupuesto de WhatsApp alcanzado',
+  SUPPRESSED_RATE_LIMIT: 'Omitido: límite de envíos por número o IP',
+  SUPPRESSED_DISABLED: 'Omitido: envíos desactivados (WHATSAPP_SENDING_ENABLED)',
+  SUPPRESSED_BLOCKED: 'Omitido: número bloqueado',
 };
 const deliveries: Record<string, string> = {
   SENT: 'Enviado',
@@ -264,6 +271,7 @@ export function AdminWhatsApp() {
                   (Ecuador)
                 </p>
                 {job.lastError && <p>{job.lastError}</p>}
+                {job.suppressedReason && <p className="small">Motivo: {job.suppressedReason}</p>}
                 {job.status === 'REVIEW' && (
                   <p className="small">
                     Comprueba el envío en Bird (WhatsApp → Mensajes) antes de contactar al cliente

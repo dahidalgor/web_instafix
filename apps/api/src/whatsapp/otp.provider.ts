@@ -1,5 +1,6 @@
 import { ProviderError } from '../integrations/provider-error';
 import type { WhatsAppProvider } from './provider';
+import { whatsappSendingEnabled } from './budget';
 
 /**
  * Transporte de códigos. Generar y validar el OTP pertenece a Instafix (VerificationService);
@@ -15,6 +16,7 @@ export function otpConfiguration() {
   const missing = ['BIRD_API_KEY'].filter((key) => !process.env[key]?.trim());
   return {
     enabled: process.env.WHATSAPP_OTP_ENABLED === 'true',
+    sendingEnabled: whatsappSendingEnabled(),
     configured: !missing.length,
     missing,
     // Plantilla de autenticación gestionada por Bird (sale desde un número de Bird).
@@ -36,6 +38,12 @@ export class WhatsAppCodeSender implements WhatsAppOtpProvider {
     if (!otpConfiguration().enabled)
       throw new ProviderError(
         'Verificación por WhatsApp desactivada (WHATSAPP_OTP_ENABLED≠true)',
+        'FAILED',
+      );
+    // Interruptor general de envíos: Bird no recibe ninguna llamada.
+    if (!whatsappSendingEnabled())
+      throw new ProviderError(
+        'Envíos de WhatsApp desactivados (WHATSAPP_SENDING_ENABLED=false)',
         'FAILED',
       );
     const sent = await this.provider.sendAuthenticationCode({ to, code });

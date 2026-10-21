@@ -1,6 +1,6 @@
 import { visitSchema, type AnalyticsSummary } from '@instafix/contracts/src/site';
 import { BadRequestException, Body, Controller, Get, Post, Req } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { RateLimit } from '../security/rate-limits';
 import type { Request } from 'express';
 import { authenticated, checkOrigin } from '../auth/session';
 import { db } from '../database/client';
@@ -8,7 +8,7 @@ import { db } from '../database/client';
 @Controller('api/v1')
 export class AnalyticsController {
   @Post('analytics/visits')
-  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @RateLimit('analytics')
   async visit(@Req() req: Request, @Body() body: unknown) {
     checkOrigin(req);
     const parsed = visitSchema.safeParse(body);

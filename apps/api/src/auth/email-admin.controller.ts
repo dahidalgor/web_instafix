@@ -1,6 +1,6 @@
 import { emailRequestSchema } from '@instafix/contracts';
 import { BadRequestException, Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { RateLimit } from '../security/rate-limits';
 import type { Request } from 'express';
 import { maskRecipient } from '../communications/log';
 import { db } from '../database/client';
@@ -29,7 +29,7 @@ export class EmailAdminController {
     return { ...mailStatus(), recent };
   }
   @Post('verify')
-  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @RateLimit('communications')
   async verify(@Req() req: Request) {
     checkOrigin(req);
     await authenticated(req, true);
@@ -38,7 +38,7 @@ export class EmailAdminController {
   /** Envío real controlado a un buzón indicado por el administrador. */
   @Post('test')
   @HttpCode(200)
-  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @RateLimit('communications')
   async test(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     const admin = await authenticated(req, true);

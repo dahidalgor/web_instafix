@@ -20,7 +20,7 @@ export class AccountController {
   @Get('my/appointments') async appointments(@Req() req: Request) {
     const user = await authenticated(req);
     const appointments = await db.appointment.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, deletedAt: null },
       orderBy: { startsAt: 'asc' },
       include: {
         offering: { select: { title: true, device: true } },
@@ -51,6 +51,10 @@ export class AccountController {
         assignedTechnicianId: _technicianId,
         automationIssue: _issue,
         automationRevision: _revision,
+        originSessionKey: _session,
+        originIpHash: _ip,
+        deletedAt: _deletedAt,
+        deletedById: _deletedBy,
         ...appointment
       }) => ({ ...appointment, assignedService: offering }),
     );

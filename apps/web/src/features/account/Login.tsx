@@ -1,10 +1,12 @@
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import type { AccountUser, VerificationTicket } from '@instafix/contracts';
-import { type CountryCode, normalizePhone } from '@instafix/contracts/src/phone';
+import { type CountryCode, normalizePhone, splitPhone } from '@instafix/contracts/src/phone';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { api, ApiError } from '../../lib/api';
 import { PhoneField } from './PhoneField';
 import { PhoneVerification } from './PhoneVerification';
+import { clearRegisterPrefill, takeRegisterPrefill } from './register-prefill';
 
 type Mode =
   | 'login'
@@ -27,12 +29,17 @@ export function Login({
   /** Token recibido en el enlace de recuperación por correo. */
   resetToken?: string;
 }) {
-  const [mode, setMode] = useState<Mode>(initialResetToken ? 'new-password' : 'login');
-  const [country, setCountry] = useState<CountryCode>('EC');
+  // Viene de «Crear mi cuenta» tras reservar como invitado: datos de la reserva ya escritos.
+  const [prefill] = useState(() => (admin || initialResetToken ? null : takeRegisterPrefill()));
+  const [mode, setMode] = useState<Mode>(
+    initialResetToken ? 'new-password' : prefill ? 'register' : 'login',
+  );
+  const prefillPhone = prefill ? splitPhone(prefill.phone) : null;
+  const [country, setCountry] = useState<CountryCode>(prefillPhone?.country ?? 'EC');
   const [ticket, setTicket] = useState<VerificationTicket | null>(null);
   const [credentials, setCredentials] = useState<{ phone: string; password: string } | null>(null);
   const [resetToken, setResetToken] = useState(initialResetToken || '');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(prefill?.email ?? '');
   const [error, setError] = useState<ReactNode>('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -110,11 +117,13 @@ export function Login({
               body: JSON.stringify(payload),
             }),
           );
+          clearRegisterPrefill();
         } catch (e) {
           if (e instanceof ApiError && e.code === 'PHONE_IN_USE') {
+            clearRegisterPrefill();
             setError(
               <>
-                {e.message}{' '}
+                Este número ya está asociado a una cuenta. Inicia sesión para continuar.{' '}
                 <button type="button" className="auth-link" onClick={() => changeMode('login')}>
                   Iniciar sesión
                 </button>{' '}
@@ -269,6 +278,12 @@ export function Login({
           <>
             <h1>{titles[mode]}</h1>
             <p className="account-login-intro">{intros[mode]}</p>
+            {mode === 'register' && prefill && (
+              <p className="small otp-notice" role="status">
+                Usamos los datos de tu reserva. Elige una contraseña y verifica tu WhatsApp: al
+                hacerlo, tu cita aparecerá en tu cuenta.
+              </p>
+            )}
             <form key={mode} onSubmit={submit}>
               {mode === 'register' && (
                 <div className="form-row">
@@ -276,6 +291,7 @@ export function Login({
                     Nombre
                     <input
                       name="firstName"
+                      defaultValue={prefill?.firstName}
                       autoComplete="given-name"
                       required
                       minLength={2}
@@ -286,6 +302,7 @@ export function Login({
                     Apellido
                     <input
                       name="lastName"
+                      defaultValue={prefill?.lastName}
                       autoComplete="family-name"
                       required
                       minLength={2}
@@ -316,14 +333,14 @@ export function Login({
                   country={country}
                   onCountry={setCountry}
                   autoComplete={mode === 'login' ? 'username' : 'tel-national'}
+                  defaultValue={mode === 'register' ? prefillPhone?.national : undefined}
                 />
               )}
               {(mode === 'login' || mode === 'register' || mode === 'new-password') && (
                 <label>
                   {mode === 'new-password' ? 'Nueva contraseña' : 'Contraseña'}
-                  <input
+                  <PasswordInput
                     name="password"
-                    type="password"
                     minLength={mode === 'login' ? 1 : 12}
                     maxLength={128}
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
@@ -334,9 +351,8 @@ export function Login({
               {mode === 'new-password' && (
                 <label>
                   Repite la contraseña
-                  <input
+                  <PasswordInput
                     name="confirmPassword"
-                    type="password"
                     autoComplete="new-password"
                     required
                     minLength={12}
