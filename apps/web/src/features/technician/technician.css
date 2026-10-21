@@ -433,15 +433,14 @@ body.sheet-open {
     font-size: 30px;
   }
 }
-@media (prefers-color-scheme: dark) {
-  .tech-alert {
-    background: #4a3a14;
-    color: #ffe3a6;
-  }
-  .tech-sheet,
-  .tech-sheet-footer {
-    background: #111222;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] .tech-alert {
+  background: #4a3a14;
+  color: #ffe3a6;
+}
+:root[data-theme='dark'] .tech-sheet,
+:root[data-theme='dark'] .tech-sheet-footer {
+  background: #111222;
 }
 
 /* Mapa de la ubicación del cliente en el detalle de la cita. */

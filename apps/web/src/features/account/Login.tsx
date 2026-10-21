@@ -8,16 +8,7 @@ import { PhoneField } from './PhoneField';
 import { PhoneVerification } from './PhoneVerification';
 import { clearRegisterPrefill, takeRegisterPrefill } from './register-prefill';
 
-type Mode =
-  | 'login'
-  | 'register'
-  | 'verify'
-  | 'forgot'
-  | 'forgot-whatsapp'
-  | 'forgot-email'
-  | 'reset-code'
-  | 'email-sent'
-  | 'new-password';
+type Mode = 'login' | 'register' | 'verify' | 'forgot-email' | 'email-sent' | 'new-password';
 
 export function Login({
   admin = false,
@@ -32,8 +23,22 @@ export function Login({
   // Viene de «Crear mi cuenta» tras reservar como invitado: datos de la reserva ya escritos.
   const [prefill] = useState(() => (admin || initialResetToken ? null : takeRegisterPrefill()));
   const [mode, setMode] = useState<Mode>(
-    initialResetToken ? 'new-password' : prefill ? 'register' : 'login',
+    initialResetToken
+      ? 'new-password'
+      : prefill || (!admin && window.location.hash === '#registro')
+        ? 'register'
+        : 'login',
   );
+  // «Registrarse» del menú de usuario cuando ya se está en Mi cuenta.
+  useEffect(() => {
+    if (admin) return;
+    const follow = () => {
+      if (window.location.hash === '#registro') changeMode('register');
+    };
+    window.addEventListener('hashchange', follow);
+    return () => window.removeEventListener('hashchange', follow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin]);
   const prefillPhone = prefill ? splitPhone(prefill.phone) : null;
   const [country, setCountry] = useState<CountryCode>(prefillPhone?.country ?? 'EC');
   const [ticket, setTicket] = useState<VerificationTicket | null>(null);
@@ -51,6 +56,9 @@ export function Login({
     return () => clearTimeout(timer);
   }, [wait]);
   const changeMode = (next: Mode) => {
+    // Así «Registrarse» del menú vuelve a funcionar después de cambiar de pantalla.
+    if (next !== 'register' && window.location.hash === '#registro')
+      history.replaceState(null, '', '#cuenta');
     setMode(next);
     setError('');
     setNotice('');
@@ -128,7 +136,11 @@ export function Login({
                   Iniciar sesión
                 </button>{' '}
                 ·{' '}
-                <button type="button" className="auth-link" onClick={() => changeMode('forgot')}>
+                <button
+                  type="button"
+                  className="auth-link"
+                  onClick={() => changeMode('forgot-email')}
+                >
                   Recuperar contraseña
                 </button>
               </>,
@@ -137,14 +149,6 @@ export function Login({
           }
           throw e;
         }
-      } else if (mode === 'forgot-whatsapp') {
-        const result = await api<VerificationTicket & { message: string }>(
-          'auth/password-reset/whatsapp',
-          { method: 'POST', body: JSON.stringify({ phone: phoneFrom(data) }) },
-        );
-        setTicket(result);
-        setMode('reset-code');
-        setNotice(result.message);
       } else if (mode === 'forgot-email') {
         const result = await api<{ message: string }>('auth/password-reset/email', {
           method: 'POST',
@@ -182,28 +186,24 @@ export function Login({
   const titles: Partial<Record<Mode, string>> = {
     login: 'Iniciar sesión',
     register: 'Crea tu cuenta',
-    forgot: 'Recupera tu acceso',
-    'forgot-whatsapp': 'Recuperar por WhatsApp',
-    'forgot-email': 'Recuperar por correo',
+    'forgot-email': 'Recupera tu acceso',
     'email-sent': 'Revisa tu correo',
     'new-password': 'Nueva contraseña',
   };
   const intros: Partial<Record<Mode, string>> = {
     login: 'Tus citas, servicios y garantías en un solo lugar.',
     register: 'Verificaremos tu número por WhatsApp para activar tu cuenta.',
-    forgot: 'Elige cómo quieres recuperar tu cuenta. Solo funcionan los canales ya verificados.',
-    'forgot-whatsapp': 'Escribe el WhatsApp verificado de tu cuenta.',
-    'forgot-email': 'Escribe el correo verificado de tu cuenta.',
+    'forgot-email':
+      'Escribe el correo verificado de tu cuenta y te enviaremos un enlace para elegir una contraseña nueva.',
     'new-password': 'Elige una contraseña nueva de al menos 12 caracteres.',
   };
   const labels: Partial<Record<Mode, string>> = {
     login: 'Entrar',
     register: 'Crear cuenta',
-    'forgot-whatsapp': 'Enviar código',
     'forgot-email': 'Enviar enlace',
     'new-password': 'Guardar contraseña',
   };
-  const form = !['verify', 'reset-code', 'forgot', 'email-sent'].includes(mode);
+  const form = !['verify', 'email-sent'].includes(mode);
 
   return (
     <section className="account-panel account-login">
@@ -229,41 +229,6 @@ export function Login({
                 return pending?.verification ?? null;
               }}
             />
-          </>
-        )}
-        {mode === 'reset-code' && (
-          <>
-            {notice && (
-              <p role="status" className="small otp-notice">
-                {notice}
-              </p>
-            )}
-            <PhoneVerification<{ resetToken: string }>
-              key={ticket?.verificationId ?? 'pending'}
-              title="Código de recuperación"
-              ticket={ticket}
-              verifyPath="auth/password-reset/whatsapp/verify"
-              resendPath="auth/phone/resend"
-              submitLabel="Continuar"
-              onVerified={(result) => {
-                setResetToken(result.resetToken);
-                changeMode('new-password');
-              }}
-            />
-          </>
-        )}
-        {mode === 'forgot' && (
-          <>
-            <h1>{titles.forgot}</h1>
-            <p className="account-login-intro">{intros.forgot}</p>
-            <div className="recovery-options">
-              <button className="button" onClick={() => changeMode('forgot-whatsapp')}>
-                Recuperar por WhatsApp
-              </button>
-              <button className="button secondary" onClick={() => changeMode('forgot-email')}>
-                Recuperar por correo
-              </button>
-            </div>
           </>
         )}
         {mode === 'email-sent' && (
@@ -311,6 +276,13 @@ export function Login({
                   </label>
                 </div>
               )}
+              {mode === 'forgot-email' && (
+                <p className="small">
+                  Por seguridad, la contraseña solo se recupera con un correo verificado. Si
+                  recuerdas tu contraseña actual, puedes cambiarla en Ajustes. ¿Sin correo
+                  verificado? <a href="#contacto">Contáctanos</a>.
+                </p>
+              )}
               {(mode === 'register' || mode === 'forgot-email') && (
                 <label>
                   Correo electrónico
@@ -326,7 +298,7 @@ export function Login({
                   />
                 </label>
               )}
-              {(mode === 'login' || mode === 'register' || mode === 'forgot-whatsapp') && (
+              {(mode === 'login' || mode === 'register') && (
                 <PhoneField
                   id="auth-phone"
                   label={mode === 'login' ? 'Número de WhatsApp' : 'WhatsApp'}
@@ -367,7 +339,11 @@ export function Login({
                 </p>
               )}
               {mode === 'login' && (
-                <button type="button" className="auth-link" onClick={() => changeMode('forgot')}>
+                <button
+                  type="button"
+                  className="auth-link"
+                  onClick={() => changeMode('forgot-email')}
+                >
                   ¿Olvidaste tu contraseña?
                 </button>
               )}

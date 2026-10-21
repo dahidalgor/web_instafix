@@ -9,6 +9,19 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <!-- Tema antes de pintar (claro, oscuro o según el sistema; ver src/lib/theme.ts). -->
+    <script>
+      (function () {
+        var t = null;
+        try {
+          t = localStorage.getItem('instafix:theme');
+        } catch (e) {}
+        var dark =
+          t === 'dark' ||
+          (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      })();
+    </script>
     <title>Instafix · Tu tecnología, en buenas manos</title>
   </head>
   <body>

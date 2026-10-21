@@ -306,12 +306,11 @@ button[aria-busy='true'] {
   --arrow-ink: #fff;
   --arrow-edge: #14152f;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* El cuerpo claro se recorta sobre el fondo con un borde del mismo color que la página. */
-    --arrow-ink: #f3eef8;
-    --arrow-edge: #111222;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] {
+  /* El cuerpo claro se recorta sobre el fondo con un borde del mismo color que la página. */
+  --arrow-ink: #f3eef8;
+  --arrow-edge: #111222;
 }
 .scribble-arrow {
   position: absolute;

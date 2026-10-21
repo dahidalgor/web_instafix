@@ -244,28 +244,27 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .status-pill.status-PENDING_LOCATION {
-    background: #4a3a14;
-    color: #ffd98a;
-  }
-  .status-pill.status-CONFIRMED,
-  .status-pill.status-IN_PROGRESS {
-    background: #193f35;
-    color: #a7e9cb;
-  }
-  .status-pill.status-COMPLETED {
-    background: #253461;
-    color: #c5d3ff;
-  }
-  .status-pill.status-CANCELLED {
-    background: #482d37;
-    color: #ffc4d0;
-  }
-  .btn-danger {
-    color: #ff9c94;
-    border-color: #ff9c94;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] .status-pill.status-PENDING_LOCATION {
+  background: #4a3a14;
+  color: #ffd98a;
+}
+:root[data-theme='dark'] .status-pill.status-CONFIRMED,
+:root[data-theme='dark'] .status-pill.status-IN_PROGRESS {
+  background: #193f35;
+  color: #a7e9cb;
+}
+:root[data-theme='dark'] .status-pill.status-COMPLETED {
+  background: #253461;
+  color: #c5d3ff;
+}
+:root[data-theme='dark'] .status-pill.status-CANCELLED {
+  background: #482d37;
+  color: #ffc4d0;
+}
+:root[data-theme='dark'] .btn-danger {
+  color: #ff9c94;
+  border-color: #ff9c94;
 }
 
 .appt-meta-wide {
@@ -367,8 +366,7 @@
 .appt-location-actions a:focus-visible {
   text-decoration: underline;
 }
-@media (prefers-color-scheme: dark) {
-  .appt-location-source {
-    color: #a7e9cb;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] .appt-location-source {
+  color: #a7e9cb;
 }

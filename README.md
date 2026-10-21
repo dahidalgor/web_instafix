@@ -2,7 +2,7 @@
 
 ## Comunicaciones y verificación (17 de octubre de 2026)
 
-Las cuentas se activan verificando el WhatsApp con un código (OTP) enviado por WhatsApp a través de Bird; el correo es opcional y se verifica desde Mi cuenta → Seguridad. La contraseña se recupera por WhatsApp o por correo verificados. La web reserva mediante la API de Cal.com (sin iframe) e Instafix envía por Brevo las confirmaciones, reprogramaciones y cancelaciones. Arquitectura, reglas de seguridad, pruebas y pasos manuales en [Comunicaciones](docs/communications.md).
+Las cuentas se activan verificando el WhatsApp con un código (OTP) enviado por WhatsApp a través de Bird; el correo es opcional y se verifica desde Mi cuenta → Seguridad. La contraseña se cambia desde Ajustes con la contraseña actual o se recupera solo con un enlace al correo verificado (nunca por WhatsApp). La apariencia (claro, oscuro o según el sistema) se elige en el menú de usuario. La web reserva mediante la API de Cal.com (sin iframe) e Instafix envía por Brevo las confirmaciones, reprogramaciones y cancelaciones. Arquitectura, reglas de seguridad, pruebas y pasos manuales en [Comunicaciones](docs/communications.md).
 
 Consulta la [guía de organización del código](docs/code-organization.md) para localizar componentes, estilos, controladores y contratos. Usa `pnpm format` para mantener el formato uniforme y `pnpm format:check` para comprobarlo.
 

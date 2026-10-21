@@ -424,13 +424,28 @@
 .security-panel {
   animation: pop-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-@media (max-width: 520px) {
-  .security-item > .btn,
+/* Ajustes: todos los botones de acción con el mismo tamaño, tengan una o dos acciones. */
+.security-actions .btn {
+  width: 188px;
+  min-height: 42px;
+  justify-content: center;
+  text-align: center;
+}
+@media (max-width: 600px) {
+  .security-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .security-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     width: 100%;
   }
-  .security-actions .btn,
-  .security-item > .btn,
+  .security-actions .btn {
+    width: 100%;
+    min-height: 46px;
+  }
   .security-form-actions .btn {
     flex: 1 1 140px;
   }
@@ -609,22 +624,21 @@
     transition: none;
   }
 }
-@media (prefers-color-scheme: dark) {
-  .job-card.is-active {
-    border-color: #2f6b47;
-  }
-  .warranty-label,
-  .warranty-ring span {
-    color: #c1b6ce;
-  }
-  .warranty-label.is-active,
-  .warranty-ring strong {
-    color: #8fe0ae;
-  }
-  .warranty-label.is-expired {
-    color: #f0a39d;
-  }
-  .warranty-ring-track {
-    stroke: #2e2840;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] .job-card.is-active {
+  border-color: #2f6b47;
+}
+:root[data-theme='dark'] .warranty-label,
+:root[data-theme='dark'] .warranty-ring span {
+  color: #c1b6ce;
+}
+:root[data-theme='dark'] .warranty-label.is-active,
+:root[data-theme='dark'] .warranty-ring strong {
+  color: #8fe0ae;
+}
+:root[data-theme='dark'] .warranty-label.is-expired {
+  color: #f0a39d;
+}
+:root[data-theme='dark'] .warranty-ring-track {
+  stroke: #2e2840;
 }

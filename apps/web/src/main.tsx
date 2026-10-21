@@ -2,6 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 import './styles/index.css';
+import { applyTheme, watchSystemTheme } from './lib/theme';
+
+applyTheme();
+watchSystemTheme();
 const root = createRoot(document.getElementById('root')!);
 const isAdminHost =
   window.location.hostname === 'admin.localhost' ||

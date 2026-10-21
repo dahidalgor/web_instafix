@@ -380,9 +380,6 @@ test(
       ),
       (e: any) => e.getStatus() === 403,
     );
-    // Recuperación: misma respuesta genérica que siempre, sin enviar nada.
-    const reset = await auth.resetByWhatsApp({ phone: blocked }, req());
-    assert.match(reset.message, /Si existe una cuenta/);
     assert.equal(otps, 0);
     cleanup.push(() => db.phoneChallenge.deleteMany({ where: { phone: blocked } }));
 
