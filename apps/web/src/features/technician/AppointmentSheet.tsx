@@ -89,6 +89,10 @@ export function AppointmentSheet({
   const editable = Boolean(item?.canManage && ['CONFIRMED', 'IN_PROGRESS'].includes(item.status));
   const total = item?.services.reduce((sum, s) => sum + s.totalMinor, 0) ?? 0;
   const notesDirty = notes !== (item?.technicianNotes ?? '');
+  // Fecha de Ecuador: no se completa una visita antes de su día.
+  const ecDay = (value: Date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(value);
+  const beforeVisitDay = item ? ecDay(new Date()) < ecDay(new Date(item.startsAt)) : false;
 
   return (
     <div className="tech-sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -444,15 +448,20 @@ export function AppointmentSheet({
                 </BusyButton>
               )}
               {editable && (
-                <button
-                  type="button"
-                  className="btn btn-success btn-block"
-                  disabled={busy || notesDirty}
-                  title={notesDirty ? 'Guarda las notas antes de completar' : undefined}
-                  onClick={() => setConfirmComplete(true)}
-                >
-                  Marcar como completada
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-success btn-block"
+                    disabled={busy || notesDirty || beforeVisitDay}
+                    title={notesDirty ? 'Guarda las notas antes de completar' : undefined}
+                    onClick={() => setConfirmComplete(true)}
+                  >
+                    Marcar como completada
+                  </button>
+                  {beforeVisitDay && (
+                    <p className="small">Podrás completarla a partir del día de la visita.</p>
+                  )}
+                </>
               )}
               {item.status === 'COMPLETED' && <p className="tech-done">✓ Visita completada</p>}
             </div>

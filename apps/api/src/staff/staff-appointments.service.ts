@@ -1,3 +1,4 @@
+import { dayIn } from '../integrations/cal-client';
 import { fillLocationArea } from '../whatsapp/location-area';
 import { locationFromText } from '../whatsapp/maps-link';
 import { recordCompletedJob } from '../jobs/completed-job';
@@ -374,6 +375,9 @@ export async function completeAppointment(user: StaffUser, id: string, now = new
     if (a.status === 'COMPLETED') return true;
     if (!['CONFIRMED', 'IN_PROGRESS'].includes(a.status))
       throw new BadRequestException('Solo se completan citas confirmadas.');
+    // No se completa antes del día de la visita (fecha de Ecuador).
+    if (dayIn(now) < dayIn(a.startsAt))
+      throw new BadRequestException('Solo puedes completar la visita a partir del día de la cita.');
     if (!a.services.length && !a.technicianNotes.trim())
       throw new BadRequestException(
         'Registra al menos un servicio realizado o una nota técnica antes de completar.',
