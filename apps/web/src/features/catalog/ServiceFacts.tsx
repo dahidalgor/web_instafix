@@ -38,13 +38,6 @@ export function ServiceFacts({
           <span className="visually-hidden">Tiempo estimado: </span>
           {duration(durationMinutes)}
         </span>
-        {warrantyDays > 0 && (
-          <span>
-            <ShieldIcon />
-            <span className="visually-hidden">Garantía: </span>
-            {warranty(warrantyDays)}
-          </span>
-        )}
       </span>
     );
   return (
