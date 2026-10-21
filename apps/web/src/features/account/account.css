@@ -478,3 +478,153 @@
 .account-settings .account-heading > a {
   white-space: nowrap;
 }
+
+/* Tarjeta de servicio realizado: anillo de garantía que se vacía hasta el vencimiento. */
+.job-card {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgb(20 21 47 / 6%);
+}
+.job-card.is-active {
+  border-color: #b9e4c9;
+}
+.job-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.job-card-head > div {
+  min-width: 0;
+}
+.job-card-head .eyebrow {
+  margin: 0 0 4px;
+}
+.job-card h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.warranty-label {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #5b5570;
+}
+.warranty-label.is-active {
+  color: #17643a;
+}
+.warranty-label.is-expired {
+  color: #a3423b;
+}
+.warranty-ring {
+  position: relative;
+  flex: none;
+  width: 76px;
+  height: 76px;
+}
+.warranty-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.warranty-ring circle {
+  fill: none;
+  stroke-width: 7;
+}
+.warranty-ring-track {
+  stroke: #e8e2ee;
+}
+.warranty-ring-value {
+  stroke: #22a55b;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 900ms ease-out;
+}
+.warranty-ring.is-low .warranty-ring-value {
+  stroke: #e0a31c;
+}
+.warranty-ring.is-expired .warranty-ring-value {
+  stroke: transparent;
+}
+.warranty-ring span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1.1;
+  color: #5b5570;
+}
+.warranty-ring strong {
+  font-size: 20px;
+  color: #17643a;
+}
+.warranty-ring.is-low strong {
+  color: #9a6a05;
+}
+.warranty-ring.is-expired strong {
+  color: #8f8799;
+}
+.job-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.job-card-facts > div {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-soft, #f6f2f9);
+}
+.job-card-facts dt {
+  font-size: 12px;
+  color: var(--muted, #5b5570);
+}
+.job-card-facts dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+}
+.job-card-terms summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.job-card-terms[open] summary {
+  margin-bottom: 8px;
+}
+@media (max-width: 560px) {
+  .job-card-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .job-card-facts > div:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warranty-ring-value {
+    transition: none;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .job-card.is-active {
+    border-color: #2f6b47;
+  }
+  .warranty-label,
+  .warranty-ring span {
+    color: #c1b6ce;
+  }
+  .warranty-label.is-active,
+  .warranty-ring strong {
+    color: #8fe0ae;
+  }
+  .warranty-label.is-expired {
+    color: #f0a39d;
+  }
+  .warranty-ring-track {
+    stroke: #2e2840;
+  }
+}

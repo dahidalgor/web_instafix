@@ -1,3 +1,4 @@
+import { recordMissingCompletedJobs } from '../jobs/completed-job';
 import { Controller, Get, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { authenticated } from '../auth/session';
@@ -8,6 +9,8 @@ export class AccountController {
   // El propietario se obtiene de la sesión, nunca de un teléfono o ID del navegador.
   @Get('my/jobs') async jobs(@Req() req: Request) {
     const user = await authenticated(req);
+    // Citas completadas antes de registrar trabajos automáticamente.
+    await recordMissingCompletedJobs(user.id);
     return db.completedJob.findMany({
       where: { userId: user.id },
       orderBy: { completedAt: 'desc' },

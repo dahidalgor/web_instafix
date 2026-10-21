@@ -28,6 +28,7 @@ import {
   pendingAppointments,
   removeService,
   saveNotes,
+  setLocation,
   staffAppointment,
   syncCalConfirmation,
   updateService,
@@ -127,6 +128,17 @@ export class StaffController {
     const parsed = technicianNotesSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException('Notas de hasta 5000 caracteres');
     return saveNotes(await authenticatedStaff(req), id, parsed.data.notes);
+  }
+
+  @Put('appointments/:id/location')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async location(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    const text = (body as { text?: unknown })?.text;
+    if (typeof text !== 'string' || !text.trim() || text.length > 2000)
+      throw new BadRequestException('Pega un enlace de Google Maps o unas coordenadas');
+    return setLocation(await authenticatedStaff(req), id, text);
   }
 
   @Post('appointments/:id/complete')

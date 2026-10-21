@@ -448,10 +448,29 @@ test(
       assert.equal(history.services.length, 2);
       assert.equal(history.assignedTechnician?.name, 'Anthony Servicios');
       assert.equal(JSON.stringify(history).includes('Polvo severo'), false);
+      // Mi cuenta → Servicios realizados: el trabajo aparece con importe y garantía del catálogo.
+      const jobs = (await account.jobs(req(customer.token))).filter(
+        (j) => j.appointmentId === appointment.id,
+      );
+      assert.equal(jobs.length, 1);
+      assert.equal(jobs[0].title, 'Mantenimiento PS5 + Cambio de metal líquido');
+      assert.equal(jobs[0].priceMinor, 6500);
+      assert.equal(
+        jobs[0].warrantyEndsAt!.getTime() - stored.completedAt!.getTime(),
+        30 * 86400000,
+      );
+      assert.match(jobs[0].warrantyTerms, /Garantía de 30 días/);
+      // Repetir la consulta no duplica el trabajo.
+      assert.equal(
+        (await account.jobs(req(customer.token))).filter((j) => j.appointmentId === appointment.id)
+          .length,
+        1,
+      );
       assert.ok(
         (await db.appointmentActivity.count({ where: { appointmentId: appointment.id } })) >= 6,
       );
     } finally {
+      await db.completedJob.deleteMany({ where: { userId: customer.user.id } });
       await db.appointment.deleteMany({ where: { id: appointment.id } });
       await db.offering.deleteMany({ where: { id: { in: [maintenance.id, metal.id] } } });
       await db.equipment.delete({ where: { id: equipment.id } });
