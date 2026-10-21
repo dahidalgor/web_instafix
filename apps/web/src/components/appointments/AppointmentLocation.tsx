@@ -101,12 +101,10 @@ export function AppointmentLocation({
           <span className="appt-location-actions">
             <a href={links.view} target="_blank" rel="noopener noreferrer">
               Abrir mapa<span className="visually-hidden"> (se abre en otra pestaña)</span>
-              <span aria-hidden="true">↗</span>
             </a>
             {directions && gps && (
               <a href={links.directions} target="_blank" rel="noopener noreferrer">
                 Cómo llegar<span className="visually-hidden"> (se abre en otra pestaña)</span>
-                <span aria-hidden="true">↗</span>
               </a>
             )}
           </span>
