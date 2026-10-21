@@ -189,6 +189,18 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
                       {a.locationArea ||
                         a.address ||
                         (a.locationReceivedAt ? 'Recibida' : 'Pendiente')}
+                      {a.locationLatitude != null && a.locationLongitude != null && (
+                        <>
+                          {' · '}
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${a.locationLatitude},${a.locationLongitude}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Cómo llegar
+                          </a>
+                        </>
+                      )}
                     </dd>
                   </div>
                 }

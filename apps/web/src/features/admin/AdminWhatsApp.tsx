@@ -38,6 +38,7 @@ type Overview = {
     type: string;
     text: string | null;
     occurredAt: string;
+    outcome: string | null;
   }[];
   webhookIssues: number;
   whatsapp: Configuration & { businessPhone: string };
@@ -92,6 +93,13 @@ const templateStatuses: Record<string, string> = {
   inactive: 'Inactiva',
   missing: 'No existe en Bird',
   error: 'No se pudo leer',
+};
+const outcomes: Record<string, string> = {
+  LOCATION_ACCEPTED: '📍 Ubicación guardada en su cita',
+  LOCATION_UPDATED: '📍 Ubicación actualizada en su cita',
+  AMBIGUOUS_LOCATION: '📍 Tiene varias citas pendientes: asígnala a mano',
+  NO_MATCHING_APPOINTMENT: '📍 No tiene una cita pendiente con este número',
+  LOCATION_BEFORE_BOOKING: '📍 Enviada antes de agendar: no se usó',
 };
 const sources: Record<string, string> = {
   customer_live: 'Cliente',
@@ -298,6 +306,9 @@ export function AdminWhatsApp() {
                   {item.provider !== 'BIRD' && ` · ${item.provider}`}
                 </p>
                 <p>{item.text || `[${item.type}]`}</p>
+                {item.outcome && outcomes[item.outcome] && (
+                  <p className="small">{outcomes[item.outcome]}</p>
+                )}
               </article>
             ))}
           </div>
