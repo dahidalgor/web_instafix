@@ -268,6 +268,29 @@ header nav a[aria-current] {
   flex-wrap: wrap;
   gap: 18px;
 }
+.footer-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #71697d;
+  transition: color 160ms;
+}
+.footer-social svg {
+  width: 20px;
+  height: 20px;
+}
+.footer-social:hover,
+.footer-social:focus-visible {
+  color: var(--accent);
+}
+@media (prefers-color-scheme: dark) {
+  .footer-social {
+    color: var(--muted);
+  }
+}
 @media (max-width: 760px) {
   .public-header {
     gap: 12px;
@@ -307,6 +330,51 @@ header nav a[aria-current] {
     padding: 12px;
     font-size: 14px;
     white-space: normal;
+  }
+}
+
+/* Menú del teléfono: lista vertical (lista para crecer). «Agendar cita» ya está en el botón
+   flotante, así que no se repite aquí. */
+@media (max-width: 760px) {
+  .public-header nav .nav-cta {
+    display: none;
+  }
+  .public-header nav.is-open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    flex: 1 0 100%;
+    gap: 4px;
+    margin: 0;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: 0 12px 30px rgb(20 21 47 / 10%);
+  }
+  .public-header nav.is-open > a:not(.nav-cta) {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+    min-height: 50px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .public-header nav.is-open > a:not(.nav-cta)::after {
+    content: '›';
+    font-size: 20px;
+    line-height: 1;
+    color: var(--muted);
+  }
+  .public-header nav.is-open > a[aria-current='page'] {
+    background: var(--surface-soft, #f3eef8);
+    color: var(--accent, #a00d68);
+  }
+  .public-header nav.is-open .sliding-indicator {
+    display: none;
   }
 }
 

@@ -19,6 +19,8 @@ const links = [
   ['cuenta', 'Mi cuenta'],
   ['agenda', 'Agendar cita'],
 ] as const;
+/** Perfil de Instagram de Instafix. Sin enlace configurado, el pie no lo muestra. */
+const INSTAGRAM_URL: string | null = null;
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 /** Desplaza a la sección de Inicio indicada en el enlace, una vez renderizada. */
 function scrollToSection(hash: string) {
@@ -156,6 +158,28 @@ export function App() {
             Políticas de garantía
           </a>
         </div>
+        {INSTAGRAM_URL && (
+          <a
+            className="footer-social"
+            href={INSTAGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Instafix en Instagram (se abre en otra pestaña)"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="5" />
+              <circle cx="12" cy="12" r="4" />
+              <circle cx="17.3" cy="6.7" r="0.9" fill="currentColor" stroke="none" />
+            </svg>
+            <span>Instagram</span>
+          </a>
+        )}
       </footer>
       <a
         className="mobile-booking"

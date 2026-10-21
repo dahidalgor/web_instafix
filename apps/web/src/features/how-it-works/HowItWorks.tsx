@@ -1,3 +1,4 @@
+import { ScribbleArrow } from '../../components/ui/ScribbleArrow';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { measureScene, paintScene } from './paint-scene';
 import { snapshots, stepAt, steps } from './story';
@@ -149,6 +150,7 @@ export function HowItWorks() {
   useDockedCta(cta);
   return (
     <section id="como" className="how-page" aria-labelledby="how-title">
+      <ScribbleArrow className="arrow-how" />
       <div className="journey-heading">
         <p className="eyebrow">CÓMO FUNCIONA</p>
         <h2 id="how-title">
@@ -175,6 +177,7 @@ export function HowItWorks() {
         <ScrollStory />
       )}
       <div className="journey-end">
+        <ScribbleArrow className="arrow-end" />
         <h2>
           Tu equipo, atendido <em>en casa.</em>
         </h2>

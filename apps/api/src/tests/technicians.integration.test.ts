@@ -415,6 +415,19 @@ test(
       // El precio del catálogo cambia después: la visita conserva el aplicado.
       await db.offering.update({ where: { id: maintenance.id }, data: { priceMinor: 9900 } });
 
+      // Antes del día de la visita no se puede completar.
+      await assert.rejects(
+        staff.complete(appointment.id, req(tech.token)),
+        (e) => status(e) === 400,
+      );
+      // El día de la visita (ya empezó hace una hora) sí.
+      await db.appointment.update({
+        where: { id: appointment.id },
+        data: {
+          startsAt: new Date(Date.now() - 3600000),
+          endsAt: new Date(Date.now() + 3600000),
+        },
+      });
       const done = await staff.complete(appointment.id, req(tech.token));
       assert.equal(done.appointment.status, 'COMPLETED');
       assert.equal((await staff.complete(appointment.id, req(tech.token))).alreadyCompleted, true);

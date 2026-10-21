@@ -298,3 +298,124 @@ button[aria-busy='true'] {
     transition: none;
   }
 }
+
+/* ---------- Flechas de trazo grueso (Inicio) ---------- */
+.scribble-arrow {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+  filter: drop-shadow(0 6px 10px rgb(20 21 47 / 16%));
+}
+.scribble-shaft {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.scribble-head {
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: translateX(14px) scale(0.6);
+  transform-box: fill-box;
+  transform-origin: 30% 50%;
+  transition:
+    opacity 0.25s ease 0.75s,
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.75s;
+}
+.scribble-arrow.is-drawn .scribble-shaft {
+  stroke-dashoffset: 0;
+}
+.scribble-arrow.is-drawn .scribble-head {
+  opacity: 1;
+  transform: none;
+}
+/* Borde oscuro fino alrededor del cuerpo blanco. */
+.scribble-outline .scribble-shaft {
+  stroke: #14152f;
+  stroke-width: 19;
+}
+.scribble-outline .scribble-head {
+  fill: #14152f;
+  stroke: #14152f;
+  stroke-width: 6;
+}
+.scribble-ink .scribble-shaft {
+  stroke: #fff;
+  stroke-width: 13;
+}
+.scribble-ink .scribble-head {
+  fill: #fff;
+  stroke: #fff;
+  stroke-width: 1;
+}
+@media (prefers-color-scheme: dark) {
+  .scribble-arrow {
+    filter: drop-shadow(0 6px 14px rgb(0 0 0 / 45%));
+  }
+  .scribble-outline .scribble-shaft,
+  .scribble-outline .scribble-head {
+    stroke: #2a2340;
+    fill: #2a2340;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scribble-shaft,
+  .scribble-head {
+    transition: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Junto al título principal, en el espacio libre de la derecha. */
+.home-hero {
+  position: relative;
+}
+.home-hero > :not(.scribble-arrow),
+.how-page > :not(.scribble-arrow),
+.journey-end > :not(.scribble-arrow) {
+  position: relative;
+  z-index: 1;
+}
+.arrow-hero {
+  top: 95px;
+  right: max(2%, calc(50% - 560px));
+  width: clamp(170px, 17vw, 230px);
+  transform: rotate(-2deg);
+}
+/* «Tú agendas. Nosotros vamos.» está alineado a la derecha: la flecha llega desde la izquierda. */
+.how-page {
+  position: relative;
+}
+.arrow-how {
+  /* El título está alineado a la derecha: la punta queda justo antes de «Nosotros vamos.». */
+  top: 120px;
+  right: min(560px, 46%);
+  width: clamp(150px, 15vw, 200px);
+  transform: scaleX(-1) rotate(6deg);
+}
+/* Cierre centrado: flecha a la izquierda del título. */
+.journey-end {
+  position: relative;
+}
+.arrow-end {
+  top: 10px;
+  left: max(0px, calc(50% - 480px));
+  width: 170px;
+  transform: scaleX(-1) rotate(14deg);
+}
+@media (max-width: 1000px) {
+  .arrow-hero,
+  .arrow-how {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  /* En el teléfono no se muestran: el contenido ya llena la pantalla. */
+  .arrow-end {
+    display: none;
+  }
+}

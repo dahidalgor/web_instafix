@@ -1,3 +1,4 @@
+import { ScribbleArrow } from '../../components/ui/ScribbleArrow';
 import { HowItWorks } from '../how-it-works/HowItWorks';
 import { WorkShowcase } from './WorkShowcase';
 
@@ -10,6 +11,7 @@ export function Home() {
     <div className="home">
       <section id="quienes-somos" className="hero home-hero" aria-labelledby="home-title">
         <p className="eyebrow">SERVICIO TÉCNICO A DOMICILIO</p>
+        <ScribbleArrow className="arrow-hero" />
         <h1 id="home-title">
           Detrás de cada equipo,
           <br />
