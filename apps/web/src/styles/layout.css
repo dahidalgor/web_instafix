@@ -173,14 +173,27 @@ header nav a[aria-current] {
     white-space: nowrap;
     padding: 7px 10px;
   }
+  /* En el teléfono el pie se apila completo: enlaces, servicio y derechos. */
   footer {
-    gap: 20px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding-left: 22px;
+    padding-right: 22px;
+    text-align: center;
     /* Reserva espacio para el acceso fijo y el indicador de inicio de iOS. */
     padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
   }
-  footer > span {
-    display: none;
+  footer .footer-links {
+    order: -1;
+    justify-content: center;
+    margin-bottom: 4px;
+  }
+  footer .footer-policy {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 14px;
   }
   main {
     padding-left: 22px;

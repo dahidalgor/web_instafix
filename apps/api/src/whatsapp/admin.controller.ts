@@ -56,6 +56,15 @@ export class WhatsAppAdminController {
       db.whatsAppWebhook.count({ where: { provider: config.provider, status: 'REVIEW' } }),
       config.configured || process.env.BIRD_API_KEY ? this.whatsapp.accountStatus() : null,
     ]);
+    // Resultado de cada mensaje del cliente (p. ej. si su ubicación se asignó a una cita).
+    const outcomes = new Map(
+      (
+        await db.integrationEvent.findMany({
+          where: { id: { in: messages.map((m) => `wa:${m.providerMessageId}`) } },
+          select: { id: true, outcome: true },
+        })
+      ).map((e) => [e.id.slice(3), e.outcome]),
+    );
     return {
       whatsapp: config,
       account,
@@ -64,7 +73,7 @@ export class WhatsAppAdminController {
       jobs,
       issues,
       events,
-      messages,
+      messages: messages.map((m) => ({ ...m, outcome: outcomes.get(m.providerMessageId) ?? null })),
       webhookIssues,
     };
   }

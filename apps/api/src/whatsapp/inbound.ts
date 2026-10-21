@@ -1,3 +1,4 @@
+import { logEvent } from '../common/log-event';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { db } from '../database/client';
 import { lockAppointment } from './queue';
@@ -36,27 +37,23 @@ export async function receiveCustomerMessage(message: {
           contactPhone: phone,
           bookingIdentityIssue: null,
           status: { in: ['PENDING_LOCATION', 'CONFIRMED'] },
-          locationReceivedAt: null,
-          whatsappConsentAt: { not: null },
+          // La ubicación la envía el cliente: no depende de que autorizara nuestros avisos, y
+          // una ubicación nueva corrige la anterior.
           startsAt: { gt: new Date() },
           createdAt: { lte: new Date(receivedAt.getTime() + 1000) },
         },
         orderBy: { startsAt: 'asc' },
       });
-      let candidate = candidates.length === 1 ? candidates[0] : undefined;
-      if (message.context?.id) {
-        const repliedTo = await tx.automationJob.findUnique({
-          where: { providerMessageId: message.context.id },
-        });
-        candidate = candidates.find(
+      // Respuesta a un aviso de una cita concreta → esa cita. Si respondió a otro mensaje
+      // (p. ej. uno escrito desde la app Business), vale la regla de la única cita pendiente.
+      const repliedTo = message.context?.id
+        ? await tx.automationJob.findUnique({ where: { providerMessageId: message.context.id } })
+        : null;
+      const candidate =
+        candidates.find(
           (a) => a.id === repliedTo?.appointmentId && a.automationRevision === repliedTo.revision,
-        );
-      }
-      if (
-        candidate &&
-        receivedAt.getTime() + 1000 >= candidate.locationRequestedAt.getTime() &&
-        !candidate.locationReceivedAt
-      ) {
+        ) ?? (candidates.length === 1 ? candidates[0] : undefined);
+      if (candidate && receivedAt.getTime() + 1000 >= candidate.locationRequestedAt.getTime()) {
         await lockAppointment(tx, candidate.id);
         const current = await tx.appointment.findUniqueOrThrow({
           where: { id: candidate.id },
@@ -64,8 +61,9 @@ export async function receiveCustomerMessage(message: {
         if (
           !current.bookingIdentityIssue &&
           ['PENDING_LOCATION', 'CONFIRMED'].includes(current.status) &&
-          !current.locationReceivedAt &&
-          current.automationRevision === candidate.automationRevision
+          current.automationRevision === candidate.automationRevision &&
+          // Nunca se sustituye por una ubicación más antigua que la guardada.
+          (!current.locationReceivedAt || current.locationReceivedAt <= receivedAt)
         ) {
           const updated = await tx.appointment.update({
             where: { id: current.id },
@@ -94,10 +92,10 @@ export async function receiveCustomerMessage(message: {
             data: { status: 'CANCELLED' },
           });
           // La ubicación solo informa al técnico; la confirmación la hace el técnico.
-          outcome = 'LOCATION_ACCEPTED';
+          outcome = current.locationReceivedAt ? 'LOCATION_UPDATED' : 'LOCATION_ACCEPTED';
           located = updated.id;
         }
-      } else if (candidates.length > 1) {
+      } else if (!candidate && candidates.length > 1) {
         // Nunca asignar una ubicación a una cita arbitraria si hay varias pendientes.
         await tx.appointment.updateMany({
           where: { id: { in: candidates.map((a) => a.id) } },
@@ -107,7 +105,13 @@ export async function receiveCustomerMessage(message: {
           },
         });
         outcome = 'AMBIGUOUS_LOCATION';
-      } else outcome = 'NO_MATCHING_APPOINTMENT';
+      } else if (!candidate) outcome = 'NO_MATCHING_APPOINTMENT';
+      else outcome = 'LOCATION_BEFORE_BOOKING';
+      logEvent(
+        'whatsapp.location',
+        { outcome, appointmentId: located, candidates: candidates.length },
+        located ? 'info' : 'warn',
+      );
     }
     await tx.integrationEvent.create({
       data: {

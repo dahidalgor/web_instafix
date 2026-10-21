@@ -29,6 +29,7 @@ export function AppointmentSheet({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState('');
+  const [pastedLocation, setPastedLocation] = useState('');
   const [adding, setAdding] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -176,6 +177,16 @@ export function AppointmentSheet({
                     : 'Pendiente: el cliente aún no compartió su ubicación por WhatsApp.')}
               </p>
               {item.locationLatitude != null && item.locationLongitude != null && (
+                // Mapa para saber a dónde ir antes de salir (sin clave de API).
+                <iframe
+                  className="tech-map"
+                  title="Mapa de la ubicación del cliente"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  src={`https://www.google.com/maps?q=${item.locationLatitude},${item.locationLongitude}&z=16&output=embed`}
+                />
+              )}
+              {item.locationLatitude != null && item.locationLongitude != null && (
                 <a
                   className="btn btn-secondary"
                   href={`https://www.google.com/maps/dir/?api=1&destination=${item.locationLatitude},${item.locationLongitude}`}
@@ -196,6 +207,47 @@ export function AppointmentSheet({
                   Abrir en Google Maps
                 </a>
               )}
+              {item.canManage &&
+                ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'].includes(item.status) && (
+                  <details className="tech-location-paste">
+                    <summary>
+                      {item.locationReceivedAt ? 'Corregir ubicación' : 'Pegar ubicación'}
+                    </summary>
+                    <p className="small">
+                      Si el cliente la envió por otro medio: pega el enlace de Google Maps o las
+                      coordenadas.
+                    </p>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (
+                          await act(
+                            '/location',
+                            { method: 'PUT', body: JSON.stringify({ text: pastedLocation }) },
+                            'Ubicación guardada.',
+                          )
+                        )
+                          setPastedLocation('');
+                      }}
+                    >
+                      <input
+                        value={pastedLocation}
+                        onChange={(e) => setPastedLocation(e.target.value)}
+                        placeholder="https://maps.app.goo.gl/… o -0.1807, -78.4678"
+                        aria-label="Enlace de Google Maps o coordenadas"
+                        maxLength={2000}
+                        disabled={busy}
+                      />
+                      <button
+                        type="submit"
+                        className="btn btn-secondary"
+                        disabled={busy || !pastedLocation.trim()}
+                      >
+                        Guardar ubicación
+                      </button>
+                    </form>
+                  </details>
+                )}
             </div>
 
             <div className="tech-block">
