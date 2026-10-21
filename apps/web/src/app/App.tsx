@@ -20,7 +20,7 @@ const links = [
   ['agenda', 'Agendar cita'],
 ] as const;
 /** Perfil de Instagram de Instafix. Sin enlace configurado, el pie no lo muestra. */
-const INSTAGRAM_URL: string | null = 'https://www.instagram.com/instafix.uio/';
+const INSTAGRAM_URL: string | null = 'https://www.instagram.com/instafix.ec/';
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 /** Desplaza a la sección de Inicio indicada en el enlace, una vez renderizada. */
 function scrollToSection(hash: string) {
