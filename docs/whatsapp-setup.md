@@ -47,7 +47,7 @@ Editar el texto de una plantilla en Bird no requiere cambiar código mientras us
 
 ## Webhook de Bird
 
-1. **Bird → Developers → Webhooks → Crear**: URL `https://api.instafix.ec/api/v1/webhooks/bird` (o la URL pública de la API).
+1. **Bird → Developers → Webhooks → Crear**: URL `https://instafix.ec/api/v1/webhooks/bird` (el dominio de `PUBLIC_HOST`: Caddy sirve la API en `/api/*` de ese dominio; no existe un subdominio `api.`).
 2. Eventos: `whatsapp.sent`, `whatsapp.delivered`, `whatsapp.read`, `whatsapp.failed`, `whatsapp.rejected`, `whatsapp.received` (opcional `whatsapp.accepted`, se ignora).
 3. Copia el secreto (`whsec_…`) que aparece **una sola vez** y guárdalo como `BIRD_WEBHOOK_SECRET` en el servidor; reinicia la API.
 4. Usa «Enviar prueba» de Bird: debe responder 200. Con firma incorrecta la API responde 403; sin secreto configurado, 503.
