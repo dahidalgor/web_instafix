@@ -289,15 +289,17 @@ export function AccountSecurity({
           <p className="eyebrow">Contraseña</p>
           <strong>••••••••</strong>
         </div>
-        <button
-          type="button"
-          className={`btn btn-small ${panel === 'password' ? 'btn-ghost' : 'btn-secondary'}`}
-          aria-expanded={panel === 'password'}
-          aria-controls="security-password"
-          onClick={() => open(panel === 'password' ? null : 'password')}
-        >
-          {panel === 'password' ? 'Cancelar' : 'Cambiar contraseña'}
-        </button>
+        <div className="security-actions">
+          <button
+            type="button"
+            className={`btn btn-small ${panel === 'password' ? 'btn-ghost' : 'btn-secondary'}`}
+            aria-expanded={panel === 'password'}
+            aria-controls="security-password"
+            onClick={() => open(panel === 'password' ? null : 'password')}
+          >
+            {panel === 'password' ? 'Cancelar' : 'Cambiar contraseña'}
+          </button>
+        </div>
       </article>
       {panel === 'password' && (
         <form className="security-panel" id="security-password" onSubmit={changePassword}>

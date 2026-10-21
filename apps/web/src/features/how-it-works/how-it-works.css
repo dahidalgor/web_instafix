@@ -785,13 +785,12 @@ body:not(.cta-docked) .journey-cta:not(:focus-visible) {
 }
 
 /* Ajustes adaptables y preferencias del sistema */
-@media (prefers-color-scheme: dark) {
-  .how-page {
-    --page-bg: #111222;
-  }
-  .scene {
-    box-shadow: none;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] .how-page {
+  --page-bg: #111222;
+}
+:root[data-theme='dark'] .scene {
+  box-shadow: none;
 }
 @media (min-width: 761px) and (max-height: 720px) {
   .story-step button {

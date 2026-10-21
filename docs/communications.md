@@ -40,10 +40,11 @@ Límites por IP (Nest Throttler): registro 5/min, login 10/min, verificar 10/min
 
 ## Recuperación de contraseña
 
-- **WhatsApp**: número → OTP `PASSWORD_RESET` (solo si ese número ya está verificado) → token temporal (15 min) → nueva contraseña.
-- **Correo**: correo → enlace `#restablecer?token=…` (30 min) solo si `email_verified_at` no es nulo y el correo no cambió.
+- **Recordando la contraseña actual**: Mi cuenta → Ajustes → Cambiar contraseña (pide la actual; cierra las demás sesiones).
+- **Correo** (única recuperación): correo → enlace `#restablecer?token=…` (30 min) solo si `email_verified_at` no es nulo y el correo no cambió.
+- **Nunca por WhatsApp**: no existe ruta de recuperación por WhatsApp (se retiró `auth/password-reset/whatsapp`). Sin correo verificado, el cliente contacta con Instafix.
 - El token de recuperación (`AuthToken`, propósito `PASSWORD_RESET`) no es una sesión ni un JWT: un uso, caduca, pertenece al usuario. Completar la recuperación cierra todas las sesiones e invalida otros tokens.
-- Respuesta sin enumeración: «Si existe una cuenta verificada asociada a estos datos, recibirás instrucciones para continuar.» Para números o correos no elegibles se crea un desafío señuelo sin envío, con los mismos límites.
+- Respuesta sin enumeración: «Si existe una cuenta verificada asociada a estos datos, recibirás instrucciones para continuar.» Para correos no verificados o inexistentes la respuesta es la misma y no se envía nada.
 
 ## Mi cuenta → Seguridad
 

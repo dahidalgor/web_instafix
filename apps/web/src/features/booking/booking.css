@@ -132,6 +132,9 @@
 /* ---------- Paso 1: equipo */
 
 /* ---------- Paso 2: calendario y horarios */
+.schedule-host {
+  container: schedule / inline-size;
+}
 .schedule {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
@@ -462,10 +465,9 @@
     min-height: 50px;
   }
 }
-@media (prefers-color-scheme: dark) {
-  .done-invite .done-invite-eyebrow {
-    color: #a7e9cb;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] .done-invite .done-invite-eyebrow {
+  color: #a7e9cb;
 }
 
 /* ---------- Formulario anterior de Cal.com (modo legacy) */
@@ -507,18 +509,41 @@
 }
 
 /* ---------- Ajustes adaptables */
-@media (max-width: 900px) {
+/* Por el ancho del contenedor: en la tarjeta de una cita (reprogramar) el calendario y los
+   horarios se apilan aunque la ventana sea ancha. */
+@container schedule (max-width: 640px) {
   .schedule {
-    grid-template-columns: 1fr;
-    gap: 26px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
   }
   .slot-panel {
     border-left: 0;
     border-top: 1px solid var(--border);
-    padding: 22px 0 0;
+    padding: 20px 0 0;
   }
   .slot-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .month-legend {
+    flex-wrap: wrap;
+    gap: 6px 18px;
+  }
+}
+@container schedule (max-width: 360px) {
+  .month-weekdays,
+  .month-grid {
+    gap: 3px;
+  }
+  .month-day {
+    height: 42px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+  .month-header h3 {
+    font-size: 16px;
+  }
+  .slot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 760px) {
@@ -546,17 +571,6 @@
 @media (max-width: 520px) {
   .booking-flow {
     margin: 0 -8px;
-  }
-  .month-weekdays,
-  .month-grid {
-    gap: 4px;
-  }
-  .month-day {
-    border-radius: 10px;
-    font-size: 14px;
-  }
-  .slot-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .booking-actions {
     flex-direction: column-reverse;
@@ -626,13 +640,12 @@
     transform: scale(1.08);
   }
 }
-@media (prefers-color-scheme: dark) {
-  .done-check-ring {
-    stroke: #f398d0;
-  }
-  .done-check-mark {
-    stroke: #6fe0a6;
-  }
+/* Modo oscuro: sistema o elección del usuario (data-theme en <html>). */
+:root[data-theme='dark'] .done-check-ring {
+  stroke: #f398d0;
+}
+:root[data-theme='dark'] .done-check-mark {
+  stroke: #6fe0a6;
 }
 @media (prefers-reduced-motion: reduce) {
   .done-check-ring,

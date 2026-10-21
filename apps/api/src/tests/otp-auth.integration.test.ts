@@ -136,13 +136,9 @@ test(
           response().res,
         ),
       );
-      // Código de verificación no sirve para restablecer contraseña (propósitos separados).
-      await assert.rejects(
-        auth.verifyResetCode(
-          { verificationId: resent.verificationId, code: wa.last(phone) },
-          request(),
-        ),
-      );
+      // La contraseña nunca se recupera por WhatsApp: no existe esa ruta.
+      assert.equal('resetByWhatsApp' in auth, false);
+      assert.equal('verifyResetCode' in auth, false);
       const { res, jar } = response();
       const user = await auth.verifyPhone(
         { verificationId: resent.verificationId, code: wa.last(phone) },
@@ -361,15 +357,6 @@ test(
       assert.equal(denied.getResponse().code, 'PHONE_UNVERIFIED');
       assert.equal(j0.cookie, undefined);
       assert.equal(await db.user.count({ where: { phone: unverifiedPhone } }), 1);
-      // Recuperar por WhatsApp no envía a un teléfono no verificado (respuesta genérica).
-      const before = wa.sent.length;
-      await ageChallenges(unverifiedPhone);
-      const decoy = await auth.resetByWhatsApp({ phone: unverifiedPhone }, request());
-      assert.match(decoy.message, /Si existe una cuenta verificada/);
-      assert.equal(wa.sent.length, before);
-      await assert.rejects(
-        auth.verifyResetCode({ verificationId: decoy.verificationId, code: '123456' }, request()),
-      );
       // Una sesión antigua de cliente no verificado deja de ser válida.
       const legacyToken = newToken();
       await db.session.create({
@@ -400,29 +387,23 @@ test(
       );
       const cookie = jar.cookie!;
 
-      // Recuperación por WhatsApp.
-      await ageChallenges(phone);
-      const reset = await auth.resetByWhatsApp({ phone }, request());
-      const { resetToken } = await auth.verifyResetCode(
-        { verificationId: reset.verificationId, code: wa.last(phone) },
-        request(),
+      // Cambiar la contraseña exige recordar la actual.
+      await assert.rejects(
+        security.changePassword(
+          { currentPassword: 'no-es-la-clave', password: 'clave-cambiada-12' },
+          request(cookie),
+        ),
       );
-      await auth.completeReset({ token: resetToken, password: 'clave-por-whatsapp-1' }, request());
+      await security.changePassword(
+        { currentPassword: 'clave-original-123', password: 'clave-cambiada-12' },
+        request(cookie),
+      );
       assert.equal(
         await verifyPassword(
-          'clave-por-whatsapp-1',
+          'clave-cambiada-12',
           (await db.user.findUniqueOrThrow({ where: { id: user.id } })).passwordHash,
         ),
         true,
-      );
-      assert.equal(await db.session.count({ where: { userId: user.id } }), 0); // sesiones cerradas
-      await assert.rejects(
-        auth.completeReset({ token: resetToken, password: 'otra-clave-123456' }, request()),
-        /caducó o ya se utilizó/,
-      );
-      // El token de recuperación no es una sesión.
-      await assert.rejects(
-        security.sendEmailVerification(request(`instafix_session=${resetToken}`)),
       );
 
       // Correo sin verificar: la recuperación por correo no envía nada.
@@ -432,7 +413,7 @@ test(
 
       // Verificación opcional del correo desde Mi cuenta.
       const { res: r2, jar: j2 } = response();
-      await auth.login({ phone, password: 'clave-por-whatsapp-1' }, request(), r2);
+      await auth.login({ phone, password: 'clave-cambiada-12' }, request(), r2);
       const session = request(j2.cookie!);
       const sent = await security.sendEmailVerification(session);
       assert.equal(sent.accepted, true);
@@ -453,6 +434,15 @@ test(
           (await db.user.findUniqueOrThrow({ where: { id: user.id } })).passwordHash,
         ),
         true,
+      );
+      assert.equal(await db.session.count({ where: { userId: user.id } }), 0); // sesiones cerradas
+      await assert.rejects(
+        auth.completeReset({ token: mailToken, password: 'otra-clave-123456' }, request()),
+        /caducó o ya se utilizó/,
+      );
+      // El token de recuperación no es una sesión.
+      await assert.rejects(
+        security.sendEmailVerification(request(`instafix_session=${mailToken}`)),
       );
 
       // Caducidad del enlace de verificación.

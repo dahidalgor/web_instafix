@@ -1,14 +1,75 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../lib/api';
+import {
+  onThemeChange,
+  setThemePreference,
+  themePreference,
+  type ThemePreference,
+} from '../../lib/theme';
 import { BusyButton } from '../ui/BusyButton';
 
 /** Avisa a Mi cuenta y Ajustes de que la sesión se cerró desde el menú. */
 export const LOGOUT_EVENT = 'instafix:logout';
 
+const themes: { id: ThemePreference; label: string; icon: ReactNode }[] = [
+  {
+    id: 'light',
+    label: 'Claro',
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+      </>
+    ),
+  },
+  {
+    id: 'dark',
+    label: 'Oscuro',
+    icon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />,
+  },
+  {
+    id: 'system',
+    label: 'Sistema',
+    icon: (
+      <>
+        <rect x="3" y="4" width="18" height="12" rx="2" />
+        <path d="M8 20h8M12 16v4" />
+      </>
+    ),
+  },
+];
+
+/** Apariencia: modo claro, oscuro o según el sistema (se recuerda en este navegador). */
+function ThemeOptions() {
+  const [current, setCurrent] = useState<ThemePreference>(themePreference);
+  useEffect(() => onThemeChange(setCurrent), []);
+  return (
+    <div className="account-menu-theme" role="group" aria-labelledby="account-menu-theme-title">
+      <span id="account-menu-theme-title">Apariencia</span>
+      <div>
+        {themes.map((theme) => (
+          <button
+            key={theme.id}
+            type="button"
+            aria-pressed={current === theme.id}
+            title={theme.id === 'system' ? 'Según el sistema' : `Modo ${theme.label.toLowerCase()}`}
+            onClick={() => setThemePreference(theme.id)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {theme.icon}
+            </svg>
+            {theme.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
- * Botón de usuario del encabezado. Sin sesión lleva a iniciar sesión; con sesión despliega
- * «Ir a mi cuenta», «Ajustes» y «Cerrar sesión». Comprueba la cookie real (no guarda un
- * indicador de sesión en el navegador).
+ * Botón de usuario del encabezado. Siempre despliega un menú: sin sesión, «Registrarse»
+ * (destacado), «Iniciar sesión» y la apariencia; con sesión, «Ir a mi cuenta», «Ajustes», la
+ * apariencia y «Cerrar sesión». Comprueba la cookie real (no guarda un indicador de sesión).
  */
 export function AccountMenu({ active, onNavigate }: { active: boolean; onNavigate: () => void }) {
   const [signedIn, setSignedIn] = useState(false);
@@ -66,9 +127,6 @@ export function AccountMenu({ active, onNavigate }: { active: boolean; onNavigat
       setOpen(false);
     }
   }, [open]);
-  useEffect(() => {
-    if (!signedIn) setOpen(false);
-  }, [signedIn]);
 
   async function logout() {
     setError('');
@@ -109,21 +167,6 @@ export function AccountMenu({ active, onNavigate }: { active: boolean; onNavigat
       )}
     </>
   );
-  if (!signedIn)
-    return (
-      <div className="account-menu">
-        <a
-          href="#cuenta"
-          className="account-link"
-          aria-label="Iniciar sesión"
-          title="Iniciar sesión"
-          aria-current={active ? 'page' : undefined}
-          onClick={onNavigate}
-        >
-          {icon}
-        </a>
-      </div>
-    );
   const pick = () => {
     setOpen(false);
     onNavigate();
@@ -134,8 +177,8 @@ export function AccountMenu({ active, onNavigate }: { active: boolean; onNavigat
         ref={toggle}
         type="button"
         className="account-link"
-        aria-label="Menú de usuario: sesión iniciada"
-        title="Mi cuenta"
+        aria-label={signedIn ? 'Menú de usuario: sesión iniciada' : 'Menú de usuario'}
+        title={signedIn ? 'Mi cuenta' : 'Cuenta y apariencia'}
         aria-expanded={open}
         aria-controls="account-menu-panel"
         data-active={active || undefined}
@@ -148,32 +191,55 @@ export function AccountMenu({ active, onNavigate }: { active: boolean; onNavigat
       </button>
       {open && (
         <div id="account-menu-panel" className="account-menu-panel">
-          <a href="#cuenta" onClick={pick}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="8" r="3.5" />
-              <path d="M4.5 21v-2a7.5 7.5 0 0 1 15 0v2" />
-            </svg>
-            Ir a mi cuenta
-          </a>
-          <a href="#ajustes" onClick={pick}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
-              <circle cx="16" cy="7" r="2" />
-              <circle cx="10" cy="17" r="2" />
-            </svg>
-            Ajustes
-          </a>
-          <BusyButton
-            type="button"
-            className="account-menu-logout"
-            busyLabel="Cerrando sesión…"
-            onClick={logout}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" />
-            </svg>
-            Cerrar sesión
-          </BusyButton>
+          {signedIn ? (
+            <>
+              <a href="#cuenta" onClick={pick}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="8" r="3.5" />
+                  <path d="M4.5 21v-2a7.5 7.5 0 0 1 15 0v2" />
+                </svg>
+                Ir a mi cuenta
+              </a>
+              <a href="#ajustes" onClick={pick}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+                  <circle cx="16" cy="7" r="2" />
+                  <circle cx="10" cy="17" r="2" />
+                </svg>
+                Ajustes
+              </a>
+            </>
+          ) : (
+            <>
+              <a href="#registro" className="account-menu-primary" onClick={pick}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="10" cy="8" r="3.5" />
+                  <path d="M3 21v-2a7 7 0 0 1 11-5.7M18 14v6M15 17h6" />
+                </svg>
+                Registrarse
+              </a>
+              <a href="#cuenta" onClick={pick}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M14 16l4-4-4-4M18 12H8" />
+                </svg>
+                Iniciar sesión
+              </a>
+            </>
+          )}
+          <ThemeOptions />
+          {signedIn && (
+            <BusyButton
+              type="button"
+              className="account-menu-logout"
+              busyLabel="Cerrando sesión…"
+              onClick={logout}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" />
+              </svg>
+              Cerrar sesión
+            </BusyButton>
+          )}
           {error && (
             <p role="alert" className="account-menu-error">
               {error}

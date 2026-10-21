@@ -2,7 +2,6 @@ import {
   completeResetSchema,
   emailRequestSchema,
   loginSchema,
-  phoneRequestSchema,
   registrationSchema,
   resendVerificationSchema,
   tokenSchema,
@@ -66,7 +65,8 @@ const emailInUse = () =>
     message: 'Ya existe una cuenta asociada a este correo.',
   });
 const dummyHash = '00000000000000000000000000000000:' + '00'.repeat(64);
-export const PASSWORD_RESET_TTL = { WHATSAPP: 900, EMAIL: 1800 } as const;
+/** La contraseña solo se recupera por correo verificado (nunca por WhatsApp). */
+export const PASSWORD_RESET_TTL = { EMAIL: 1800 } as const;
 
 /** Normalización definitiva en el backend: equivalentes de un número resuelven al mismo E.164. */
 export function serverPhone(value: string) {
@@ -276,59 +276,10 @@ export class AuthController {
     if (!parsed.success) throw new BadRequestException('Solicitud inválida');
     return this.verification.resend(
       parsed.data.verificationId,
-      ['PHONE_VERIFICATION', 'PASSWORD_RESET'],
+      ['PHONE_VERIFICATION'],
       undefined,
       requestOrigin(req),
     );
-  }
-
-  @Post('password-reset/whatsapp')
-  @HttpCode(200)
-  @RateLimit('recovery')
-  async resetByWhatsApp(@Body() body: unknown, @Req() req: Request) {
-    checkOrigin(req);
-    const parsed = phoneRequestSchema.safeParse(body);
-    const phone = parsed.success ? serverPhone(parsed.data.phone) : null;
-    if (!phone) throw new BadRequestException('Revisa tu número y el país seleccionado.');
-    const user = await db.user.findUnique({ where: { phone } });
-    // Solo un WhatsApp ya verificado recibe código. Para el resto se crea un señuelo con la
-    // misma respuesta y los mismos límites, sin envío: no se revela si la cuenta existe.
-    const eligible = Boolean(user?.phoneVerifiedAt);
-    const ticket = await this.verification.start({
-      purpose: 'PASSWORD_RESET',
-      phone,
-      userId: eligible ? user!.id : undefined,
-      deliver: eligible,
-      origin: requestOrigin(req),
-    });
-    return { ...ticket, message: genericRecoveryMessage };
-  }
-
-  @Post('password-reset/whatsapp/verify')
-  @HttpCode(200)
-  @RateLimit('otpVerify')
-  async verifyResetCode(@Body() body: unknown, @Req() req: Request) {
-    checkOrigin(req);
-    const parsed = verifyPhoneSchema.safeParse(body);
-    if (!parsed.success) throw new BadRequestException('Escribe el código de 6 dígitos');
-    const resetToken = await this.verification.verify(
-      parsed.data.verificationId,
-      parsed.data.code,
-      'PASSWORD_RESET',
-      async (tx, c) => {
-        const user = c.userId ? await tx.user.findUnique({ where: { id: c.userId } }) : null;
-        if (!user || user.phone !== c.phone || !user.phoneVerifiedAt)
-          throw new BadRequestException('Inicia una nueva solicitud.');
-        // Token limitado a restablecer contraseña: no es una sesión ni un JWT.
-        return issueAuthToken(tx, {
-          purpose: 'PASSWORD_RESET',
-          userId: user.id,
-          channel: 'WHATSAPP',
-          ttlSeconds: PASSWORD_RESET_TTL.WHATSAPP,
-        });
-      },
-    );
-    return { resetToken, expiresIn: PASSWORD_RESET_TTL.WHATSAPP };
   }
 
   @Post('password-reset/email')

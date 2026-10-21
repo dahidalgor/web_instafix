@@ -11,7 +11,7 @@ export function resolvePage(hash: string): Page {
   // Antiguas páginas «Quiénes somos» y «Cómo funciona»: ahora son secciones de Inicio.
   if ((homeSections as readonly string[]).includes(value)) return 'inicio';
   // Enlaces de correo: la recuperación se gestiona en Mi cuenta; la verificación, en Ajustes.
-  if (value === 'restablecer') return 'cuenta';
+  if (value === 'restablecer' || value === 'registro') return 'cuenta';
   if (value === 'verificar-correo') return 'ajustes';
   return pages.includes(value as Page) ? (value as Page) : 'inicio';
 }
