@@ -95,6 +95,8 @@ model Equipment {
   name String @unique
   categoryId String
   category ServiceCategory @relation(fields: [categoryId], references: [id])
+  // Desactivado: sus servicios no se publican ni se pueden reservar; el historial se conserva.
+  active Boolean @default(true)
   offerings Offering[]
   @@index([categoryId])
 }
@@ -111,6 +113,8 @@ model User {
   role Role @default(CUSTOMER)
   // Un miembro del equipo desactivado no puede iniciar sesión; sus sesiones se rechazan.
   active Boolean @default(true)
+  // Cuenta eliminada por administración: datos de contacto anonimizados, nunca vuelve a entrar.
+  deletedAt DateTime?
   phoneVerifiedAt DateTime?
   createdAt DateTime @default(now())
   sessions Session[]

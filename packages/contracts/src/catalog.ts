@@ -87,6 +87,16 @@ export const categoryUpdateSchema = categoryInputSchema.partial().strict();
 export const equipmentInputSchema = z
   .object({ name: catalogName, categoryId: z.string().min(1, 'Elige una categoría') })
   .strict();
-export const equipmentUpdateSchema = equipmentInputSchema.partial().strict();
+export const equipmentUpdateSchema = equipmentInputSchema
+  .partial()
+  .extend({ active: z.boolean().optional() })
+  .strict();
 export type ServiceCategory = { id: string; name: string; position: number };
-export type CatalogEquipment = { id: string; name: string; categoryId: string; category: string };
+export type CatalogEquipment = {
+  id: string;
+  name: string;
+  categoryId: string;
+  category: string;
+  /** Solo en administración: un equipo desactivado no se publica. */
+  active?: boolean;
+};

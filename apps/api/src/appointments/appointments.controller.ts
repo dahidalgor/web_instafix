@@ -103,7 +103,7 @@ export class AppointmentsController {
     if (!parsed.success) throw new BadRequestException('Revisa los datos y las fechas de la cita');
     const { whatsappConsent, ...data } = parsed.data;
     const user = data.userId ? await db.user.findUnique({ where: { id: data.userId } }) : null;
-    if (data.userId && (!user || user.role !== 'CUSTOMER'))
+    if (data.userId && (!user || user.role !== 'CUSTOMER' || user.deletedAt))
       throw new BadRequestException('Selecciona un cliente');
     const contactName = data.contactName || user?.name || '';
     const contactPhone = normalizePhone(data.contactPhone || user?.phone || '', 'EC');

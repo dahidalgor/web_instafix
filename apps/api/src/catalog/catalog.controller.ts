@@ -26,12 +26,15 @@ import type { Request } from 'express';
 import { randomUUID } from 'node:crypto';
 import { authenticated, checkOrigin } from '../auth/session';
 import { db } from '../database/client';
+import { auditAdmin } from '../security/admin-audit';
+import { RateLimit } from '../security/rate-limits';
+import { publishedOffering } from './published';
 
 @Controller('api/v1')
 export class CatalogController {
   @Get('catalog') async catalog() {
     try {
-      return await db.offering.findMany({ where: { active: true }, orderBy: { id: 'asc' } });
+      return await db.offering.findMany({ where: publishedOffering, orderBy: { id: 'asc' } });
     } catch {
       throw new ServiceUnavailableException('Base de datos no disponible');
     }
@@ -41,12 +44,15 @@ export class CatalogController {
     return db.serviceCategory.findMany({ orderBy: [{ position: 'asc' }, { name: 'asc' }] });
   }
 
+  /** Público: solo equipos activos. */
   @Get('equipment') async equipment() {
-    const rows = await db.equipment.findMany({
-      orderBy: { name: 'asc' },
-      include: { category: { select: { name: true } } },
-    });
-    return rows.map(({ category, ...item }) => ({ ...item, category: category.name }));
+    return listEquipment({ active: true });
+  }
+
+  /** Administración: todos los equipos, con su estado. */
+  @Get('admin/equipment') async adminEquipment(@Req() req: Request) {
+    await authenticated(req, true);
+    return listEquipment({});
   }
 
   @Get('admin/services') async services(@Req() req: Request) {
@@ -149,9 +155,11 @@ export class CatalogController {
     checkOrigin(req);
     await authenticated(req, true);
     await found(db.equipment.findUnique({ where: { id } }), 'Equipo no encontrado');
-    // Los servicios (también los retirados) conservan su equipo para el historial.
+    // Los servicios (también los eliminados con historial) conservan su equipo.
     if (await db.offering.count({ where: { equipmentId: id } }))
-      throw new ConflictException('Este equipo tiene servicios; muévelos a otro equipo primero');
+      throw new ConflictException(
+        'Este equipo tiene servicios (o historial de servicios eliminados). Desactívalo para ocultarlo.',
+      );
     await db.equipment.delete({ where: { id } });
   }
 
@@ -186,8 +194,49 @@ export class CatalogController {
   ) {
     checkOrigin(req);
     await authenticated(req, true);
+    await found(db.offering.findFirst({ where: { id, active: true } }), 'Servicio no encontrado');
     return db.offering.update({ where: { id }, data: await this.serviceData(body) });
   }
+
+  /**
+   * Eliminar un servicio. Sin historial se borra; si ya se usó en solicitudes, citas o trabajos,
+   * se retira (active = false): desaparece del catálogo y de administración, pero las visitas
+   * anteriores conservan su nombre y precio.
+   */
+  @Delete('admin/services/:id') @RateLimit('staff') async removeService(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    checkOrigin(req);
+    const admin = await authenticated(req, true);
+    return db.$transaction(async (tx) => {
+      const offering = await found(
+        tx.offering.findFirst({
+          where: { id, active: true },
+          select: {
+            _count: {
+              select: { requests: true, appointments: true, jobs: true, performedServices: true },
+            },
+          },
+        }),
+        'Servicio no encontrado',
+      );
+      const used = Object.values(offering._count).some(Boolean);
+      if (used) await tx.offering.update({ where: { id }, data: { active: false } });
+      else await tx.offering.delete({ where: { id } });
+      await auditAdmin(admin.id, 'SERVICE_DELETED', id, { kept: used }, tx);
+      return { ok: true, kept: used };
+    });
+  }
+}
+
+async function listEquipment(where: Prisma.EquipmentWhereInput) {
+  const rows = await db.equipment.findMany({
+    where,
+    orderBy: { name: 'asc' },
+    include: { category: { select: { name: true } } },
+  });
+  return rows.map(({ category, ...item }) => ({ ...item, category: category.name }));
 }
 
 function parse<T>(schema: ZodType<T>, body: unknown): T {

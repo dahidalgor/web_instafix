@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { db } from '../database/client';
+import { publishedOffering } from '../catalog/published';
 import { expiration, parseRequest } from './request-policy';
 @Controller('api/v1')
 export class RequestsController {
@@ -30,8 +31,10 @@ export class RequestsController {
     const result = parseRequest(body);
     if (!result.success) throw new BadRequestException(result.error.flatten());
     const input = result.data;
-    const offer = await db.offering.findUnique({ where: { id: input.offeringId } });
-    if (!offer?.active || offer.availability !== 'AVAILABLE')
+    const offer = await db.offering.findFirst({
+      where: { ...publishedOffering, id: input.offeringId },
+    });
+    if (!offer || offer.availability !== 'AVAILABLE')
       throw new BadRequestException('Servicio no disponible');
     const now = new Date();
     // An unverified phone never claims or merges an existing customer history.
