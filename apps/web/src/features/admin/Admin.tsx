@@ -23,6 +23,10 @@ import { AdminUsers } from './AdminUsers';
 import { AdminBlockedPhones } from './AdminBlockedPhones';
 import { TechnicianPanel } from '../technician/TechnicianPanel';
 import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton';
+import { appointmentIdFromHash } from '@instafix/contracts/src/push';
+import { AdminNotifications } from '../notifications/AdminNotifications';
+import { pushApi } from '../notifications/push-api';
+import { browserEnv, resyncPush } from '../notifications/push-client';
 export default function Admin() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -69,8 +73,44 @@ export default function Admin() {
   };
   useEffect(checkSession, []);
   useEffect(() => {
-    if (user?.role === 'ADMIN') load().catch((e) => setMessage(e.message));
+    if (user?.role !== 'ADMIN') return;
+    load().catch((e) => setMessage(e.message));
+    // Renueva en silencio la suscripción push de este dispositivo (nunca pide permiso).
+    resyncPush(browserEnv(), pushApi).catch(() => {});
   }, [user]);
+  // Enlace a una cita (#cita=<id>), p. ej. al tocar una notificación push.
+  const [focusAppointment, setFocusAppointment] = useState<string | null>(() =>
+    appointmentIdFromHash(window.location.hash),
+  );
+  useEffect(() => {
+    const follow = () => {
+      const id = appointmentIdFromHash(window.location.hash);
+      if (id) setFocusAppointment(id);
+    };
+    // El service worker pide navegar a una ventana ya abierta sin recargarla.
+    const fromWorker = (event: MessageEvent) => {
+      const data = event.data as { type?: string; url?: string } | null;
+      if (data?.type !== 'instafix:navigate' || typeof data.url !== 'string') return;
+      const url = new URL(data.url, window.location.origin);
+      if (url.origin !== window.location.origin) return;
+      if (url.hash) window.location.hash = url.hash;
+      follow();
+    };
+    window.addEventListener('hashchange', follow);
+    navigator.serviceWorker?.addEventListener('message', fromWorker);
+    return () => {
+      window.removeEventListener('hashchange', follow);
+      navigator.serviceWorker?.removeEventListener('message', fromWorker);
+    };
+  }, []);
+  useEffect(() => {
+    if (focusAppointment) setTab('Citas');
+  }, [focusAppointment]);
+  const appointmentFocused = () => {
+    setFocusAppointment(null);
+    // Se quita el hash para que recargar no vuelva a abrir la misma cita.
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  };
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setMessage('');
@@ -208,6 +248,7 @@ export default function Admin() {
             'Presentaciones',
             'Estadísticas',
             'Correo',
+            'Notificaciones',
           ].map((name) => (
             <button
               disabled={uploading}
@@ -228,13 +269,20 @@ export default function Admin() {
           </p>
         )}
         {tab === 'Correo' && <AdminEmail />}
+        {tab === 'Notificaciones' && <AdminNotifications />}
         {tab === 'Panel técnico' && <TechnicianPanel user={user} />}
         {tab === 'Equipo' && <AdminTeam />}
         {tab === 'Usuarios' && <AdminUsers currentUserId={user.id} />}
         {tab === 'Números' && <AdminBlockedPhones />}
         {tab === 'Presentaciones' && <AdminSlides onUploading={setUploading} />}
         {tab === 'Estadísticas' && <AdminAnalytics />}
-        {tab === 'Citas' && <AdminAppointments services={items} />}
+        {tab === 'Citas' && (
+          <AdminAppointments
+            services={items}
+            focusId={focusAppointment}
+            onFocused={appointmentFocused}
+          />
+        )}
         {tab === 'WhatsApp' && <AdminWhatsApp />}
         {tab === 'Servicios' && (
           <AdminServices

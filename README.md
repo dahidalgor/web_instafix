@@ -6,6 +6,10 @@ Las cuentas se activan verificando el WhatsApp con un código (OTP) enviado por 
 
 Consulta la [guía de organización del código](docs/code-organization.md) para localizar componentes, estilos, controladores y contratos. Usa `pnpm format` para mantener el formato uniforme y `pnpm format:check` para comprobarlo.
 
+## Notificaciones push del equipo (22 de octubre de 2026)
+
+Administración → Notificaciones activa avisos Web Push en el dispositivo. El primero es «Nueva solicitud de cita» al administrador, también en iPhone (iOS 16.4+, con el panel añadido a la pantalla de inicio). Requiere `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` en la API. Arquitectura, seguridad y prueba en el iPhone: [Notificaciones push](docs/push-notifications.md).
+
 ## WhatsApp y Cal.com (14 de octubre de 2026)
 
 Implementados los webhooks firmados, reservas de invitados, solicitud de ubicación, confirmación por técnico, cola persistente de mensajes y recordatorios a las 08:00 de Ecuador continental. Administración → WhatsApp muestra el número, las plantillas y el resultado de cada envío. La única integración de mensajería es **Bird** (`@messagebird/sdk`) con Coexistence: el número sigue en WhatsApp Business App. Requiere `BIRD_API_KEY`, el webhook de Bird registrado y plantillas aprobadas: consulta [la guía](docs/whatsapp-setup.md) y [la migración desde WasapFlow](docs/whatsapp-bird.md). Los envíos permanecen desactivados por defecto. Límites, presupuesto de WhatsApp y Cloudflare: [Seguridad y control de costos](docs/security-costs.md).

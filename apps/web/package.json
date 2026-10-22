@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build"
+    "build": "tsc --noEmit && tsc --noEmit -p src/sw && vite build && vite build -c vite.sw.config.ts",
+    "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@instafix/contracts": "workspace:*",
@@ -14,6 +15,7 @@
   "devDependencies": {
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3",
     "vite": "^6.2.0"
   }

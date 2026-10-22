@@ -51,7 +51,15 @@ const localDate = (value: string) => {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
-export function AdminAppointments(_props: { services: Offering[] }) {
+export function AdminAppointments({
+  focusId = null,
+  onFocused,
+}: {
+  services: Offering[];
+  /** Cita que se abre al llegar (enlace #cita=<id>, p. ej. desde una notificación). */
+  focusId?: string | null;
+  onFocused?: () => void;
+}) {
   const [linkUserId, setLinkUserId] = useState('');
   const [identityVerified, setIdentityVerified] = useState(false);
   const [recoverable, setRecoverable] = useState(0);
@@ -93,6 +101,15 @@ export function AdminAppointments(_props: { services: Offering[] }) {
     load(sort).catch((e) => setLoadError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
+  // Abre la cita enlazada en cuanto el listado está cargado (una sola vez por enlace).
+  useEffect(() => {
+    if (!focusId || !items) return;
+    const target = items.find((item) => item.id === focusId);
+    if (target) edit(target);
+    else setMessage('La cita del aviso ya no está disponible (pudo eliminarse).');
+    onFocused?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, items]);
   function edit(item: AdminAppointment) {
     setFormOpen(true);
     // El formulario está arriba del listado: se lleva a la vista al abrirlo para editar.

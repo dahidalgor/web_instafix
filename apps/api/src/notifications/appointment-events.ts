@@ -3,11 +3,13 @@ import { queueJob, queueReminders } from '../whatsapp/queue';
 import type { MessageKind } from '../whatsapp/messages';
 import type { RequestOrigin } from '../security/client-identity';
 import { enqueueAppointmentEmail } from './notification.service';
+import { enqueueAppointmentRequested } from './staff/staff-notifications';
 
 /**
  * Eventos internos de cita. AppointmentService publica el hecho una vez confirmado por
  * Cal.com y persistido; NotificationService decide los canales:
  *   email → Brevo (bandeja Notification)   ·   WhatsApp → Bird (cola AutomationJob)
+ *   equipo → Web Push (bandeja Notification, channel WEB_PUSH; ver staff/staff-notifications)
  * Los OTP no pasan por aquí: pertenecen a VerificationService.
  */
 export type AppointmentEvent =
@@ -42,6 +44,9 @@ export async function publishAppointmentEvent(
     case 'appointment.created':
       // El WhatsApp inicial (solicitud de ubicación) lo encola el flujo de confirmación.
       await email('APPOINTMENT_CREATED');
+      // Aviso al equipo. No se añade a `notifications`: esa lista se entrega en la misma
+      // petición del cliente; el push lo envía el worker y nunca retrasa la reserva.
+      await enqueueAppointmentRequested(tx, appointment, now);
       break;
     case 'appointment.rescheduled':
       await email('APPOINTMENT_RESCHEDULED', { previousStartsAt: event.previousStartsAt });

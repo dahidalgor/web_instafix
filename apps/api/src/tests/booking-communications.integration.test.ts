@@ -143,7 +143,10 @@ test(
       );
       await receiveCalWebhook(webhook('BOOKING_REQUESTED', uid, start, phone));
       assert.equal(emails.filter((e) => e.to === email).length, 1);
-      assert.equal(await db.notification.count({ where: { appointmentId: appointment.id } }), 1);
+      assert.equal(
+        await db.notification.count({ where: { appointmentId: appointment.id, channel: 'EMAIL' } }),
+        1,
+      );
       // WhatsApp inicial (pedir ubicación) encolado una sola vez.
       assert.equal(
         await db.automationJob.count({ where: { appointmentId: appointment.id, kind: 'INITIAL' } }),
