@@ -20,6 +20,9 @@
       header_up X-Real-IP {client_ip}
     }
   }
+  # El service worker se revisa siempre (Cloudflare y el navegador no deben servir uno viejo).
+  @sw path /sw.js
+  header @sw Cache-Control "no-cache"
   handle {
     root * /srv
     try_files {path} /index.html

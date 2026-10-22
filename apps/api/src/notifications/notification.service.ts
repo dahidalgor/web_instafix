@@ -3,6 +3,7 @@ import type { Appointment, Prisma } from '@prisma/client';
 import { maskRecipient } from '../communications/log';
 import { retryCalConfirmations } from '../staff/staff-appointments.service';
 import { db } from '../database/client';
+import { configuredStaffChannels, deliverStaffNotification } from './staff/staff-notifications';
 import {
   appointmentEmailsEnabled,
   EmailDeliveryError,
@@ -113,6 +114,8 @@ export async function deliverNotification(id: string, now = new Date()): Promise
     where: { id },
     include: { appointment: true },
   });
+  // Avisos al equipo (Web Push…): reglas y canal propios.
+  if (row.channel !== 'EMAIL') return deliverStaffNotification(row, now);
   // Un aviso de cita creada/reprogramada no se envía si la cita ya fue cancelada.
   if (
     (row.kind !== 'APPOINTMENT_CANCELLED' &&
@@ -176,7 +179,9 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     // Confirmaciones de técnicos que Cal.com aún no reflejó: independiente del correo.
     await retryCalConfirmations().catch(() => console.error('No se pudo sincronizar con Cal.com'));
-    if (!mailStatus().configured) return;
+    // Cada canal se procesa solo si está configurado; los demás avisos esperan en la bandeja.
+    const channels = [...(mailStatus().configured ? ['EMAIL'] : []), ...configuredStaffChannels()];
+    if (!channels.length) return;
     this.running = true;
     try {
       // Un proceso interrumpido durante el envío queda en revisión: no se reenvía a ciegas.
@@ -184,11 +189,15 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
         where: { status: 'SENDING', updatedAt: { lt: new Date(Date.now() - 300000) } },
         data: {
           status: 'REVIEW',
-          lastError: 'Envío interrumpido; revisar en Brevo antes de repetir',
+          lastError: 'Envío interrumpido; revisar antes de repetir',
         },
       });
       const due = await db.notification.findMany({
-        where: { status: { in: ['PENDING', 'RETRY'] }, dueAt: { lte: new Date() } },
+        where: {
+          status: { in: ['PENDING', 'RETRY'] },
+          dueAt: { lte: new Date() },
+          channel: { in: channels },
+        },
         orderBy: { dueAt: 'asc' },
         take: 20,
         select: { id: true },

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @instafix/web --filter @instafix/api dev",
     "build": "pnpm -r build",
-    "test": "pnpm --filter @instafix/api test",
+    "test": "pnpm --filter @instafix/web test && pnpm --filter @instafix/api test",
     "format": "prettier --write apps packages scripts docs deploy/README.md README.md '*.{json,yaml}'",
     "format:check": "prettier --check apps packages scripts docs deploy/README.md README.md '*.{json,yaml}'",
     "imports:organize": "node scripts/organize-imports.cjs",

@@ -34,6 +34,8 @@ export const rateLimits = {
   communications: { default: { limit: 3, ttl: minute }, long: { limit: 10, ttl: hour } },
   /** Acciones del equipo (sesión de ADMIN/TECHNICIAN). */
   staff: { default: { limit: 60, ttl: minute }, long: { limit: 1500, ttl: hour } },
+  /** Registrar o quitar dispositivos de notificaciones push del equipo. */
+  push: { default: { limit: 10, ttl: minute }, long: { limit: 60, ttl: hour } },
   analytics: { default: { limit: 60, ttl: minute }, long: { limit: 1500, ttl: hour } },
 } as const;
 export type RateLimitPolicy = keyof typeof rateLimits;

@@ -9,6 +9,20 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <!-- Panel del equipo: manifiesto propio (standalone). En iPhone, Web Push solo funciona en
+         la web app abierta desde la pantalla de inicio. La web pública no cambia. -->
+    <script>
+      (function () {
+        var h = location.hostname;
+        if (h === 'admin.localhost' || h === '%VITE_ADMIN_HOST%') {
+          document.querySelector('link[rel="manifest"]').href = '/admin.webmanifest';
+          var m = document.createElement('meta');
+          m.name = 'apple-mobile-web-app-title';
+          m.content = 'Instafix';
+          document.head.appendChild(m);
+        }
+      })();
+    </script>
     <!-- Tema antes de pintar (claro, oscuro o según el sistema; ver src/lib/theme.ts). -->
     <script>
       (function () {

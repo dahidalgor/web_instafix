@@ -4,5 +4,6 @@ export * from './appointments';
 export * from './auth';
 export * from './catalog';
 export * from './help';
+export * from './push';
 export * from './requests';
 export * from './site';

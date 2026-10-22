@@ -25,6 +25,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { StaffController } from './staff/staff.controller';
 import { TeamController } from './staff/team.controller';
 import { PeopleAdminController } from './admin/people-admin.controller';
+import { PushController } from './notifications/staff/push.controller';
 
 @Module({
   imports: [WhatsAppModule, ThrottlerModule.forRoot(throttlerOptions)],
@@ -48,6 +49,7 @@ import { PeopleAdminController } from './admin/people-admin.controller';
     StaffController,
     TeamController,
     PeopleAdminController,
+    PushController,
   ],
   providers: [
     VerificationService,

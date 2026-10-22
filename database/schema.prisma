@@ -126,6 +126,7 @@ model User {
   completedAppointments Appointment[] @relation("CompletedBy")
   performedServices AppointmentService[]
   appointmentActivity AppointmentActivity[]
+  pushSubscriptions PushSubscription[]
 }
 // Desafíos aislados por finalidad. Nunca se guarda el código en texto plano.
 model EmailChallenge {
@@ -532,4 +533,30 @@ model IdempotencyRecord {
   expiresAt DateTime
   createdAt DateTime @default(now())
   @@index([expiresAt])
+}
+
+// Suscripción Web Push de un dispositivo del equipo (una por navegador/instalación).
+// endpoint y claves son datos sensibles: nunca se registran ni se devuelven al frontend.
+// Una app nativa futura registrará sus propios tokens (APNs/FCM) en otra tabla y canal.
+model PushSubscription {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SHA-256 del endpoint: evita duplicados sin indexar la URL completa.
+  endpointHash String @unique
+  endpoint String
+  p256dh String
+  auth String
+  // Identificador aleatorio de la instalación (localStorage del dispositivo).
+  installationId String
+  // Etiqueta legible («iPhone · Safari»), derivada del navegador; sin datos personales.
+  label String @default("")
+  active Boolean @default(true)
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  failureReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, active])
+  @@index([userId, installationId])
 }
