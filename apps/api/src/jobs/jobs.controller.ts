@@ -34,14 +34,15 @@ export class JobsController {
     const roleFilter = role === 'CUSTOMER' ? { role: 'CUSTOMER' as const } : {};
     if (!text)
       return db.user.findMany({
-        where: roleFilter,
+        where: { ...roleFilter, deletedAt: null },
         select: safeUser,
         orderBy: { createdAt: 'desc' },
         take: 100,
       });
     const ids = await db.$queryRaw<{ id: string }[]>`
       SELECT id FROM "User"
-      WHERE (${role === 'CUSTOMER'} = false OR role = 'CUSTOMER')
+      WHERE "deletedAt" IS NULL
+        AND (${role === 'CUSTOMER'} = false OR role = 'CUSTOMER')
         AND (
           translate(lower(name), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower(${text}), 'áéíóúüñ', 'aeiouun') || '%'
           OR (${digits.length >= 3} AND regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%' || ${digits} || '%')
@@ -70,7 +71,7 @@ export class JobsController {
     return db.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: data.userId } });
       const offering = await tx.offering.findUnique({ where: { id: data.offeringId } });
-      if (user?.role !== 'CUSTOMER' || !offering)
+      if (user?.role !== 'CUSTOMER' || user.deletedAt || !offering)
         throw new BadRequestException('Cliente o servicio no encontrado');
       if (data.appointmentId) {
         await lockAppointment(tx, data.appointmentId);

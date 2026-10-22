@@ -43,7 +43,7 @@ export default function Admin() {
   async function load() {
     const [services, devices, groups, customers, terms] = await Promise.all([
       api('admin/services'),
-      api('equipment'),
+      api('admin/equipment'),
       api('categories'),
       api('admin/users'),
       api('warranty-policy'),
@@ -96,6 +96,27 @@ export default function Admin() {
       await load();
       setDraft({ ...emptyService });
     });
+  }
+  /** Devuelve si se eliminó (el editor cierra su confirmación solo entonces). */
+  async function removeService(id: string) {
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await api<{ kept: boolean }>(`admin/services/${id}`, { method: 'DELETE' });
+      await load();
+      setDraft({ ...emptyService });
+      setMessage(
+        result.kept
+          ? 'Servicio eliminado del catálogo. Las citas y trabajos anteriores lo conservan.'
+          : 'Servicio eliminado.',
+      );
+      return true;
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo eliminar el servicio');
+      return false;
+    } finally {
+      setBusy(false);
+    }
   }
   if (checking)
     return (
@@ -209,7 +230,7 @@ export default function Admin() {
         {tab === 'Correo' && <AdminEmail />}
         {tab === 'Panel técnico' && <TechnicianPanel user={user} />}
         {tab === 'Equipo' && <AdminTeam />}
-        {tab === 'Usuarios' && <AdminUsers />}
+        {tab === 'Usuarios' && <AdminUsers currentUserId={user.id} />}
         {tab === 'Números' && <AdminBlockedPhones />}
         {tab === 'Presentaciones' && <AdminSlides onUploading={setUploading} />}
         {tab === 'Estadísticas' && <AdminAnalytics />}
@@ -228,6 +249,7 @@ export default function Admin() {
             save={save}
             busy={busy}
             loading={!loaded}
+            remove={removeService}
           />
         )}
         {tab === 'Categorías y equipos' && (

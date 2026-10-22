@@ -36,7 +36,7 @@ export class TeamController {
   @Get() async list(@Req() req: Request) {
     await authenticated(req, true);
     const members = await db.user.findMany({
-      where: { role: { in: ['ADMIN', 'TECHNICIAN'] } },
+      where: { role: { in: ['ADMIN', 'TECHNICIAN'] }, deletedAt: null },
       select: member,
       orderBy: [{ role: 'asc' }, { name: 'asc' }],
     });
@@ -92,7 +92,7 @@ export class TeamController {
       throw new BadRequestException(parsed.error.issues[0]?.message || 'Revisa los datos');
     const target = await db.user.findUnique({ where: { id } });
     // Solo se gestionan técnicos: ni clientes ni otros administradores ni la propia cuenta.
-    if (!target || target.role !== 'TECHNICIAN' || target.id === admin.id)
+    if (!target || target.deletedAt || target.role !== 'TECHNICIAN' || target.id === admin.id)
       throw new NotFoundException('Técnico no encontrado');
     const { active, password, confirmFutureAppointments, firstName, lastName, email } = parsed.data;
     const phone =

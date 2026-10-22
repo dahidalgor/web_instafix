@@ -472,7 +472,13 @@ test(
     }
     await assert.rejects(people.accounts(req()), (e: any) => e.getStatus() === 401);
 
-    const listed = await people.accounts(req(admin.cookie), client.user.phone.slice(-7), '1', '5');
+    const listed = await people.accounts(
+      req(admin.cookie),
+      client.user.phone.slice(-7),
+      '',
+      '1',
+      '5',
+    );
     assert.ok(listed.items.some((u) => u.id === client.user.id));
     assert.equal(listed.page, 1);
     assert.ok(listed.total >= 1);

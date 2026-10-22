@@ -121,7 +121,8 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
       <p className="small">
         El catálogo se organiza en Categoría → Equipo → Servicio, por ejemplo «Consolas de
         Videojuegos → PS5 → Mantenimiento». Las categorías con servicios aparecen en la página
-        pública en este orden.
+        pública en este orden. Un equipo desactivado se oculta de la página junto con sus servicios,
+        sin borrar nada.
       </p>
       {message && (
         <p role="status" className="admin-message">
@@ -255,7 +256,7 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
                   const count = servicesOf(device.id);
                   const editingDevice = editing?.kind === 'equipment' && editing.id === device.id;
                   return (
-                    <li key={device.id}>
+                    <li key={device.id} className={device.active === false ? 'is-inactive' : ''}>
                       {editingDevice ? (
                         <form className="catalog-admin-inline" onSubmit={saveEdit}>
                           <input
@@ -299,9 +300,35 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
                         <>
                           <span>
                             <strong>{device.name}</strong>
-                            <small>{count === 1 ? '1 servicio' : `${count} servicios`}</small>
+                            <small>
+                              {count === 1 ? '1 servicio' : `${count} servicios`}
+                              {device.active === false && (
+                                <span className="equipment-off"> · Desactivado: no se publica</span>
+                              )}
+                            </small>
                           </span>
                           <span className="tech-actions-row">
+                            <BusyButton
+                              type="button"
+                              className="btn btn-secondary btn-small"
+                              disabled={busy}
+                              busy={busyKey === `device:toggle:${device.id}`}
+                              busyLabel="Guardando…"
+                              onClick={() =>
+                                act(
+                                  `device:toggle:${device.id}`,
+                                  () =>
+                                    send(`admin/equipment/${device.id}`, 'PATCH', {
+                                      active: device.active === false,
+                                    }),
+                                  device.active === false
+                                    ? `${device.name} activado: sus servicios vuelven a publicarse.`
+                                    : `${device.name} desactivado: sus servicios ya no aparecen en la página.`,
+                                )
+                              }
+                            >
+                              {device.active === false ? 'Activar' : 'Desactivar'}
+                            </BusyButton>
                             <button
                               type="button"
                               className="btn btn-ghost btn-small"

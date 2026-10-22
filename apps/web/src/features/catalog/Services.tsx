@@ -9,6 +9,12 @@ import { ServiceFacts } from './ServiceFacts';
 import { availabilityLabels } from './catalog.constants';
 
 const ALL = 'Todos';
+/** Comparación sin mayúsculas ni tildes: «bateria» encuentra «Batería». */
+const fold = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 
 /** Catálogo público: Categoría → Equipo → Servicio. */
 export function Services() {
@@ -16,6 +22,7 @@ export function Services() {
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [category, setCategory] = useState(ALL);
   const [device, setDevice] = useState(ALL);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Offering | null>(null);
@@ -60,7 +67,11 @@ export function Services() {
     category === ALL && groups.length > 1
       ? []
       : [...new Set(inCategory.map((item) => item.device))];
-  const visible = inCategory.filter((item) => device === ALL || item.device === device);
+  // La búsqueda mira solo el nombre del servicio (no la descripción) y respeta los filtros.
+  const words = fold(search.trim());
+  const visible = inCategory
+    .filter((item) => device === ALL || item.device === device)
+    .filter((item) => !words || fold(item.title).includes(words));
   const chooseCategory = (name: string) => {
     setCategory(name);
     setDevice(ALL);
@@ -78,6 +89,22 @@ export function Services() {
         </div>
         <p>Conoce el alcance, el precio y la disponibilidad.</p>
       </div>
+      {items.length > 0 && (
+        <label className="service-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            maxLength={80}
+            aria-label="Buscar servicio por nombre"
+            placeholder="Buscar servicio por nombre"
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
+      )}
       {groups.length > 1 && (
         <div className="filters category-filters has-indicator" role="group" aria-label="Categoría">
           {[ALL, ...groups].map((name) => (
@@ -126,6 +153,15 @@ export function Services() {
         </p>
       )}
       {!loading && !error && !items.length && <p>Pronto publicaremos nuestros servicios.</p>}
+      {!loading && !error && items.length > 0 && !visible.length && (
+        <p className="service-empty" role="status">
+          Ningún servicio se llama «{search.trim()}»
+          {category !== ALL || device !== ALL ? ' en este filtro' : ''}.{' '}
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setSearch('')}>
+            Quitar búsqueda
+          </button>
+        </p>
+      )}
       {!loading && !error && (
         // Cambiar de categoría o de equipo vuelve a montar el listado y las tarjetas entran
         // escalonadas.

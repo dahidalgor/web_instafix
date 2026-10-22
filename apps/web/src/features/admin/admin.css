@@ -331,3 +331,77 @@
 :root[data-theme='dark'] .user-badges .unverified {
   color: #ffb1a9;
 }
+
+/* Barra de búsqueda y filtros (Usuarios, Servicios). */
+.admin-toolbar .filters {
+  margin: 14px 0 10px;
+}
+.user-delete-confirm {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.service-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+.service-filters .is-wide {
+  grid-column: 1 / -1;
+}
+.service-filters label {
+  margin: 0;
+}
+.admin-service-item .is-off {
+  color: #a12f26;
+}
+.catalog-admin-devices li.is-inactive strong {
+  opacity: 0.6;
+}
+.equipment-off {
+  color: #a12f26;
+  font-weight: 600;
+}
+:root[data-theme='dark'] .admin-service-item .is-off,
+:root[data-theme='dark'] .equipment-off {
+  color: #ffb1a9;
+}
+@media (max-width: 520px) {
+  .service-filters {
+    grid-template-columns: 1fr;
+  }
+}
+.service-delete {
+  margin-top: 12px;
+}
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.link-button:hover {
+  text-decoration: underline;
+}
+/* Acciones del equipo: botones del mismo tamaño, en fila; a lo ancho en el teléfono. */
+.catalog-admin-devices li > .tech-actions-row {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.catalog-admin-devices li > .tech-actions-row > * {
+  flex: 0 0 auto;
+  min-width: 104px;
+  justify-content: center;
+}
+@media (max-width: 600px) {
+  .catalog-admin-devices li > .tech-actions-row {
+    flex: 1 1 100%;
+  }
+  .catalog-admin-devices li > .tech-actions-row > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

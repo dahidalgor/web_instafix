@@ -1,7 +1,7 @@
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import type { CatalogEquipment, Offering, ServiceCategory } from '@instafix/contracts';
-import type { Dispatch, FormEvent, SetStateAction } from 'react';
+import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { money } from '../../lib/format';
 import { availabilityLabels } from '../catalog/catalog.constants';
 import { MediaEditor } from '../media/MediaEditor';
@@ -20,7 +20,15 @@ type Props = {
   save: (event: FormEvent) => Promise<void>;
   busy: boolean;
   loading?: boolean;
+  remove: (id: string) => Promise<boolean>;
 };
+type Sort = 'name' | 'price-asc' | 'price-desc';
+/** Comparación sin mayúsculas ni tildes: «bateria» encuentra «Batería». */
+const fold = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 export function AdminServices({
   items,
   equipment,
@@ -33,7 +41,50 @@ export function AdminServices({
   save,
   busy,
   loading,
+  remove,
 }: Props) {
+  const [name, setName] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [equipmentId, setEquipmentId] = useState('');
+  const [sort, setSort] = useState<Sort>('name');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const categoryOf = (item: Offering) =>
+    equipment.find((device) => device.id === item.equipmentId)?.categoryId;
+  const devicesInCategory = equipment.filter(
+    (device) => !categoryId || device.categoryId === categoryId,
+  );
+  const words = fold(name.trim());
+  const visible = items
+    .filter((item) => !categoryId || categoryOf(item) === categoryId)
+    .filter((item) => !equipmentId || item.equipmentId === equipmentId)
+    .filter((item) => !words || fold(item.title).includes(words))
+    .sort((a, b) =>
+      sort === 'price-asc'
+        ? a.priceMinor - b.priceMinor
+        : sort === 'price-desc'
+          ? b.priceMinor - a.priceMinor
+          : `${a.device} ${a.title}`.localeCompare(`${b.device} ${b.title}`, 'es'),
+    );
+  const filtered = Boolean(categoryId || equipmentId || words);
+  const clearFilters = () => {
+    setName('');
+    setCategoryId('');
+    setEquipmentId('');
+  };
+  const pick = (next: ServiceDraft) => {
+    setConfirmDelete(false);
+    setDraft(next);
+  };
+  async function onDelete() {
+    if (!draft.id) return;
+    setDeleting(true);
+    const ok = await remove(draft.id);
+    setDeleting(false);
+    if (ok) setConfirmDelete(false);
+  }
+  const inactiveDevice = (id: string | null | undefined) =>
+    equipment.find((device) => device.id === id)?.active === false;
   return (
     <div className="admin-layout">
       <section>
@@ -41,19 +92,82 @@ export function AdminServices({
         <button
           className="btn btn-primary"
           disabled={uploading}
-          onClick={() => setDraft({ ...emptyService })}
+          onClick={() => pick({ ...emptyService })}
         >
           + Nuevo servicio
         </button>
+        <div className="service-filters" role="search" aria-label="Filtrar servicios">
+          <label className="is-wide">
+            Buscar por nombre
+            <input
+              type="search"
+              value={name}
+              maxLength={100}
+              placeholder="Ej.: Mantenimiento"
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+          <label>
+            Categoría
+            <select
+              value={categoryId}
+              onChange={(e) => {
+                setCategoryId(e.target.value);
+                setEquipmentId('');
+              }}
+            >
+              <option value="">Todas</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Equipo
+            <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)}>
+              <option value="">Todos</option>
+              {devicesInCategory.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.name}
+                  {device.active === false ? ' (desactivado)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="is-wide">
+            Ordenar por
+            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+              <option value="name">Equipo y nombre</option>
+              <option value="price-asc">Precio: de menor a mayor</option>
+              <option value="price-desc">Precio: de mayor a menor</option>
+            </select>
+          </label>
+        </div>
+        {!loading && items.length > 0 && (
+          <p className="small" role="status">
+            {visible.length === 1 ? '1 servicio' : `${visible.length} servicios`}
+            {filtered && ` de ${items.length} · `}
+            {filtered && (
+              <button type="button" className="link-button" onClick={clearFilters}>
+                Quitar filtros
+              </button>
+            )}
+          </p>
+        )}
         {loading && <ListSkeleton label="Cargando catálogo…" count={4} />}
         {!loading && !items.length && <p className="tech-empty">Aún no hay servicios.</p>}
-        {items.map((item) => (
+        {!loading && items.length > 0 && !visible.length && (
+          <p className="tech-empty">Ningún servicio coincide con los filtros.</p>
+        )}
+        {visible.map((item) => (
           <button
             className="admin-item admin-service-item"
             disabled={uploading}
             key={item.id}
             onClick={() =>
-              setDraft({
+              pick({
                 id: item.id,
                 title: item.title,
                 equipmentId: item.equipmentId ?? '',
@@ -79,6 +193,9 @@ export function AdminServices({
             </strong>
             <span>
               {money(item.priceMinor)} · {availabilityLabels[item.availability]}
+              {inactiveDevice(item.equipmentId) && (
+                <em className="is-off"> · Equipo desactivado: no se publica</em>
+              )}
             </span>
           </button>
         ))}
@@ -101,6 +218,7 @@ export function AdminServices({
                   {devices.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}
+                      {item.active === false ? ' (desactivado)' : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -205,6 +323,48 @@ export function AdminServices({
         >
           Guardar servicio
         </BusyButton>
+        {draft.id && !confirmDelete && (
+          <button
+            type="button"
+            className="btn btn-danger service-delete"
+            disabled={busy || uploading || deleting}
+            onClick={() => setConfirmDelete(true)}
+          >
+            Eliminar servicio
+          </button>
+        )}
+        {draft.id && confirmDelete && (
+          <div
+            className="security-panel service-delete"
+            role="alertdialog"
+            aria-labelledby="delete-service-title"
+          >
+            <p id="delete-service-title">
+              <strong>¿Eliminar «{draft.title}»?</strong> Deja de aparecer en el catálogo y ya no se
+              puede reservar ni añadir a una visita. Las citas y trabajos anteriores conservan su
+              nombre y precio.
+            </p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Mantener
+              </button>
+              <BusyButton
+                type="button"
+                className="btn btn-danger"
+                busy={deleting}
+                busyLabel="Eliminando…"
+                onClick={() => void onDelete()}
+              >
+                Sí, eliminar
+              </BusyButton>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );
