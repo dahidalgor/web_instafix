@@ -1,5 +1,6 @@
 import {
   addPerformedServiceSchema,
+  completeAppointmentSchema,
   technicianNotesSchema,
   updatePerformedServiceSchema,
 } from '@instafix/contracts';
@@ -143,9 +144,12 @@ export class StaffController {
 
   @Post('appointments/:id/complete')
   @HttpCode(200)
-  async complete(@Param('id') id: string, @Req() req: Request) {
+  async complete(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     checkId(id);
-    return completeAppointment(await authenticatedStaff(req), id);
+    // Sin cuerpo (clientes anteriores) equivale a no participar en el sorteo.
+    const parsed = completeAppointmentSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new BadRequestException('Revisa la cantidad de mandos del sorteo.');
+    return completeAppointment(await authenticatedStaff(req), id, new Date(), parsed.data);
   }
 }

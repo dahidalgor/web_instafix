@@ -642,3 +642,46 @@
 :root[data-theme='dark'] .warranty-ring-track {
   stroke: #2e2840;
 }
+
+/* Sorteo vigente: aviso con el total y etiqueta en cada servicio que participa. */
+.giveaway-banner {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 20px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: var(--brand-gradient);
+  color: #fff;
+}
+.giveaway-banner strong {
+  font-family: Manrope, sans-serif;
+  font-size: 20px;
+}
+.giveaway-banner span {
+  font-size: 14px;
+  color: #f3eef8;
+}
+.giveaway-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 10px 0 0;
+  padding: 6px 8px 6px 14px;
+  border-radius: 999px;
+  background: var(--brand-gradient);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgb(160 13 104 / 25%);
+}
+.giveaway-badge:not(:has(.giveaway-count)) {
+  padding-right: 14px;
+}
+.giveaway-count {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 22%);
+  font-size: 13px;
+}

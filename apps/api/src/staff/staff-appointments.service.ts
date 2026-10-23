@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Appointment, AppointmentService, Prisma } from '@prisma/client';
-import type { StaffAppointment } from '@instafix/contracts';
+import { giveaway, giveawayOpen, type StaffAppointment } from '@instafix/contracts';
 import type { StaffUser } from '../auth/session';
 import { db } from '../database/client';
 import { confirmCalBooking } from '../integrations/cal-client';
@@ -70,6 +70,7 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     confirmedAt: a.confirmedAt?.toISOString() ?? null,
     completedAt: a.completedAt?.toISOString() ?? null,
     ...(manage ? { technicianNotes: a.technicianNotes } : {}),
+    giveawayEntries: a.giveawayEntries,
     services: a.services.map((s) => ({
       id: s.id,
       offeringId: s.offeringId,
@@ -374,7 +375,14 @@ export async function setLocation(user: StaffUser, id: string, text: string) {
   return staffAppointment(user, id);
 }
 
-export async function completeAppointment(user: StaffUser, id: string, now = new Date()) {
+export async function completeAppointment(
+  user: StaffUser,
+  id: string,
+  now = new Date(),
+  { giveawayEntries = 0 }: { giveawayEntries?: number } = {},
+) {
+  if (giveawayEntries > 0 && !giveawayOpen(now))
+    throw new BadRequestException(`El sorteo de ${giveaway.prize} ya cerró.`);
   const already = await db.$transaction(async (tx) => {
     await lockAppointment(tx, id);
     const a = await tx.appointment.findUnique({ where: { id }, include: { services: true } });
@@ -393,11 +401,14 @@ export async function completeAppointment(user: StaffUser, id: string, now = new
       );
     const done = await tx.appointment.updateMany({
       where: { id, status: { in: ['CONFIRMED', 'IN_PROGRESS'] } },
-      data: { status: 'COMPLETED', completedAt: now, completedById: user.id },
+      data: { status: 'COMPLETED', completedAt: now, completedById: user.id, giveawayEntries },
     });
     if (!done.count) return true;
     await cancelPendingJobs(tx, id);
-    await activity(tx, id, user.id, 'COMPLETED', { services: a.services.length });
+    await activity(tx, id, user.id, 'COMPLETED', {
+      services: a.services.length,
+      ...(giveawayEntries ? { giveawayEntries } : {}),
+    });
     // La cuenta del cliente recibe el trabajo realizado con su garantía.
     await recordCompletedJob(tx, id);
     const updated = await tx.appointment.findUniqueOrThrow({ where: { id } });

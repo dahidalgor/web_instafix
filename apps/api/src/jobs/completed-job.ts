@@ -39,6 +39,7 @@ export async function recordCompletedJob(tx: Prisma.TransactionClient, appointme
       title: title.slice(0, 200),
       device: (services[0]?.deviceSnapshot || a.device || 'Equipo').slice(0, 120),
       priceMinor: services.reduce((total, s) => total + s.totalMinor, 0),
+      giveawayEntries: a.giveawayEntries,
       currency: services[0]?.currency || 'USD',
       completedAt,
       warrantyEndsAt,

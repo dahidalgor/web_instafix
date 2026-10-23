@@ -3,6 +3,7 @@ export * from './account';
 export * from './appointments';
 export * from './auth';
 export * from './catalog';
+export * from './giveaway';
 export * from './help';
 export * from './push';
 export * from './requests';

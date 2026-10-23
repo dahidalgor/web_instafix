@@ -5,7 +5,13 @@ import {
   SkeletonGroup,
   StatTilesSkeleton,
 } from '../../components/ui/Skeleton';
-import { type AccountUser, type Appointment, type CompletedJob } from '@instafix/contracts';
+import {
+  giveaway,
+  giveawayOpen,
+  type AccountUser,
+  type Appointment,
+  type CompletedJob,
+} from '@instafix/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
@@ -167,6 +173,12 @@ export function AccountDashboard() {
   const activeWarranties = jobs.filter(
     (job) => job.warrantyEndsAt && new Date(job.warrantyEndsAt).getTime() > now,
   ).length;
+  // Sorteo vigente: participaciones registradas por el técnico; se ocultan tras el sorteo.
+  const giveawayActive = giveawayOpen(new Date(now));
+  const giveawayTotal = giveawayActive
+    ? jobs.reduce((total, job) => total + (job.giveawayEntries ?? 0), 0)
+    : 0;
+  const entriesLabel = (n: number) => (n === 1 ? 'participación' : 'participaciones');
   const format = (date: string, timeZone = 'America/Guayaquil') =>
     new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(
       new Date(date),
@@ -203,6 +215,14 @@ export function AccountDashboard() {
           </>
         )}
       </div>
+      {!loading && !error && giveawayTotal > 0 && (
+        <div className="giveaway-banner">
+          <strong>
+            {giveawayTotal} {entriesLabel(giveawayTotal)} por {giveaway.prize}
+          </strong>
+          <span>Sorteo el {giveawayDay}. Cada mando que salvas del drift suma una más.</span>
+        </div>
+      )}
       <div className="account-tabs" role="group" aria-label="Contenido de mi cuenta">
         <button
           aria-pressed={section === 'appointments'}
@@ -351,6 +371,17 @@ export function AccountDashboard() {
                             ? 'Garantía vencida'
                             : 'Sin garantía'}
                       </p>
+                      {giveawayActive && (job.giveawayEntries ?? 0) > 0 && (
+                        <p
+                          className="giveaway-badge"
+                          aria-label={`Participando por ${giveaway.prize}: ${job.giveawayEntries} ${entriesLabel(job.giveawayEntries ?? 0)}`}
+                        >
+                          Participando por {giveaway.prize}
+                          {(job.giveawayEntries ?? 0) > 1 && (
+                            <span className="giveaway-count">×{job.giveawayEntries}</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     {state !== 'none' && <WarrantyRing left={left} days={days} />}
                   </div>
@@ -416,6 +447,13 @@ function WarrantyRing({ left, days }: { left: number; days: number }) {
     </div>
   );
 }
+
+/** Día del sorteo para mostrar («18 de noviembre»). */
+const giveawayDay = new Intl.DateTimeFormat('es-EC', {
+  timeZone: 'America/Guayaquil',
+  day: 'numeric',
+  month: 'long',
+}).format(new Date(`${giveaway.drawDate}T12:00:00-05:00`));
 
 /** Fecha sin hora (servicios y garantías). */
 const dateOnly = (value: string) =>
