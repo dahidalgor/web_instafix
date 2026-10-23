@@ -24,4 +24,6 @@ export type CompletedJob = {
   warrantyTerms: string;
   priceMinor: number;
   currency: string;
+  /** Participaciones en el sorteo vigente (mandos con par de joysticks magnéticos). 0 = no participa. */
+  giveawayEntries?: number;
 };

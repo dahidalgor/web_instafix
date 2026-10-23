@@ -10,6 +10,7 @@ import { CatalogController } from '../catalog/catalog.controller';
 import { db } from '../database/client';
 import { setEmailProvider } from '../mail/email.service';
 import { NotificationWorker } from '../notifications/notification.service';
+import { giveawayOpen } from '@instafix/contracts';
 import { CAL_SYNC_ISSUE } from '../staff/staff-appointments.service';
 import { StaffController } from '../staff/staff.controller';
 import { TeamController } from '../staff/team.controller';
@@ -417,7 +418,7 @@ test(
 
       // Antes del día de la visita no se puede completar.
       await assert.rejects(
-        staff.complete(appointment.id, req(tech.token)),
+        staff.complete(appointment.id, {}, req(tech.token)),
         (e) => status(e) === 400,
       );
       // El día de la visita (ya empezó hace una hora) sí.
@@ -428,9 +429,24 @@ test(
           endsAt: new Date(Date.now() + 3600000),
         },
       });
-      const done = await staff.complete(appointment.id, req(tech.token));
+      // Cantidad de mandos fuera de rango: rechazada sin completar.
+      await assert.rejects(
+        staff.complete(appointment.id, { giveawayEntries: 21 }, req(tech.token)),
+        (e) => status(e) === 400,
+      );
+      // Tras el día del sorteo ya no se aceptan participaciones: la prueba sigue siendo válida.
+      const entries = giveawayOpen() ? 2 : 0;
+      const done = await staff.complete(
+        appointment.id,
+        { giveawayEntries: entries },
+        req(tech.token),
+      );
       assert.equal(done.appointment.status, 'COMPLETED');
-      assert.equal((await staff.complete(appointment.id, req(tech.token))).alreadyCompleted, true);
+      assert.equal(done.appointment.giveawayEntries, entries);
+      // Repetir no cambia las participaciones ya registradas.
+      const again = await staff.complete(appointment.id, { giveawayEntries: 5 }, req(tech.token));
+      assert.equal(again.alreadyCompleted, true);
+      assert.equal(again.appointment.giveawayEntries, entries);
       await assert.rejects(
         staff.add(appointment.id, { offeringId: maintenance.id }, req(tech.token)),
         (e) => status(e) === 400,
@@ -473,6 +489,8 @@ test(
         30 * 86400000,
       );
       assert.match(jobs[0].warrantyTerms, /Garantía de 30 días/);
+      // Las participaciones del sorteo pasan de la visita al trabajo de la cuenta.
+      assert.equal(jobs[0].giveawayEntries, entries);
       // Repetir la consulta no duplica el trabajo.
       assert.equal(
         (await account.jobs(req(customer.token))).filter((j) => j.appointmentId === appointment.id)

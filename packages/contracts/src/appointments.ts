@@ -136,6 +136,8 @@ export type StaffAppointment = {
   completedAt: string | null;
   technicianNotes?: string;
   services: PerformedService[];
+  /** Participaciones en el sorteo marcadas por el técnico al completar. */
+  giveawayEntries: number;
   canManage: boolean;
 };
 

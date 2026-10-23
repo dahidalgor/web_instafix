@@ -168,6 +168,8 @@ model CompletedJob {
   warrantyTerms String
   priceMinor Int
   currency String @default("USD")
+  // Participaciones en el sorteo vigente, copiadas de la cita al registrar el trabajo.
+  giveawayEntries Int @default(0)
   createdAt DateTime @default(now())
   @@index([userId, completedAt])
 }
@@ -209,6 +211,9 @@ model Appointment {
   locationName String?
   // Reprogramaciones reales (cambio de fecha/hora). Máximo 2 por cita, comprobado en backend.
   rescheduleCount Int @default(0)
+  // Participaciones en el sorteo marcadas por el técnico al completar (mandos DualSense con par
+  // de joysticks magnéticos). 0 = no participa.
+  giveawayEntries Int @default(0)
   // Sesión e IP (con hash) que crearon la cita: presupuesto de WhatsApp y límites por origen.
   originSessionKey String?
   originIpHash String?
