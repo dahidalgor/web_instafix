@@ -32,7 +32,14 @@ export function groupMine(items: StaffAppointment[], now = Date.now()) {
   return { today: todayList, upcoming, history };
 }
 
-export function TechnicianPanel({ user }: { user: AccountUser }) {
+export function TechnicianPanel({
+  user,
+  embedded = false,
+}: {
+  user: AccountUser;
+  /** Dentro de Administración: sin saludo propio y sin barra fija abajo (la pone el panel). */
+  embedded?: boolean;
+}) {
   const [tab, setTab] = useState<Tab>('today');
   const [mine, setMine] = useState<StaffAppointment[]>([]);
   const [pending, setPending] = useState<StaffAppointment[]>([]);
@@ -108,12 +115,16 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
   };
 
   return (
-    <section className="tech-panel">
+    <section className={`tech-panel${embedded ? ' is-embedded' : ''}`}>
       {/* Con el detalle abierto, el resto queda inerte: ni foco ni lector de pantalla detrás. */}
       <div inert={openId ? true : undefined}>
         <div className="tech-hero">
-          <p className="eyebrow">PANEL TÉCNICO</p>
-          <h1>Hola, {user.firstName || user.name.split(' ')[0]}</h1>
+          {!embedded && (
+            <>
+              <p className="eyebrow">PANEL TÉCNICO</p>
+              <h1>Hola, {user.firstName || user.name.split(' ')[0]}</h1>
+            </>
+          )}
           {nextVisit ? (
             <p>
               Próxima visita: <strong>{nextVisit.contactName}</strong> a las{' '}
@@ -128,7 +139,11 @@ export function TechnicianPanel({ user }: { user: AccountUser }) {
             </p>
           ) : (
             <p>
-              {pending.length ? `${pending.length} citas esperan confirmación.` : 'Todo al día.'}
+              {pending.length === 1
+                ? '1 cita espera confirmación.'
+                : pending.length
+                  ? `${pending.length} citas esperan confirmación.`
+                  : 'Todo al día.'}
             </p>
           )}
         </div>

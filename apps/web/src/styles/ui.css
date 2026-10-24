@@ -267,10 +267,6 @@ button[aria-busy='true'] {
   display: grid;
   gap: 6px;
 }
-.admin-skeleton-tabs {
-  flex-wrap: wrap;
-  margin: 27px 0;
-}
 
 /* Indicador deslizante de la opción activa (navegación principal y filtros). */
 .has-indicator {

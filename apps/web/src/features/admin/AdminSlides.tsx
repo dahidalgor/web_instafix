@@ -47,7 +47,6 @@ export function AdminSlides({ onUploading }: { onUploading: (busy: boolean) => v
   }
   return (
     <section>
-      <h2>Presentación de nuestro trabajo</h2>
       <p>
         Administra las diapositivas de «Nuestro trabajo», en Inicio. Menor posición aparece primero.
         Desmarca «Publicada» para retirar una diapositiva sin perderla.

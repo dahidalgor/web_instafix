@@ -18,7 +18,6 @@ export function AdminAnalytics() {
   }, []);
   return (
     <section className="editor">
-      <h2>Visitas de la web</h2>
       <p>
         Últimos 30 días. El promedio cuenta el tiempo con la página visible, incluyendo visitas
         breves. Las sesiones corresponden a pestañas del navegador, no a personas únicas.

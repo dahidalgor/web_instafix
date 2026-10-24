@@ -54,7 +54,6 @@ export function AdminEmail() {
   }
   return (
     <section className="editor">
-      <h2>Comunicaciones</h2>
       <p>
         Instafix envía sus correos por Brevo: verificación de correo, recuperación de contraseña y
         avisos de citas. Cal.com solo gestiona la agenda.

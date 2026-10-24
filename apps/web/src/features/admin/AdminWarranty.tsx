@@ -23,7 +23,6 @@ export function AdminWarranty({ policy, setPolicy, run, busy, loading }: Props) 
 
   return (
     <form className="editor" onSubmit={handleSubmit}>
-      <h2>Políticas de garantía</h2>
       <p>
         Estas condiciones se publicarán en el footer. No cambian las garantías ya registradas en
         trabajos anteriores.

@@ -227,7 +227,6 @@ export function AdminAppointments({
   }
   return (
     <section>
-      <h2>Citas de clientes</h2>
       <p>
         Registra o actualiza una cita acordada. Comprueba la identidad antes de vincularla a una
         cuenta.

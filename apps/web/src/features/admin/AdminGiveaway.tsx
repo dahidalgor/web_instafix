@@ -105,7 +105,6 @@ export function AdminGiveaway() {
 
   return (
     <section className="giveaway-admin">
-      <h2>Sorteo {data?.prize ?? ''}</h2>
       {!data && !error && <ListSkeleton label="Cargando sorteo…" count={3} />}
       {data && (
         <div className="giveaway-summary">
@@ -113,7 +112,8 @@ export function AdminGiveaway() {
             {data.open ? 'Abierto' : 'Cerrado'}
           </span>
           <p>
-            Sorteo el <strong>{drawDay(data.drawDate)}</strong>.{' '}
+            Premio: <strong>{data.prize}</strong> · sorteo el{' '}
+            <strong>{drawDay(data.drawDate)}</strong>.{' '}
             {data.participants.length === 1
               ? '1 participante'
               : `${data.participants.length} participantes`}{' '}

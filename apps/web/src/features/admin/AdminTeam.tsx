@@ -121,7 +121,6 @@ export function AdminTeam() {
     setProfile({ ...profile, [key]: e.target.value });
   return (
     <section className="team-admin">
-      <h2>Equipo</h2>
       <p className="small">
         Los técnicos solo ven su panel: citas pendientes, sus visitas e historial. No acceden a la
         configuración ni a la administración.
