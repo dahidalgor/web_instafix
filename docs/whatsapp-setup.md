@@ -35,7 +35,7 @@ Permisos de la API key: lectura y envío de WhatsApp, números y plantillas. `wo
 | Técnico confirma la visita                                        | `appointment_confirmed`          | Utility        |
 | Reprogramada                                                      | `appointment_rescheduled`        | Utility        |
 | Cancelada                                                         | `appointment_cancelled`          | Utility        |
-| Recordatorio día anterior y mismo día (08:00 Ecuador)             | `appointment_reminder`           | Utility        |
+| Recordatorio el día anterior (08:00 Ecuador)                      | `appointment_reminder`           | Utility        |
 | Código de verificación (registro, recuperación, cambio de número) | `bird_otp` (gestionada por Bird) | Authentication |
 
 - **Idioma**: se usa el idioma aprobado de cada plantilla (`es-EC`, `es`…), leído de Bird. No se configura.
@@ -106,7 +106,7 @@ En el evento `instafix/agenda-tu-cita-con-instafix`:
 
 - Cola `AutomationJob` revisada cada 15 s; bandeja de webhooks cada 3 s. Sobreviven reinicios y se coordinan con PostgreSQL.
 - Cancelar o reprogramar invalida los avisos pendientes de la revisión anterior.
-- Los recordatorios solo se envían mientras son pertinentes (no «mañana» el mismo día, nada después del inicio).
+- Hay un único recordatorio: el día anterior a las 08:00 de Ecuador (o al confirmar, si ya pasó esa hora). Caduca a las 00:00 del día de la visita: nunca sale un «mañana» el mismo día. Si la visita se confirma el mismo día, no hay recordatorio. El antiguo recordatorio del mismo día se retiró y los que quedaban encolados se cancelan sin enviarse.
 - Mensajes solo con autorización del cliente (`whatsappConsentAt`).
 
 ## Pruebas

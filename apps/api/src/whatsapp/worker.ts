@@ -3,7 +3,7 @@ import { Injectable, type OnModuleInit, type OnModuleDestroy, Inject } from '@ne
 import type { Appointment } from '@prisma/client';
 import { db } from '../database/client';
 import { whatsappConfiguration, calConfiguration } from './config';
-import { isMessageKind, type MessageKind } from './messages';
+import { isMessageKind, reminderTimes, type MessageKind } from './messages';
 import { confirmCalBooking } from '../integrations/cal-client';
 import { ProviderError } from '../integrations/provider-error';
 import { WhatsAppService } from './whatsapp.service';
@@ -37,8 +37,10 @@ export function kindStillValid(kind: string, appointment: Appointment) {
       return ['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status);
     case 'CONFIRMED':
     case 'DAY_BEFORE':
-    case 'SAME_DAY':
       return appointment.status === 'CONFIRMED';
+    case 'SAME_DAY':
+      // Retirado: decía «mañana» el día de la visita. Los ya encolados se cancelan sin enviar.
+      return false;
     default:
       // Avisos retirados (p. ej. «técnico en camino», sin plantilla): se cancelan sin enviar.
       return false;
@@ -68,6 +70,9 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           !appointment.contactPhone ||
           job.expiresAt <= now ||
           appointment.startsAt <= now ||
+          // El recordatorio «mañana» solo sale antes del día de la visita (hora de Ecuador),
+          // aunque la fila antigua tuviera otra caducidad.
+          (job.kind === 'DAY_BEFORE' && now >= reminderTimes(appointment.startsAt).dayStart) ||
           !kindStillValid(job.kind, appointment);
         if (invalid) {
           await tx.automationJob.update({ where: { id }, data: { status: 'CANCELLED' } });

@@ -55,7 +55,7 @@ const kinds: Record<string, string> = {
   CAL_CONFIRM: 'Confirmar en Cal.com',
   CONFIRMED: 'Cita confirmada',
   DAY_BEFORE: 'Recordatorio del día anterior',
-  SAME_DAY: 'Recordatorio del mismo día',
+  SAME_DAY: 'Recordatorio del mismo día (retirado)',
   RESCHEDULED: 'Cita reprogramada',
   CANCELLED: 'Cita cancelada',
   TECHNICIAN_ASSIGNED: 'Técnico asignado (retirado)',

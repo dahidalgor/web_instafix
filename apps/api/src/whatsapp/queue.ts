@@ -45,6 +45,9 @@ export async function queueReminders(
     appointment.status !== 'CONFIRMED'
   )
     return;
+  // Un único recordatorio: el día anterior a las 08:00 de Ecuador (o al confirmar, si ya pasó
+  // esa hora). Caduca a las 00:00 del día de la visita: el mismo día nunca sale un «mañana».
+  // No hay recordatorio del mismo día: la plantilla aprobada dice «mañana».
   const times = reminderTimes(appointment.startsAt);
   if (now < times.dayStart)
     await queueJob(
@@ -54,12 +57,6 @@ export async function queueReminders(
       new Date(Math.max(now.getTime(), times.dayBefore.getTime())),
       times.dayStart,
     );
-  await queueJob(
-    tx,
-    appointment,
-    'SAME_DAY',
-    new Date(Math.max(now.getTime(), times.sameDay.getTime())),
-  );
 }
 export async function cancelPendingJobs(tx: Prisma.TransactionClient, id: string) {
   await tx.automationJob.updateMany({
