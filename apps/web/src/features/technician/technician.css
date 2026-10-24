@@ -517,3 +517,11 @@ body.sheet-open {
   flex: 1 1 220px;
   min-width: 0;
 }
+.tech-giveaway.is-on {
+  border-color: var(--accent);
+}
+.tech-giveaway-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}

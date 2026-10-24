@@ -25,6 +25,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { StaffController } from './staff/staff.controller';
 import { TeamController } from './staff/team.controller';
 import { PeopleAdminController } from './admin/people-admin.controller';
+import { GiveawayAdminController } from './admin/giveaway-admin.controller';
 import { PushController } from './notifications/staff/push.controller';
 
 @Module({
@@ -49,6 +50,7 @@ import { PushController } from './notifications/staff/push.controller';
     StaffController,
     TeamController,
     PeopleAdminController,
+    GiveawayAdminController,
     PushController,
   ],
   providers: [
