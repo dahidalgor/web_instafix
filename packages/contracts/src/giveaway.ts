@@ -27,9 +27,10 @@ export function suggestedGiveawayEntries(
   services: { nameSnapshot: string; deviceSnapshot: string; quantity: number }[],
 ) {
   const plain = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  // «PS5»/«DualSense» puede estar en el equipo («PS5») o en el nombre («Par de joysticks PS5»).
   return services
     .filter((s) => plain(s.nameSnapshot).includes('par de joystick'))
-    .filter((s) => /\b(ps5|dualsense)\b/.test(plain(s.deviceSnapshot)))
+    .filter((s) => /\b(ps5|dualsense)\b/.test(plain(`${s.nameSnapshot} ${s.deviceSnapshot}`)))
     .reduce((total, s) => total + s.quantity, 0);
 }
 

@@ -9,6 +9,7 @@ import {
   type StaffAppointment,
 } from '@instafix/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { GiveawayPicker } from './GiveawayPicker';
 import { StatusPill, visitDay, visitTime } from '../../components/appointments/AppointmentCard';
 import { api, ApiError } from '../../lib/api';
 import { money } from '../../lib/format';
@@ -41,9 +42,11 @@ export function AppointmentSheet({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [confirmComplete, setConfirmComplete] = useState(false);
-  // Sorteo: lo marca el técnico al completar; por defecto sin marcar.
+  // Sorteo: se marca solo al registrar un «Par de joysticks» de PS5 (un mando por unidad).
+  // Si el técnico cambia la casilla o el número, se respeta su decisión.
   const [joinGiveaway, setJoinGiveaway] = useState(false);
   const [giveawayEntries, setGiveawayEntries] = useState(1);
+  const giveawayTouched = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -102,6 +105,26 @@ export function AppointmentSheet({
   // Fecha de Ecuador: no se completa una visita antes de su día.
   const ecDay = (value: Date) =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(value);
+  const suggestedEntries = item ? suggestedGiveawayEntries(item.services) : 0;
+  useEffect(() => {
+    if (giveawayTouched.current) return;
+    setJoinGiveaway(suggestedEntries > 0);
+    setGiveawayEntries(Math.max(1, suggestedEntries));
+  }, [suggestedEntries]);
+  const giveawayProps = {
+    join: joinGiveaway,
+    entries: giveawayEntries,
+    suggested: suggestedEntries,
+    disabled: busy,
+    onJoin: (value: boolean) => {
+      giveawayTouched.current = true;
+      setJoinGiveaway(value);
+    },
+    onEntries: (value: number) => {
+      giveawayTouched.current = true;
+      setGiveawayEntries(value);
+    },
+  };
   const beforeVisitDay = item ? ecDay(new Date()) < ecDay(new Date(item.startsAt)) : false;
 
   return (
@@ -322,6 +345,9 @@ export function AppointmentSheet({
                     Total registrado <strong>{money(total)}</strong>
                   </p>
                 )}
+                {editable && giveawayOpen() && (suggestedEntries > 0 || joinGiveaway) && (
+                  <GiveawayPicker id="giveaway-services" {...giveawayProps} />
+                )}
                 {editable &&
                   (adding ? (
                     <div className="tech-picker">
@@ -444,11 +470,7 @@ export function AppointmentSheet({
                     className="btn btn-success btn-block"
                     disabled={busy || notesDirty || beforeVisitDay}
                     title={notesDirty ? 'Guarda las notas antes de completar' : undefined}
-                    onClick={() => {
-                      setJoinGiveaway(false);
-                      setGiveawayEntries(Math.max(1, suggestedGiveawayEntries(item.services)));
-                      setConfirmComplete(true);
-                    }}
+                    onClick={() => setConfirmComplete(true)}
                   >
                     Marcar como completada
                   </button>
@@ -490,50 +512,7 @@ export function AppointmentSheet({
                 <p>No registraste servicios del catálogo; quedará solo la nota técnica.</p>
               )}
               {!!item.services.length && <p>Total: {money(total)}</p>}
-              {giveawayOpen() && (
-                <div className="tech-giveaway">
-                  <label className="tech-giveaway-check">
-                    <input
-                      type="checkbox"
-                      checked={joinGiveaway}
-                      disabled={busy}
-                      onChange={(e) => setJoinGiveaway(e.target.checked)}
-                    />
-                    <span>
-                      <strong>Participa por {giveaway.prize}</strong>
-                      <small>
-                        Una participación por cada mando DualSense con par de joysticks magnéticos.
-                      </small>
-                    </span>
-                  </label>
-                  {joinGiveaway && (
-                    <div className="tech-giveaway-qty">
-                      <span id="giveaway-qty-label">Mandos</span>
-                      <div className="tech-qty" role="group" aria-labelledby="giveaway-qty-label">
-                        <button
-                          type="button"
-                          aria-label="Un mando menos"
-                          disabled={busy || giveawayEntries <= 1}
-                          onClick={() => setGiveawayEntries((n) => Math.max(1, n - 1))}
-                        >
-                          −
-                        </button>
-                        <output aria-live="polite">{giveawayEntries}</output>
-                        <button
-                          type="button"
-                          aria-label="Un mando más"
-                          disabled={busy || giveawayEntries >= giveaway.maxEntries}
-                          onClick={() =>
-                            setGiveawayEntries((n) => Math.min(giveaway.maxEntries, n + 1))
-                          }
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              {giveawayOpen() && <GiveawayPicker id="giveaway-confirm" {...giveawayProps} />}
               <p className="small">Después no podrás modificar los servicios ni las notas.</p>
               <div className="tech-actions-row">
                 <button

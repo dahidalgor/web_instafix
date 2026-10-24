@@ -25,6 +25,7 @@ import { TechnicianPanel } from '../technician/TechnicianPanel';
 import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton';
 import { appointmentIdFromHash } from '@instafix/contracts/src/push';
 import { AdminNotifications } from '../notifications/AdminNotifications';
+import { AdminGiveaway } from './AdminGiveaway';
 import { pushApi } from '../notifications/push-api';
 import { browserEnv, resyncPush } from '../notifications/push-client';
 export default function Admin() {
@@ -249,6 +250,7 @@ export default function Admin() {
             'Estadísticas',
             'Correo',
             'Notificaciones',
+            'Sorteo',
           ].map((name) => (
             <button
               disabled={uploading}
@@ -270,6 +272,7 @@ export default function Admin() {
         )}
         {tab === 'Correo' && <AdminEmail />}
         {tab === 'Notificaciones' && <AdminNotifications />}
+        {tab === 'Sorteo' && <AdminGiveaway />}
         {tab === 'Panel técnico' && <TechnicianPanel user={user} />}
         {tab === 'Equipo' && <AdminTeam />}
         {tab === 'Usuarios' && <AdminUsers currentUserId={user.id} />}

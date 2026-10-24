@@ -42,5 +42,8 @@ test('suggestion counts PS5 / DualSense joystick pairs only', () => {
     ]),
     3,
   );
+  // PS5 en el nombre del servicio (equipo genérico) también cuenta; PS4 no.
+  assert.equal(suggestedGiveawayEntries([s('Par de Joysticks PS5', 'Mandos', 2)]), 2);
+  assert.equal(suggestedGiveawayEntries([s('Par de joysticks PS4', 'Mandos', 2)]), 0);
   assert.equal(suggestedGiveawayEntries([]), 0);
 });
