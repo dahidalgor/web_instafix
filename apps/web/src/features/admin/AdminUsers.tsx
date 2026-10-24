@@ -100,7 +100,6 @@ export function AdminUsers({ currentUserId }: { currentUserId: string }) {
   const filterLabel = roleFilters.find((r) => r.id === role)?.label.toLowerCase();
   return (
     <section className="team-admin">
-      <h2>Usuarios</h2>
       <div className="admin-toolbar" role="search" aria-label="Buscar usuarios">
         <label className="admin-search">
           Buscar por nombre, teléfono o correo

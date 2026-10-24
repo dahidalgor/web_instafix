@@ -26,12 +26,33 @@ import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton';
 import { appointmentIdFromHash } from '@instafix/contracts/src/push';
 import { AdminNotifications } from '../notifications/AdminNotifications';
 import { AdminGiveaway } from './AdminGiveaway';
+import { AdminShell } from './AdminShell';
+import { DEFAULT_ADMIN_TAB, isAdminTab, type AdminTab } from './admin-nav';
+
+const TAB_KEY = 'instafix:admin-tab';
+/** Última ventana abierta en este navegador (comodidad; sin ella se abre Citas). */
+function savedTab(): AdminTab {
+  try {
+    const value = localStorage.getItem(TAB_KEY);
+    return isAdminTab(value) ? value : DEFAULT_ADMIN_TAB;
+  } catch {
+    return DEFAULT_ADMIN_TAB;
+  }
+}
 import { pushApi } from '../notifications/push-api';
 import { browserEnv, resyncPush } from '../notifications/push-client';
 export default function Admin() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [checking, setChecking] = useState(true);
-  const [tab, setTab] = useState('Servicios');
+  const [tab, setTabState] = useState<AdminTab>(savedTab);
+  const setTab = (next: AdminTab) => {
+    setTabState(next);
+    try {
+      localStorage.setItem(TAB_KEY, next);
+    } catch {
+      // Sin almacenamiento: la ventana no se recuerda, nada más.
+    }
+  };
   const [items, setItems] = useState<Offering[]>([]);
   const [equipment, setEquipment] = useState<CatalogEquipment[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -105,7 +126,7 @@ export default function Admin() {
     };
   }, []);
   useEffect(() => {
-    if (focusAppointment) setTab('Citas');
+    if (focusAppointment) setTab('citas');
   }, [focusAppointment]);
   const appointmentFocused = () => {
     setFocusAppointment(null);
@@ -161,14 +182,17 @@ export default function Admin() {
   }
   if (checking)
     return (
-      <main className="admin-page">
-        <div className="skeleton-row is-start admin-skeleton-tabs">
-          {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} width={96} height={38} radius={999} />
+      <div className="admin-shell is-loading">
+        <aside className="admin-sidebar" aria-hidden="true">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} width="100%" height={36} radius={10} />
           ))}
-        </div>
-        <ListSkeleton label="Cargando administración…" count={3} />
-      </main>
+        </aside>
+        <main className="admin-main">
+          <Skeleton width={220} height={34} radius={10} />
+          <ListSkeleton label="Cargando administración…" count={3} />
+        </main>
+      </div>
     );
   if (sessionError)
     return (
@@ -224,105 +248,75 @@ export default function Admin() {
       </main>
     );
   return (
-    <>
-      <header className="staff-header">
-        <a className="brand" href="#">
-          InstaFix · Administración
-        </a>
-        <button className="btn btn-ghost btn-small" onClick={logout}>
-          Cerrar sesión
-        </button>
-      </header>
-      <main className="admin-page">
-        <div className="filters">
-          {[
-            'Servicios',
-            'Categorías y equipos',
-            'Citas',
-            'Panel técnico',
-            'Equipo',
-            'Usuarios',
-            'Números',
-            'WhatsApp',
-            'Garantías',
-            'Trabajos',
-            'Presentaciones',
-            'Estadísticas',
-            'Correo',
-            'Notificaciones',
-            'Sorteo',
-          ].map((name) => (
-            <button
-              disabled={uploading}
-              key={name}
-              className={tab === name ? 'active' : ''}
-              onClick={() => {
-                setTab(name);
-                setMessage('');
-              }}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-        {message && (
+    <AdminShell
+      user={user}
+      tab={tab}
+      locked={uploading}
+      onLogout={logout}
+      onSelect={(next) => {
+        setTab(next);
+        setMessage('');
+      }}
+      message={
+        message && (
           <p role="status" className="admin-message">
             {message}
           </p>
-        )}
-        {tab === 'Correo' && <AdminEmail />}
-        {tab === 'Notificaciones' && <AdminNotifications />}
-        {tab === 'Sorteo' && <AdminGiveaway />}
-        {tab === 'Panel técnico' && <TechnicianPanel user={user} />}
-        {tab === 'Equipo' && <AdminTeam />}
-        {tab === 'Usuarios' && <AdminUsers currentUserId={user.id} />}
-        {tab === 'Números' && <AdminBlockedPhones />}
-        {tab === 'Presentaciones' && <AdminSlides onUploading={setUploading} />}
-        {tab === 'Estadísticas' && <AdminAnalytics />}
-        {tab === 'Citas' && (
-          <AdminAppointments
-            services={items}
-            focusId={focusAppointment}
-            onFocused={appointmentFocused}
-          />
-        )}
-        {tab === 'WhatsApp' && <AdminWhatsApp />}
-        {tab === 'Servicios' && (
-          <AdminServices
-            items={items}
-            equipment={equipment}
-            categories={categories}
-            draft={draft}
-            setDraft={setDraft}
-            update={update}
-            uploading={uploading}
-            setUploading={setUploading}
-            save={save}
-            busy={busy}
-            loading={!loaded}
-            remove={removeService}
-          />
-        )}
-        {tab === 'Categorías y equipos' && (
-          <AdminEquipment
-            categories={categories}
-            equipment={equipment}
-            services={items}
-            load={load}
-            loading={!loaded}
-          />
-        )}
-        {tab === 'Garantías' && (
-          <AdminWarranty
-            policy={policy}
-            setPolicy={setPolicy}
-            run={run}
-            busy={busy}
-            loading={!loaded}
-          />
-        )}
-        {tab === 'Trabajos' && <AdminJobs items={items} users={users} run={run} busy={busy} />}
-      </main>
-    </>
+        )
+      }
+    >
+      {tab === 'correo' && <AdminEmail />}
+      {tab === 'notificaciones' && <AdminNotifications />}
+      {tab === 'sorteo' && <AdminGiveaway />}
+      {tab === 'tecnico' && <TechnicianPanel user={user} embedded />}
+      {tab === 'equipo' && <AdminTeam />}
+      {tab === 'usuarios' && <AdminUsers currentUserId={user.id} />}
+      {tab === 'numeros' && <AdminBlockedPhones />}
+      {tab === 'presentaciones' && <AdminSlides onUploading={setUploading} />}
+      {tab === 'estadisticas' && <AdminAnalytics />}
+      {tab === 'citas' && (
+        <AdminAppointments
+          services={items}
+          focusId={focusAppointment}
+          onFocused={appointmentFocused}
+        />
+      )}
+      {tab === 'whatsapp' && <AdminWhatsApp />}
+      {tab === 'servicios' && (
+        <AdminServices
+          items={items}
+          equipment={equipment}
+          categories={categories}
+          draft={draft}
+          setDraft={setDraft}
+          update={update}
+          uploading={uploading}
+          setUploading={setUploading}
+          save={save}
+          busy={busy}
+          loading={!loaded}
+          remove={removeService}
+        />
+      )}
+      {tab === 'categorias' && (
+        <AdminEquipment
+          categories={categories}
+          equipment={equipment}
+          services={items}
+          load={load}
+          loading={!loaded}
+        />
+      )}
+      {tab === 'garantias' && (
+        <AdminWarranty
+          policy={policy}
+          setPolicy={setPolicy}
+          run={run}
+          busy={busy}
+          loading={!loaded}
+        />
+      )}
+      {tab === 'trabajos' && <AdminJobs items={items} users={users} run={run} busy={busy} />}
+    </AdminShell>
   );
 }

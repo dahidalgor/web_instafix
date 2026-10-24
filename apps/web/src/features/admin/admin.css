@@ -1,9 +1,5 @@
 /* admin: estilos, estados y ajustes adaptables. */
 
-.admin-page {
-  padding-bottom: 60px;
-}
-
 /* Seguimiento de automatizaciones, sin exponer credenciales al navegador. */
 .whatsapp-status,
 .whatsapp-jobs article {

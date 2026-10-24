@@ -149,14 +149,13 @@ export function AdminWhatsApp() {
   const missing = data ? [...data.whatsapp.missing, ...data.cal.missing] : [];
   return (
     <section className="whatsapp-admin">
-      <h2>WhatsApp y citas</h2>
       <p>
         Bird · Coexistence: el número sigue funcionando en WhatsApp Business App. Se conecta una
         sola vez desde el panel de Bird; aquí solo se muestra su estado.
       </p>
       <p>
-        Recordatorios a las 08:00, hora de Ecuador continental. Los mensajes se envían únicamente
-        con autorización del cliente.
+        Recordatorio el día anterior a las 08:00, hora de Ecuador continental. Los mensajes se
+        envían únicamente con autorización del cliente.
       </p>
       <BusyButton
         className="btn btn-secondary btn-small"

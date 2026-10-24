@@ -58,7 +58,6 @@ export function AdminBlockedPhones() {
   }
   return (
     <section className="team-admin">
-      <h2>Números</h2>
       <p className="small">
         Un número bloqueado no puede agendar, crear cuenta ni recibir códigos o avisos por WhatsApp.
         El motivo es solo para el equipo.

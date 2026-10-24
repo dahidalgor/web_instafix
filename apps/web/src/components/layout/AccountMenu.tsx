@@ -40,12 +40,13 @@ const themes: { id: ThemePreference; label: string; icon: ReactNode }[] = [
 ];
 
 /** Apariencia: modo claro, oscuro o según el sistema (se recuerda en este navegador). */
-function ThemeOptions() {
+/** Claro / Oscuro / Sistema. También lo usa la hoja «Más» de Administración. */
+export function ThemeOptions({ labelId = 'account-menu-theme-title' }: { labelId?: string }) {
   const [current, setCurrent] = useState<ThemePreference>(themePreference);
   useEffect(() => onThemeChange(setCurrent), []);
   return (
-    <div className="account-menu-theme" role="group" aria-labelledby="account-menu-theme-title">
-      <span id="account-menu-theme-title">Apariencia</span>
+    <div className="account-menu-theme" role="group" aria-labelledby={labelId}>
+      <span id={labelId}>Apariencia</span>
       <div>
         {themes.map((theme) => (
           <button

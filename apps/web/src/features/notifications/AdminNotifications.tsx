@@ -81,11 +81,6 @@ export function AdminNotifications() {
   const ios = isIos(env);
   return (
     <section className="push-settings">
-      <h2>Notificaciones</h2>
-      <p className="small">
-        Recibe un aviso en este dispositivo cuando un cliente solicite una cita, aunque Instafix no
-        esté abierta.
-      </p>
       {!status && !error && <ListSkeleton label="Cargando notificaciones…" count={1} />}
       {status && (
         <div className={`push-card ${active ? 'is-on' : ''}`} role="status">

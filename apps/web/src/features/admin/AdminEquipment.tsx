@@ -117,7 +117,6 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
 
   return (
     <section className="catalog-admin">
-      <h2>Categorías y equipos</h2>
       <p className="small">
         El catálogo se organiza en Categoría → Equipo → Servicio, por ejemplo «Consolas de
         Videojuegos → PS5 → Mantenimiento». Las categorías con servicios aparecen en la página
