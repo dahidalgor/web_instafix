@@ -119,13 +119,13 @@ test(
     const jobs = await db.automationJob.findMany({ where: { appointmentId: a.id } });
     assert.deepEqual(
       jobs.map((j) => j.kind).sort(),
-      ['INITIAL', 'CONFIRMED', 'DAY_BEFORE', 'SAME_DAY'].sort(),
+      // Un único recordatorio: el día anterior (no hay recordatorio del mismo día).
+      ['INITIAL', 'CONFIRMED', 'DAY_BEFORE'].sort(),
     );
-    for (const kind of ['DAY_BEFORE', 'SAME_DAY'])
-      assert.equal(jobs.find((j) => j.kind === kind)?.dueAt.getUTCHours(), 13);
+    assert.equal(jobs.find((j) => j.kind === 'DAY_BEFORE')?.dueAt.getUTCHours(), 13);
     await receiveCalWebhook(event(first, 'BOOKING_CREATED', { status: 'ACCEPTED' }));
     assert.equal((await appointment(first)).status, 'CONFIRMED');
-    assert.equal(await db.automationJob.count({ where: { appointmentId: a.id } }), 4);
+    assert.equal(await db.automationJob.count({ where: { appointmentId: a.id } }), 3);
     await receiveCalWebhook(event(first, 'BOOKING_CANCELLED'));
     await receiveCalWebhook(event(first));
     assert.equal((await appointment(first)).status, 'CANCELLED');

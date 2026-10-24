@@ -56,13 +56,13 @@ WhatsApp (enmascarado, verificado), correo (enmascarado, verificado/sin verifica
 
 ## Citas y correos de Instafix
 
-| Evento       | Disparador                                                                | Correo                                                                                  | WhatsApp                                          |
-| ------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Creada       | API Instafix tras crear en Cal.com y guardar en PostgreSQL                | «Recibimos tu solicitud de visita» (pendiente de confirmación; nunca dice «confirmada») | `appointment_requested` (pide la ubicación)       |
-| Confirmada   | Un técnico pulsa «Confirmar cita» en su panel (ver `docs/technicians.md`) | «Tu visita está confirmada ✓» con técnico, fecha, hora y solicitud                      | `appointment_confirmed` + recordatorios           |
-| Reprogramada | API Instafix o webhook `BOOKING_RESCHEDULED` hecho en Cal.com             | Fecha anterior y nueva                                                                  | `appointment_rescheduled`                         |
-| Cancelada    | API Instafix o webhook `BOOKING_CANCELLED`/`BOOKING_REJECTED`             | «Tu cita fue cancelada»                                                                 | `appointment_cancelled`                           |
-| Recordatorio | 08:00 Ecuador                                                             | —                                                                                       | `appointment_reminder` (día anterior y mismo día) |
+| Evento       | Disparador                                                                | Correo                                                                                  | WhatsApp                                      |
+| ------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Creada       | API Instafix tras crear en Cal.com y guardar en PostgreSQL                | «Recibimos tu solicitud de visita» (pendiente de confirmación; nunca dice «confirmada») | `appointment_requested` (pide la ubicación)   |
+| Confirmada   | Un técnico pulsa «Confirmar cita» en su panel (ver `docs/technicians.md`) | «Tu visita está confirmada ✓» con técnico, fecha, hora y solicitud                      | `appointment_confirmed` + recordatorios       |
+| Reprogramada | API Instafix o webhook `BOOKING_RESCHEDULED` hecho en Cal.com             | Fecha anterior y nueva                                                                  | `appointment_rescheduled`                     |
+| Cancelada    | API Instafix o webhook `BOOKING_CANCELLED`/`BOOKING_REJECTED`             | «Tu cita fue cancelada»                                                                 | `appointment_cancelled`                       |
+| Recordatorio | 08:00 Ecuador                                                             | —                                                                                       | `appointment_reminder` (solo el día anterior) |
 
 El correo muestra «Solicitud: “…”» con lo que describió el cliente; nunca un servicio realizado. Los invitados reciben «Tu cita ha sido creada correctamente» y una invitación a crear la cuenta con el mismo WhatsApp, sin botón que exija iniciar sesión.
 
