@@ -571,3 +571,95 @@
   color: var(--accent);
   font-size: 13px;
 }
+
+/* Administración → Estadísticas. */
+.analytics-admin {
+  display: grid;
+  gap: 22px;
+}
+.analytics-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.analytics-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.analytics-totals div {
+  display: grid;
+  min-width: 96px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.analytics-totals strong {
+  font-family: Manrope, sans-serif;
+  font-size: 26px;
+  line-height: 1.1;
+}
+.analytics-totals span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.analytics-block h2 {
+  margin-bottom: 6px;
+}
+.analytics-table {
+  width: 100%;
+  min-width: 520px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 14.5px;
+}
+.analytics-table th,
+.analytics-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.analytics-table thead th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.analytics-table tbody th {
+  font-weight: 600;
+}
+/* Mismas columnas en las dos tablas (páginas y secciones). */
+.analytics-table th:first-child {
+  width: 38%;
+}
+.analytics-table th:nth-child(2) {
+  width: 16%;
+}
+.analytics-table th:nth-child(3) {
+  width: 24%;
+}
+.analytics-table th:first-child,
+.analytics-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.analytics-table tr.is-empty {
+  color: var(--muted);
+}
+.analytics-bar {
+  display: inline-block;
+  min-width: 90px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 22%, transparent) var(--share),
+    transparent var(--share)
+  );
+  font-variant-numeric: tabular-nums;
+}

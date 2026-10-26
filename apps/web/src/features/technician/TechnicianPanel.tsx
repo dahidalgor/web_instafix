@@ -7,7 +7,9 @@ import { AppointmentCard, visitDayKey } from '../../components/appointments/Appo
 import { api, ApiError } from '../../lib/api';
 import { AppointmentSheet } from './AppointmentSheet';
 
-type Tab = 'today' | 'upcoming' | 'pending' | 'history';
+export type TechnicianTab = 'today' | 'upcoming' | 'pending' | 'history';
+type Tab = TechnicianTab;
+export type TechnicianCounts = Record<Tab, number>;
 const active = (a: StaffAppointment) => a.status === 'CONFIRMED' || a.status === 'IN_PROGRESS';
 
 /** Agrupa «Mis citas»: Hoy (próxima primero, y visitas pasadas sin completar), Próximas e Historial. */
@@ -35,12 +37,24 @@ export function groupMine(items: StaffAppointment[], now = Date.now()) {
 export function TechnicianPanel({
   user,
   embedded = false,
+  view,
+  onCounts,
+  focusId = null,
+  onFocused,
 }: {
   user: AccountUser;
   /** Dentro de Administración: sin saludo propio y sin barra fija abajo (la pone el panel). */
   embedded?: boolean;
+  /** Lista que se muestra, elegida desde fuera (barra del panel de técnicos): sin pestañas propias. */
+  view?: Tab;
+  /** Contadores para la navegación externa. */
+  onCounts?: (counts: TechnicianCounts) => void;
+  /** Cita que se abre al llegar (enlace #cita=<id> de una notificación). */
+  focusId?: string | null;
+  onFocused?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>('today');
+  const [ownTab, setTab] = useState<Tab>('today');
+  const tab = view ?? ownTab;
   const [mine, setMine] = useState<StaffAppointment[]>([]);
   const [pending, setPending] = useState<StaffAppointment[]>([]);
   const [catalog, setCatalog] = useState<Offering[]>([]);
@@ -83,6 +97,24 @@ export function TechnicianPanel({
   }, [load]);
 
   const groups = useMemo(() => groupMine(mine, now), [mine, now]);
+  const todayCount = groups.today.filter(active).length;
+  useEffect(() => {
+    if (loading) return;
+    onCounts?.({
+      today: todayCount,
+      upcoming: groups.upcoming.length,
+      pending: pending.length,
+      history: 0,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, todayCount, groups.upcoming.length, pending.length]);
+  // Notificación → abre la ficha de esa cita (si el técnico puede verla, la API la devuelve).
+  useEffect(() => {
+    if (!focusId) return;
+    setOpenId(focusId);
+    onFocused?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
   const nextVisit = groups.today.find((a) => active(a) && new Date(a.endsAt).getTime() > now);
 
   async function confirm(id: string) {
@@ -148,19 +180,21 @@ export function TechnicianPanel({
           )}
         </div>
 
-        <nav className="tech-tabs" aria-label="Secciones del panel técnico">
-          {tabs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-current={tab === item.id ? 'page' : undefined}
-              onClick={() => setTab(item.id)}
-            >
-              {item.label}
-              {!!item.count && <span className="tech-count">{item.count}</span>}
-            </button>
-          ))}
-        </nav>
+        {!view && (
+          <nav className="tech-tabs" aria-label="Secciones del panel técnico">
+            {tabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={tab === item.id ? 'page' : undefined}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
+                {!!item.count && <span className="tech-count">{item.count}</span>}
+              </button>
+            ))}
+          </nav>
+        )}
 
         {notice && (
           <p role="status" className="tech-notice" key={notice}>

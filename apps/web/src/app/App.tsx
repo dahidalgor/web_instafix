@@ -37,9 +37,10 @@ export function App() {
   const [page, setPage] = useState(() => resolvePage(window.location.hash));
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
-  usePageAnalytics(page);
   const main = useRef<HTMLElement>(null);
   const [hash, setHash] = useState(() => window.location.hash);
+  // Cada enlace del menú cuenta: también las secciones de Inicio (#como, #nuestro-trabajo…).
+  usePageAnalytics(homeSection(hash) ?? page);
   const pageRef = useRef(page);
   pageRef.current = page;
   useEffect(() => {

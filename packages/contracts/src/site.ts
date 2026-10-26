@@ -14,6 +14,23 @@ export const publicPages = [
 ] as const;
 /** Enlaces antiguos o internos que abren Inicio y se desplazan a una de sus secciones. */
 export const homeSections = ['quienes-somos', 'nuestro-trabajo', 'como'] as const;
+/** Lo que mide Estadísticas: cada página y cada sección de Inicio a la que lleva un enlace. */
+export const trackedPages = [...publicPages, ...homeSections] as const;
+export type TrackedPage = (typeof trackedPages)[number];
+/** Nombres tal como aparecen en la web (menú, pie y botones). */
+export const pageLabels: Record<TrackedPage, string> = {
+  inicio: 'Inicio',
+  servicios: 'Servicios',
+  cuenta: 'Mi cuenta',
+  ajustes: 'Ajustes de la cuenta',
+  agenda: 'Agendar cita',
+  garantia: 'Políticas de garantía',
+  solicitud: 'Asesoría',
+  contacto: 'Contacto',
+  'quienes-somos': 'Quiénes somos',
+  'nuestro-trabajo': 'Nuestro trabajo',
+  como: 'Cómo funciona',
+};
 export const slideSchema = z
   .object({
     label: z.string().trim().min(1).max(60),
@@ -32,7 +49,7 @@ export const visitSchema = z
   .object({
     id: z.string().uuid(),
     sessionId: z.string().uuid(),
-    page: z.enum(publicPages),
+    page: z.enum(trackedPages),
     activeSeconds: z.number().int().min(0).max(14400),
   })
   .strict();

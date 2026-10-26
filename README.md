@@ -8,7 +8,7 @@ Consulta la [guía de organización del código](docs/code-organization.md) para
 
 ## Notificaciones push del equipo (22 de octubre de 2026)
 
-Administración → Notificaciones activa avisos Web Push en el dispositivo. El primero es «Nueva solicitud de cita» al administrador, también en iPhone (iOS 16.4+, con el panel añadido a la pantalla de inicio). Requiere `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` en la API. Arquitectura, seguridad y prueba en el iPhone: [Notificaciones push](docs/push-notifications.md).
+Mi cuenta (administración) y Ajustes (técnicos) activan avisos Web Push en el dispositivo. El primero es «Nueva solicitud de cita» a administración y técnicos, también en iPhone (iOS 16.4+, con el panel añadido a la pantalla de inicio). Requiere `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` en la API. Arquitectura, seguridad y prueba en el iPhone: [Notificaciones push](docs/push-notifications.md).
 
 ## WhatsApp y Cal.com (14 de octubre de 2026)
 

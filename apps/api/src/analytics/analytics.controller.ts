@@ -53,11 +53,14 @@ export class AnalyticsController {
       days: 30,
       visits: pages.reduce((sum, p) => sum + p._count.id, 0),
       sessions: sessions.length,
-      pages: pages.map((p) => ({
-        page: p.page,
-        visits: p._count.id,
-        averageSeconds: Math.round(p._avg.activeSeconds ?? 0),
-      })),
+      // De más a menos visitada.
+      pages: pages
+        .map((p) => ({
+          page: p.page,
+          visits: p._count.id,
+          averageSeconds: Math.round(p._avg.activeSeconds ?? 0),
+        }))
+        .sort((a, b) => b.visits - a.visits || a.page.localeCompare(b.page)),
     };
   }
 }

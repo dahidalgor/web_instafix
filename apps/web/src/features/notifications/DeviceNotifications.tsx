@@ -22,10 +22,10 @@ const date = (value: string) =>
   }).format(new Date(value));
 
 /**
- * Administración → Notificaciones: activar avisos push en ESTE dispositivo. El permiso solo se
- * pide al pulsar «Activar notificaciones», nunca al cargar.
+ * Mi cuenta → Notificaciones: avisos push en ESTE dispositivo (administración y técnicos).
+ * El permiso solo se pide al pulsar «Activar notificaciones», nunca al cargar.
  */
-export function AdminNotifications() {
+export function DeviceNotifications() {
   const [env] = useState(browserEnv);
   const [support] = useState<Support>(() => detectSupport(env));
   const [permission, setPermission] = useState(env.notification?.permission ?? 'default');
@@ -106,10 +106,7 @@ export function AdminNotifications() {
         </div>
       )}
       {status && !status.receivesNotifications && (
-        <p className="push-help">
-          Tu rol todavía no recibe avisos automáticos; por ahora solo administración recibe las
-          solicitudes nuevas.
-        </p>
+        <p className="push-help">Tu rol todavía no recibe avisos automáticos.</p>
       )}
       {status && !status.configured && (
         <p className="push-help push-warning" role="alert">
@@ -193,20 +190,10 @@ function SupportHelp({ support, ios }: { support: Support; ios: boolean }) {
   if (support.kind === 'supported') return null;
   if (support.kind === 'ios-install')
     return (
-      <div className="push-help" role="note">
-        <strong>En iPhone, primero instala Instafix en la pantalla de inicio.</strong>
-        <ol>
-          <li>
-            Abre esta página en <b>Safari</b>.
-          </li>
-          <li>
-            Pulsa <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>.
-          </li>
-          <li>Abre Instafix desde el icono nuevo e inicia sesión.</li>
-          <li>Vuelve a esta sección y pulsa «Activar notificaciones».</li>
-        </ol>
-        <p className="small">Requiere iOS 16.4 o posterior.</p>
-      </div>
+      <p className="push-help" role="note">
+        <strong>En iPhone, primero instala Instafix en la pantalla de inicio</strong> (pasos en
+        «App», arriba) y ábrela desde ese icono. Requiere iOS 16.4 o posterior.
+      </p>
     );
   if (support.kind === 'ios-update')
     return (

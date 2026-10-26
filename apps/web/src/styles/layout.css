@@ -502,7 +502,8 @@ button.account-link {
 .account-menu-panel > button:focus-visible {
   background: var(--surface-soft);
 }
-.account-menu-panel svg {
+.account-menu-panel svg,
+.account-menu-theme svg {
   flex: none;
   width: 18px;
   height: 18px;

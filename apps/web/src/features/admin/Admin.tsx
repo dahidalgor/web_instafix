@@ -24,10 +24,17 @@ import { AdminBlockedPhones } from './AdminBlockedPhones';
 import { TechnicianPanel } from '../technician/TechnicianPanel';
 import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton';
 import { appointmentIdFromHash } from '@instafix/contracts/src/push';
-import { AdminNotifications } from '../notifications/AdminNotifications';
 import { AdminGiveaway } from './AdminGiveaway';
-import { AdminShell } from './AdminShell';
-import { DEFAULT_ADMIN_TAB, isAdminTab, type AdminTab } from './admin-nav';
+import { StaffShell } from '../../components/staff/StaffShell';
+import { StaffSettings } from '../staff/StaffSettings';
+import { TechnicianApp } from '../technician/TechnicianApp';
+import {
+  adminGroups,
+  DEFAULT_ADMIN_TAB,
+  isAdminTab,
+  mobilePrimary,
+  type AdminTab,
+} from './admin-nav';
 
 const TAB_KEY = 'instafix:admin-tab';
 /** Última ventana abierta en este navegador (comodidad; sin ella se abre Citas). */
@@ -40,7 +47,7 @@ function savedTab(): AdminTab {
   }
 }
 import { pushApi } from '../notifications/push-api';
-import { browserEnv, resyncPush } from '../notifications/push-client';
+import { browserEnv, disablePush, resyncPush } from '../notifications/push-client';
 export default function Admin() {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -95,11 +102,12 @@ export default function Admin() {
   };
   useEffect(checkSession, []);
   useEffect(() => {
-    if (user?.role !== 'ADMIN') return;
-    load().catch((e) => setMessage(e.message));
+    if (user?.role !== 'ADMIN' && user?.role !== 'TECHNICIAN') return;
     // Renueva en silencio la suscripción push de este dispositivo (nunca pide permiso).
     resyncPush(browserEnv(), pushApi).catch(() => {});
-  }, [user]);
+    if (user.role === 'ADMIN') load().catch((e) => setMessage(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.role]);
   // Enlace a una cita (#cita=<id>), p. ej. al tocar una notificación push.
   const [focusAppointment, setFocusAppointment] = useState<string | null>(() =>
     appointmentIdFromHash(window.location.hash),
@@ -126,8 +134,9 @@ export default function Admin() {
     };
   }, []);
   useEffect(() => {
-    if (focusAppointment) setTab('citas');
-  }, [focusAppointment]);
+    // En administración el enlace abre Citas; el técnico lo abre en su propio panel.
+    if (focusAppointment && user?.role === 'ADMIN') setTab('citas');
+  }, [focusAppointment, user?.role]);
   const appointmentFocused = () => {
     setFocusAppointment(null);
     // Se quita el hash para que recargar no vuelva a abrir la misma cita.
@@ -211,23 +220,21 @@ export default function Admin() {
     );
   const logout = () =>
     run(async () => {
+      // Un dispositivo sin sesión no debe seguir recibiendo avisos con datos de citas.
+      await disablePush(browserEnv(), pushApi).catch(() => {});
       await api('auth/logout', { method: 'POST' });
       setUser(null);
     });
   // El técnico entra directamente a su panel: no ve opciones de administración deshabilitadas.
   if (user.role === 'TECHNICIAN')
     return (
-      <>
-        <header className="staff-header">
-          <span className="brand">InstaFix · Técnicos</span>
-          <button className="btn btn-ghost btn-small" onClick={logout}>
-            Cerrar sesión
-          </button>
-        </header>
-        <main>
-          <TechnicianPanel user={user} />
-        </main>
-      </>
+      <TechnicianApp
+        user={user}
+        onUser={setUser}
+        onLogout={logout}
+        focusId={focusAppointment}
+        onFocused={appointmentFocused}
+      />
     );
   if (user.role !== 'ADMIN')
     return (
@@ -248,8 +255,12 @@ export default function Admin() {
       </main>
     );
   return (
-    <AdminShell
+    <StaffShell
+      area="Administración"
       user={user}
+      groups={adminGroups}
+      primary={mobilePrimary}
+      accountTab="cuenta"
       tab={tab}
       locked={uploading}
       onLogout={logout}
@@ -266,7 +277,7 @@ export default function Admin() {
       }
     >
       {tab === 'correo' && <AdminEmail />}
-      {tab === 'notificaciones' && <AdminNotifications />}
+      {tab === 'cuenta' && <StaffSettings user={user} onUser={setUser} onLogout={logout} />}
       {tab === 'sorteo' && <AdminGiveaway />}
       {tab === 'tecnico' && <TechnicianPanel user={user} embedded />}
       {tab === 'equipo' && <AdminTeam />}
@@ -317,6 +328,6 @@ export default function Admin() {
         />
       )}
       {tab === 'trabajos' && <AdminJobs items={items} users={users} run={run} busy={busy} />}
-    </AdminShell>
+    </StaffShell>
   );
 }

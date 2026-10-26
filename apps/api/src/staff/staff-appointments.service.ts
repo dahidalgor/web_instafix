@@ -130,7 +130,9 @@ export async function staffAppointment(user: StaffUser, id: string) {
   const a = await db.appointment.findUnique({ where: { id }, include });
   // Un técnico solo ve sus visitas y las pendientes que puede confirmar.
   if (!a || a.deletedAt || !(canManage(user, a) || isClaimable(a)))
-    throw new NotFoundException('Cita no encontrada');
+    throw new NotFoundException(
+      'Esta cita ya no está disponible: otro técnico la confirmó, se canceló o ya pasó.',
+    );
   return serializeStaff(user, a);
 }
 

@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import type { Page } from '../../app/navigation';
+import type { TrackedPage } from '@instafix/contracts/src/site';
 
 /** Una visita por navegación. Solo suma tiempo visible; no mide personas identificables. */
-export function usePageAnalytics(page: Page) {
+export function usePageAnalytics(page: TrackedPage) {
   useEffect(() => {
     if (navigator.doNotTrack === '1') return;
     let sessionId: string;
