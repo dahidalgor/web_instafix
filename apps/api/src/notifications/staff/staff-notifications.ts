@@ -25,9 +25,10 @@ import { WebPushChannel } from './web-push.channel';
  *   appointmentId = entidad, data = título/cuerpo/ruta, channel, status, lastError, createdAt.
  */
 
-/** Quién puede recibir cada tipo de aviso. Hoy solo administración recibe solicitudes nuevas. */
+/** Quién puede recibir cada tipo de aviso (rol activo, no eliminado, con dispositivo). */
 export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]> = {
-  APPOINTMENT_REQUESTED: ['ADMIN'],
+  // Administración y técnicos: los técnicos son quienes confirman las citas pendientes.
+  APPOINTMENT_REQUESTED: ['ADMIN', 'TECHNICIAN'],
   // Preparados, sin productor todavía. Un aviso a un técnico concreto usaría
   // `recipientIds` (p. ej. el técnico asignado) en lugar de todo el rol.
   APPOINTMENT_CANCELLED: ['ADMIN'],

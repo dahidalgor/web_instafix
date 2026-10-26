@@ -196,7 +196,12 @@ export class SecurityController {
             where: { userId: session.id, purpose: 'PASSWORD_RESET', usedAt: null },
             data: { usedAt: now },
           });
-          const claimed = await claimGuestAppointments(tx, session.id, c.phone, now);
+          // Solo las cuentas de cliente heredan sus reservas de invitado. Un técnico o
+          // administrador nunca recibe citas de clientes por cambiar de número.
+          const claimed =
+            user.role === 'CUSTOMER'
+              ? await claimGuestAppointments(tx, session.id, c.phone, now)
+              : 0;
           return { ...user, claimedAppointments: claimed };
         },
       );

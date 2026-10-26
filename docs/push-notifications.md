@@ -50,26 +50,29 @@ Service worker /sw.js                                        apps/web/src/sw/
 
 ### Quién recibe qué
 
-| Tipo                      | Destinatarios                           | Estado                         |
-| ------------------------- | --------------------------------------- | ------------------------------ |
-| `APPOINTMENT_REQUESTED`   | Administradores activos con dispositivo | Implementado                   |
-| `APPOINTMENT_CANCELLED`   | Administradores                         | Regla preparada, sin productor |
-| `APPOINTMENT_RESCHEDULED` | Administradores                         | Regla preparada, sin productor |
-| `APPOINTMENT_ASSIGNED`    | Técnicos                                | Regla preparada, sin productor |
+| Tipo                      | Destinatarios                              | Estado                         |
+| ------------------------- | ------------------------------------------ | ------------------------------ |
+| `APPOINTMENT_REQUESTED`   | Administradores y técnicos con dispositivo | Implementado                   |
+| `APPOINTMENT_CANCELLED`   | Administradores                            | Regla preparada, sin productor |
+| `APPOINTMENT_RESCHEDULED` | Administradores                            | Regla preparada, sin productor |
+| `APPOINTMENT_ASSIGNED`    | Técnicos                                   | Regla preparada, sin productor |
 
 Solo cuenta como solicitud nueva el hecho `appointment.created` de una reserva hecha por el
 cliente (estado `PENDING_LOCATION`). Una edición, una reprogramación, una consulta de
 disponibilidad o una cita creada desde administración no generan este aviso.
 
-**Avisos a técnicos (siguiente paso).** Por ejemplo, «te asignaron una cita»:
+**Técnicos.** Reciben «Nueva solicitud de cita» porque son quienes confirman las pendientes. Al
+tocar el aviso se abre la ficha de esa cita en su panel. Los avisos se activan en **Ajustes →
+Notificaciones** (técnicos) o **Mi cuenta → Notificaciones** (administración). Cerrar sesión
+desactiva los avisos de ese dispositivo.
+
+**Avisos a un técnico concreto (siguiente paso).** Por ejemplo, «te asignaron una cita»:
 
 1. Añadir el caso a `publishAppointmentEvent`, por ejemplo `appointment.confirmed`.
 2. Llamar a una función que encole el aviso para el técnico asignado, en lugar de para todo un
    rol, con su clave única.
 
-El canal, el worker, el service worker y la pantalla de activación no cambian. Los técnicos ya
-pueden registrar dispositivos en la API, aunque la pantalla de activación solo está hoy en
-administración.
+El canal, el worker, el service worker y la pantalla de activación no cambian.
 
 **Apps nativas (futuro).** Una app de iOS o Android tendrá sus propios tokens (APNs o FCM), no
 suscripciones Web Push. Se registrarán en una tabla propia, con un endpoint autenticado parecido.
@@ -141,8 +144,8 @@ docker compose --env-file .env.production -f compose.production.yaml run --rm ap
 ## Probar en un iPhone real
 
 1. En Safari, abre `https://admin.instafix.ec` → Compartir → **Añadir a pantalla de inicio**.
-2. Abre Instafix **desde el icono**, inicia sesión con una cuenta de administrador y ve a
-   **Notificaciones**.
+2. Abre Instafix **desde el icono** e inicia sesión. Administración: **Mi cuenta →
+   Notificaciones**. Técnicos: **Ajustes → Notificaciones**.
 3. Pulsa **Activar notificaciones** y acepta el permiso. Debe aparecer «Activadas en este
    dispositivo · iPhone · Safari».
 4. Pulsa **Enviar prueba**. La notificación de prueba debe llegar.

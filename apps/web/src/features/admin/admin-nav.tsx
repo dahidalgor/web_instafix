@@ -1,4 +1,10 @@
 import type { ReactNode } from 'react';
+import {
+  shellIcons,
+  staffSvg,
+  type StaffNavGroup,
+  type StaffNavItem,
+} from '../../components/staff/StaffShell';
 
 /**
  * Mapa de Administración: cuatro secciones con sus ventanas. Es la única fuente para la barra
@@ -18,35 +24,13 @@ export type AdminTab =
   | 'numeros'
   | 'whatsapp'
   | 'correo'
-  | 'notificaciones'
-  | 'estadisticas';
+  | 'estadisticas'
+  | 'cuenta';
 
-export type AdminNavItem = {
-  id: AdminTab;
-  label: string;
-  /** Nombre corto para la barra inferior del móvil. */
-  short?: string;
-  description: string;
-  icon: ReactNode;
-};
-export type AdminNavGroup = { id: string; label: string; items: AdminNavItem[] };
+export type AdminNavItem = StaffNavItem<AdminTab>;
+export type AdminNavGroup = StaffNavGroup<AdminTab>;
 
-const svg = (children: ReactNode) => (
-  <svg
-    viewBox="0 0 24 24"
-    width="22"
-    height="22"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    focusable="false"
-  >
-    {children}
-  </svg>
-);
+const svg = staffSvg;
 
 export const icons = {
   citas: svg(
@@ -116,16 +100,8 @@ export const icons = {
       <path d="m3 7 9 6 9-6" />
     </>,
   ),
-  notificaciones: svg(<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 21h4" />),
   estadisticas: svg(<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />),
-  mas: svg(
-    <>
-      <circle cx="5" cy="12" r="1.2" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.2" fill="currentColor" />
-      <circle cx="19" cy="12" r="1.2" fill="currentColor" />
-    </>,
-  ),
-  salir: svg(<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" />),
+  cuenta: shellIcons.cuenta,
 } satisfies Record<string, ReactNode>;
 
 export const adminGroups: AdminNavGroup[] = [
@@ -234,16 +210,23 @@ export const adminGroups: AdminNavGroup[] = [
         icon: icons.correo,
       },
       {
-        id: 'notificaciones',
-        label: 'Notificaciones',
-        description: 'Avisos push en este dispositivo cuando llega una solicitud de cita.',
-        icon: icons.notificaciones,
-      },
-      {
         id: 'estadisticas',
         label: 'Estadísticas',
         description: 'Visitas y tiempo de lectura de la web pública.',
         icon: icons.estadisticas,
+      },
+    ],
+  },
+  {
+    id: 'cuenta',
+    label: 'Cuenta',
+    items: [
+      {
+        id: 'cuenta',
+        label: 'Mi cuenta',
+        description:
+          'Tus datos y seguridad, la apariencia y las notificaciones de este dispositivo.',
+        icon: icons.cuenta,
       },
     ],
   },

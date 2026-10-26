@@ -157,7 +157,8 @@ test(
     // El estado nunca devuelve el endpoint ni las claves.
     assert.ok(!JSON.stringify(state).includes(device.endpoint));
     assert.ok(!JSON.stringify(state).includes(device.keys.auth));
-    assert.equal((await push.status(tech.req(), '')).receivesNotifications, false);
+    // Los técnicos también reciben las solicitudes nuevas (son quienes las confirman).
+    assert.equal((await push.status(tech.req(), '')).receivesNotifications, true);
 
     // 17:00 UTC = 12H00 en Ecuador.
     const start = future(4, 17);
@@ -182,8 +183,8 @@ test(
     );
 
     const recipients = (await pushRows(created.appointmentId)).map((r) => r.recipient);
-    // Solo administradores con dispositivo: ni el técnico ni el administrador sin dispositivo.
-    assert.ok(!recipients.includes(tech.user.id));
+    // Administración y técnicos con dispositivo; nunca quien no tiene dispositivo.
+    assert.ok(recipients.includes(tech.user.id), 'el técnico con dispositivo recibe el aviso');
     assert.ok(!recipients.includes(adminWithoutDevice.user.id));
     // Un único aviso para este administrador pese al reintento y al evento repetido.
     const rows = await pushRows(created.appointmentId, admin.user.id);
@@ -311,7 +312,7 @@ test(
       { start: future(8, 16).toISOString(), request: 'Dos', whatsappConsent: false },
       client.req(),
     );
-    await db.user.update({ where: { id: admin.user.id }, data: { role: 'TECHNICIAN' } });
+    await db.user.update({ where: { id: admin.user.id }, data: { role: 'CUSTOMER' } });
     await deliverAll(two.appointmentId, admin.user.id);
     assert.equal(sent.length, 0);
     const [demoted] = await pushRows(two.appointmentId, admin.user.id);

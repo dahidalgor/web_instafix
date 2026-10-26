@@ -21,6 +21,7 @@ test(
     const calIds: string[] = [];
     const offeringId = `test-${randomUUID()}`;
     const visitId = randomUUID();
+    const sectionVisitId = randomUUID();
     const sessionId = randomUUID();
     const eventType = process.env.CAL_EVENT_TYPE_ID;
     process.env.CAL_EVENT_TYPE_ID = '991991';
@@ -200,6 +201,16 @@ test(
       );
       await assert.rejects(analytics.summary(customer));
       assert.ok((await analytics.summary(admin)).pages.some((p) => p.page === 'contacto'));
+      // Las secciones de Inicio del menú también se miden; un nombre inventado no.
+      await analytics.visit(guests, { ...visit, id: sectionVisitId, page: 'como' });
+      await assert.rejects(analytics.visit(guests, { ...visit, id: randomUUID(), page: 'admin' }));
+      const summary = await analytics.summary(admin);
+      assert.ok(summary.pages.some((p) => p.page === 'como'));
+      // De más a menos visitada.
+      assert.deepEqual(
+        summary.pages.map((p) => p.visits),
+        [...summary.pages.map((p) => p.visits)].sort((a, b) => b - a),
+      );
     } finally {
       if (eventType === undefined) delete process.env.CAL_EVENT_TYPE_ID;
       else process.env.CAL_EVENT_TYPE_ID = eventType;
@@ -211,7 +222,7 @@ test(
       await db.user.deleteMany({ where: { id: { in: ids } } });
       await db.offering.deleteMany({ where: { id: offeringId } });
       await db.siteSlide.deleteMany({ where: { id: { in: slideIds } } });
-      await db.pageVisit.deleteMany({ where: { id: visitId } });
+      await db.pageVisit.deleteMany({ where: { id: { in: [visitId, sectionVisitId] } } });
       await db.$disconnect();
     }
   },

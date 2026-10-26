@@ -532,3 +532,64 @@ test(
     }
   },
 );
+
+test(
+  'staff phone change never links guest appointments of that number',
+  { skip: !enabled },
+  async () => {
+    const wa = new FakeWhatsApp();
+    const security = new SecurityController(new VerificationService(wa));
+    const oldPhone = testPhone();
+    const newPhone = testPhone();
+    try {
+      const tech = await db.user.create({
+        data: {
+          name: 'Técnico Cambio',
+          phone: oldPhone,
+          passwordHash: await hashPassword('clave-tecnico-123'),
+          role: 'TECHNICIAN',
+          phoneVerifiedAt: new Date(),
+        },
+      });
+      const token = newToken();
+      await db.session.create({
+        data: {
+          userId: tech.id,
+          tokenHash: tokenHash(token),
+          expiresAt: new Date(Date.now() + 6e5),
+        },
+      });
+      const session = request(`instafix_session=${token}`);
+      // Una reserva de invitado con el número nuevo (p. ej. un cliente que lo usó antes).
+      const guest = await db.appointment.create({
+        data: {
+          title: 'Reserva de invitado',
+          device: 'Laptop',
+          startsAt: new Date(Date.now() + 3 * 86400000),
+          endsAt: new Date(Date.now() + 3 * 86400000 + 3600000),
+          address: '',
+          technician: '',
+          contactName: 'Invitado',
+          contactPhone: newPhone,
+          source: 'INSTAFIX_API',
+        },
+      });
+      const change = await security.startPhoneChange(
+        { phone: newPhone, password: 'clave-tecnico-123' },
+        session,
+      );
+      const changed = await security.verifyPhoneChange(
+        { verificationId: change.verificationId, code: wa.last(newPhone) },
+        session,
+      );
+      assert.equal(changed.phone, newPhone);
+      assert.equal(changed.claimedAppointments, 0);
+      assert.equal(
+        (await db.appointment.findUniqueOrThrow({ where: { id: guest.id } })).userId,
+        null,
+      );
+    } finally {
+      await cleanup([oldPhone, newPhone], []);
+    }
+  },
+);
