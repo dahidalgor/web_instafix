@@ -1,3 +1,4 @@
+import { cleanNumberText } from '../../components/ui/NumberField';
 import type { AccountUser, Appointment, Offering } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { BusyButton } from '../../components/ui/BusyButton';
@@ -200,13 +201,13 @@ export function AdminJobs({ users, items, run, busy }: Props) {
         Precio final USD
         <input
           name="price"
-          type="number"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          placeholder="0"
           required
-          min="0"
-          max="100000"
-          step="0.01"
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onChange={(e) => setPrice(cleanNumberText(e.target.value, 2))}
         />
       </label>
       <label>

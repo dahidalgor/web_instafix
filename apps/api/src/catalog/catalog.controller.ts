@@ -4,6 +4,7 @@ import {
   equipmentInputSchema,
   equipmentUpdateSchema,
   offeringSchema,
+  reorderSchema,
 } from '@instafix/contracts';
 import {
   BadRequestException,
@@ -17,6 +18,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -30,11 +32,28 @@ import { auditAdmin } from '../security/admin-audit';
 import { RateLimit } from '../security/rate-limits';
 import { publishedOffering } from './published';
 
+/** Orden del catálogo: equipo (dentro de su categoría) → servicio → nombre. */
+const catalogOrder: Prisma.OfferingOrderByWithRelationInput[] = [
+  { equipment: { position: 'asc' } },
+  { equipment: { name: 'asc' } },
+  { position: 'asc' },
+  { title: 'asc' },
+];
+
+/** El nuevo orden debe contener exactamente los elementos de la lista, sin repetir. */
+function sameItems(ids: string[], expected: string[]) {
+  return (
+    ids.length === expected.length &&
+    new Set(ids).size === ids.length &&
+    expected.every((id) => ids.includes(id))
+  );
+}
+
 @Controller('api/v1')
 export class CatalogController {
   @Get('catalog') async catalog() {
     try {
-      return await db.offering.findMany({ where: publishedOffering, orderBy: { id: 'asc' } });
+      return await db.offering.findMany({ where: publishedOffering, orderBy: catalogOrder });
     } catch {
       throw new ServiceUnavailableException('Base de datos no disponible');
     }
@@ -59,7 +78,7 @@ export class CatalogController {
     await authenticated(req, true);
     return db.offering.findMany({
       where: { active: true },
-      orderBy: [{ device: 'asc' }, { title: 'asc' }],
+      orderBy: catalogOrder,
     });
   }
 
@@ -114,7 +133,14 @@ export class CatalogController {
       db.serviceCategory.findUnique({ where: { id: data.categoryId } }),
       'Categoría no encontrada',
     );
-    return unique(() => db.equipment.create({ data }));
+    // Un equipo nuevo va al final de su categoría.
+    const last = await db.equipment.aggregate({
+      where: { categoryId: data.categoryId },
+      _max: { position: true },
+    });
+    return unique(() =>
+      db.equipment.create({ data: { ...data, position: (last._max.position ?? -1) + 1 } }),
+    );
   }
 
   @Patch('admin/equipment/:id') async editEquipment(
@@ -184,7 +210,15 @@ export class CatalogController {
   @Post('admin/services') async addService(@Body() body: unknown, @Req() req: Request) {
     checkOrigin(req);
     await authenticated(req, true);
-    return db.offering.create({ data: { id: randomUUID(), ...(await this.serviceData(body)) } });
+    const data = await this.serviceData(body);
+    // Un servicio nuevo va al final de su equipo.
+    const last = await db.offering.aggregate({
+      where: { equipmentId: data.equipmentId },
+      _max: { position: true },
+    });
+    return db.offering.create({
+      data: { id: randomUUID(), ...data, position: (last._max.position ?? -1) + 1 },
+    });
   }
 
   @Patch('admin/services/:id') async editService(
@@ -196,6 +230,66 @@ export class CatalogController {
     await authenticated(req, true);
     await found(db.offering.findFirst({ where: { id, active: true } }), 'Servicio no encontrado');
     return db.offering.update({ where: { id }, data: await this.serviceData(body) });
+  }
+
+  /** Orden de los equipos de una categoría (arrastrar en Categorías y equipos). */
+  @Put('admin/categories/:id/equipment-order') @RateLimit('staff') async orderEquipment(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    checkOrigin(req);
+    await authenticated(req, true);
+    const { ids } = parse(reorderSchema, body);
+    return db.$transaction(async (tx) => {
+      await found(tx.serviceCategory.findUnique({ where: { id } }), 'Categoría no encontrada');
+      const current = await tx.equipment.findMany({
+        where: { categoryId: id },
+        select: { id: true },
+      });
+      if (
+        !sameItems(
+          ids,
+          current.map((e) => e.id),
+        )
+      )
+        throw new ConflictException(
+          'La lista cambió mientras ordenabas. Recarga e inténtalo de nuevo.',
+        );
+      for (const [position, equipmentId] of ids.entries())
+        await tx.equipment.update({ where: { id: equipmentId }, data: { position } });
+      return { ok: true };
+    });
+  }
+
+  /** Orden de los servicios de un equipo (arrastrar en Servicios). */
+  @Put('admin/equipment/:id/services-order') @RateLimit('staff') async orderServices(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    checkOrigin(req);
+    await authenticated(req, true);
+    const { ids } = parse(reorderSchema, body);
+    return db.$transaction(async (tx) => {
+      await found(tx.equipment.findUnique({ where: { id } }), 'Equipo no encontrado');
+      const current = await tx.offering.findMany({
+        where: { equipmentId: id, active: true },
+        select: { id: true },
+      });
+      if (
+        !sameItems(
+          ids,
+          current.map((o) => o.id),
+        )
+      )
+        throw new ConflictException(
+          'La lista cambió mientras ordenabas. Recarga e inténtalo de nuevo.',
+        );
+      for (const [position, offeringId] of ids.entries())
+        await tx.offering.update({ where: { id: offeringId }, data: { position } });
+      return { ok: true };
+    });
   }
 
   /**
@@ -233,7 +327,7 @@ export class CatalogController {
 async function listEquipment(where: Prisma.EquipmentWhereInput) {
   const rows = await db.equipment.findMany({
     where,
-    orderBy: { name: 'asc' },
+    orderBy: [{ position: 'asc' }, { name: 'asc' }],
     include: { category: { select: { name: true } } },
   });
   return rows.map(({ category, ...item }) => ({ ...item, category: category.name }));

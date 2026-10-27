@@ -235,7 +235,7 @@ export function TechnicianPanel({
                 details={
                   <AppointmentLocation
                     appointment={a}
-                    directions={a.canManage}
+                    directions
                     pending="Pendiente por WhatsApp"
                   />
                 }

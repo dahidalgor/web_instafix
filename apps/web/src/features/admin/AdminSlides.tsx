@@ -1,3 +1,4 @@
+import { NumberField } from '../../components/ui/NumberField';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { SiteSlide } from '@instafix/contracts/src/site';
 import { BusyButton } from '../../components/ui/BusyButton';
@@ -110,12 +111,9 @@ export function AdminSlides({ onUploading }: { onUploading: (busy: boolean) => v
         </label>
         <label>
           Posición
-          <input
-            type="number"
-            min={0}
-            max={1000}
+          <NumberField
             value={draft.position}
-            onChange={(e) => setDraft({ ...draft, position: Number(e.target.value) })}
+            onValue={(position) => setDraft({ ...draft, position: Math.min(position, 1000) })}
             required
           />
         </label>

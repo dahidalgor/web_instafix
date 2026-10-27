@@ -168,6 +168,21 @@ export default function Admin() {
       setDraft({ ...emptyService });
     });
   }
+  /** Orden de los servicios de un equipo (arrastrar). La lista se recarga al terminar. */
+  async function reorderServices(equipmentId: string, ids: string[]) {
+    setMessage('');
+    try {
+      await api(`admin/equipment/${equipmentId}/services-order`, {
+        method: 'PUT',
+        body: JSON.stringify({ ids }),
+      });
+      await load();
+      setMessage('Orden guardado; la web muestra los servicios en este orden.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo guardar el orden.');
+      await load().catch(() => {});
+    }
+  }
   /** Devuelve si se eliminó (el editor cierra su confirmación solo entonces). */
   async function removeService(id: string) {
     setBusy(true);
@@ -307,6 +322,7 @@ export default function Admin() {
           busy={busy}
           loading={!loaded}
           remove={removeService}
+          reorder={reorderServices}
         />
       )}
       {tab === 'categorias' && (

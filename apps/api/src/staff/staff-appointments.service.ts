@@ -54,8 +54,8 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     // El contacto directo solo lo ve quien atiende la visita.
     contactPhone: manage ? a.contactPhone : '',
     contactEmail: manage ? a.contactEmail : null,
-    // La ubicación exacta solo la ve quien atiende la visita; para decidir si confirmarla basta
-    // el sector.
+    // La ubicación exacta solo la ve quien atiende la visita. Para decidir si confirmarla basta
+    // el sector, que el panel también abre en el mapa (búsqueda del sector, no las coordenadas).
     address: manage ? a.address : '',
     locationArea: a.locationArea || null,
     locationName: manage ? a.locationName : null,

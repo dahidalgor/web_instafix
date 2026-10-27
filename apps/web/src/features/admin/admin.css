@@ -259,7 +259,7 @@
   display: grid;
   gap: 8px;
 }
-.catalog-admin-devices li {
+.catalog-admin-device {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -269,8 +269,10 @@
   border-radius: 10px;
   background: var(--surface-soft);
 }
-.catalog-admin-devices li > span:first-child {
+.catalog-admin-device > span:first-of-type {
   display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .catalog-admin-devices small {
   color: var(--muted);
@@ -351,7 +353,7 @@
 .admin-service-item .is-off {
   color: #a12f26;
 }
-.catalog-admin-devices li.is-inactive strong {
+.catalog-admin-device.is-inactive strong {
   opacity: 0.6;
 }
 .equipment-off {
@@ -383,23 +385,31 @@
   text-decoration: underline;
 }
 /* Acciones del equipo: botones del mismo tamaño, en fila; a lo ancho en el teléfono. */
-.catalog-admin-devices li > .tech-actions-row {
+.catalog-admin-device > .tech-actions-row {
   flex-wrap: nowrap;
   gap: 8px;
 }
-.catalog-admin-devices li > .tech-actions-row > * {
+.catalog-admin-device > .tech-actions-row > * {
   flex: 0 0 auto;
   min-width: 104px;
   justify-content: center;
 }
 @media (max-width: 600px) {
-  .catalog-admin-devices li > .tech-actions-row {
+  /* Tres botones (Desactivar, Editar, Eliminar) no caben en 360–390 px: pasan de línea. */
+  .catalog-admin-device > .tech-actions-row {
     flex: 1 1 100%;
+    flex-wrap: wrap;
   }
-  .catalog-admin-devices li > .tech-actions-row > * {
-    flex: 1 1 0;
+  .catalog-admin-device > .tech-actions-row > * {
+    flex: 1 1 88px;
     min-width: 0;
   }
+}
+/* Ninguna fila ni tarjeta del catálogo se ensancha más que la pantalla. */
+.catalog-admin-category,
+.catalog-admin-devices > .sortable-item,
+.catalog-admin-device {
+  min-width: 0;
 }
 
 /* Administración → Notificaciones. */
@@ -577,6 +587,10 @@
   display: grid;
   gap: 22px;
 }
+/* La tabla ancha se desplaza dentro de su caja; no ensancha la columna (ni el botón). */
+.analytics-admin > * {
+  min-width: 0;
+}
 .analytics-head {
   display: flex;
   flex-wrap: wrap;
@@ -662,4 +676,70 @@
     transparent var(--share)
   );
   font-variant-numeric: tabular-nums;
+}
+
+/* Servicios: lista con su propio scroll (escritorio) y formulario a su altura real. */
+.services-layout {
+  /* Sin esto el formulario se estiraba hasta el final de la lista (espacio vacío). */
+  align-items: start;
+}
+.service-list-head h2 {
+  margin-top: 0;
+}
+.service-list-head > .small {
+  margin: 8px 0 0;
+}
+.service-list-scroll {
+  padding-top: 12px;
+}
+.service-group-admin + .service-group-admin {
+  margin-top: 18px;
+}
+.service-group-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.service-list-scroll .admin-item {
+  margin: 0;
+}
+.service-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.service-row .admin-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.service-row .sort-handle {
+  align-self: stretch;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.admin-service-item.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+@media (min-width: 761px) {
+  .service-list-panel {
+    position: sticky;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+  }
+  .service-list-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-right: -8px;
+    padding: 12px 8px 16px 2px;
+    overflow-y: auto;
+    /* Al llegar al final de la lista, la rueda no mueve el formulario. */
+    overscroll-behavior: contain;
+  }
 }
