@@ -210,7 +210,7 @@ export function AppointmentSheet({
               <dl className="appt-meta tech-location-meta">
                 <AppointmentLocation
                   appointment={item}
-                  directions={item.canManage}
+                  directions
                   pending="Pendiente: el cliente aún no compartió su ubicación por WhatsApp."
                 />
               </dl>

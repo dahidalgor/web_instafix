@@ -40,6 +40,8 @@ model Offering {
   performedServices AppointmentService[]
   equipmentId String?
   equipment Equipment? @relation(fields: [equipmentId], references: [id])
+  // Orden dentro de su equipo en el catálogo (arrastrar en Administración). Empate: título.
+  position Int @default(0)
 }
 model ServiceRequest {
   id String @id @default(uuid())
@@ -97,6 +99,8 @@ model Equipment {
   category ServiceCategory @relation(fields: [categoryId], references: [id])
   // Desactivado: sus servicios no se publican ni se pueden reservar; el historial se conserva.
   active Boolean @default(true)
+  // Orden dentro de su categoría (arrastrar en Administración). Empate: nombre.
+  position Int @default(0)
   offerings Offering[]
   @@index([categoryId])
 }

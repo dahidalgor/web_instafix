@@ -1,3 +1,5 @@
+import { NumberField } from '../../components/ui/NumberField';
+import { SortableList } from '../../components/ui/SortableList';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import type { CatalogEquipment, Offering, ServiceCategory } from '@instafix/contracts';
@@ -21,8 +23,10 @@ type Props = {
   busy: boolean;
   loading?: boolean;
   remove: (id: string) => Promise<boolean>;
+  /** Guarda el nuevo orden de los servicios de un equipo. */
+  reorder: (equipmentId: string, ids: string[]) => Promise<void>;
 };
-type Sort = 'name' | 'price-asc' | 'price-desc';
+type Sort = 'manual' | 'name' | 'price-asc' | 'price-desc';
 /** Comparación sin mayúsculas ni tildes: «bateria» encuentra «Batería». */
 const fold = (text: string) =>
   text
@@ -42,11 +46,14 @@ export function AdminServices({
   busy,
   loading,
   remove,
+  reorder,
 }: Props) {
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [equipmentId, setEquipmentId] = useState('');
-  const [sort, setSort] = useState<Sort>('name');
+  const [sort, setSort] = useState<Sort>('manual');
+  // Orden mostrado mientras se guarda un arrastre (sin esperar a la recarga).
+  const [pendingOrder, setPendingOrder] = useState<Record<string, string[]>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const categoryOf = (item: Offering) =>
@@ -59,13 +66,56 @@ export function AdminServices({
     .filter((item) => !categoryId || categoryOf(item) === categoryId)
     .filter((item) => !equipmentId || item.equipmentId === equipmentId)
     .filter((item) => !words || fold(item.title).includes(words))
-    .sort((a, b) =>
-      sort === 'price-asc'
-        ? a.priceMinor - b.priceMinor
-        : sort === 'price-desc'
-          ? b.priceMinor - a.priceMinor
-          : `${a.device} ${a.title}`.localeCompare(`${b.device} ${b.title}`, 'es'),
+    .sort(
+      (a, b) =>
+        sort === 'price-asc'
+          ? a.priceMinor - b.priceMinor
+          : sort === 'price-desc'
+            ? b.priceMinor - a.priceMinor
+            : sort === 'name'
+              ? `${a.device} ${a.title}`.localeCompare(`${b.device} ${b.title}`, 'es')
+              : 0, // «Orden del catálogo»: el de la API (equipo → posición → nombre).
     );
+  // Orden del catálogo: grupos por equipo, en el orden de categorías y equipos.
+  const groups =
+    sort === 'manual'
+      ? [
+          ...categories.flatMap((category) =>
+            equipment
+              .filter((device) => device.categoryId === category.id)
+              .map((device) => {
+                const list = visible.filter((item) => item.equipmentId === device.id);
+                const order = pendingOrder[device.id];
+                return {
+                  key: device.id,
+                  label: `${category.name} · ${device.name}`,
+                  sortable: true,
+                  items: order
+                    ? [...list].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+                    : list,
+                };
+              }),
+          ),
+          {
+            key: 'sin-equipo',
+            label: 'Sin equipo',
+            sortable: false,
+            items: visible.filter(
+              (item) => !equipment.some((device) => device.id === item.equipmentId),
+            ),
+          },
+        ].filter((group) => group.items.length)
+      : [{ key: 'todos', label: '', sortable: false, items: visible }];
+  // Con una búsqueda por nombre la lista está incompleta: no se ordena.
+  const canSort = sort === 'manual' && !words && !uploading;
+  async function saveOrder(equipmentId: string, ids: string[]) {
+    setPendingOrder((value) => ({ ...value, [equipmentId]: ids }));
+    try {
+      await reorder(equipmentId, ids);
+    } finally {
+      setPendingOrder(({ [equipmentId]: _done, ...rest }) => rest);
+    }
+  }
   const filtered = Boolean(categoryId || equipmentId || words);
   const clearFilters = () => {
     setName('');
@@ -85,120 +135,150 @@ export function AdminServices({
   }
   const inactiveDevice = (id: string | null | undefined) =>
     equipment.find((device) => device.id === id)?.active === false;
+  const renderService = (item: Offering) => (
+    <button
+      type="button"
+      className={`admin-item admin-service-item${draft.id === item.id ? ' is-selected' : ''}`}
+      disabled={uploading}
+      aria-current={draft.id === item.id ? 'true' : undefined}
+      onClick={() =>
+        pick({
+          id: item.id,
+          title: item.title,
+          equipmentId: item.equipmentId ?? '',
+          description: item.description,
+          priceMinor: item.priceMinor,
+          durationMinutes: item.durationMinutes,
+          warrantyDays: item.warrantyDays,
+          availability: item.availability,
+          media: item.media,
+          cover: item.cover ?? null,
+        })
+      }
+    >
+      {serviceCover(item) && (
+        <img src={serviceCover(item)!.thumbnail || serviceCover(item)!.url} alt="" loading="lazy" />
+      )}
+      <strong>
+        {item.device} · {item.title}
+      </strong>
+      <span>
+        {money(item.priceMinor)} · {availabilityLabels[item.availability]}
+        {inactiveDevice(item.equipmentId) && (
+          <em className="is-off"> · Equipo desactivado: no se publica</em>
+        )}
+      </span>
+    </button>
+  );
   return (
-    <div className="admin-layout">
-      <section>
-        <h2>Catálogo</h2>
-        <button
-          className="btn btn-primary"
-          disabled={uploading}
-          onClick={() => pick({ ...emptyService })}
-        >
-          + Nuevo servicio
-        </button>
-        <div className="service-filters" role="search" aria-label="Filtrar servicios">
-          <label className="is-wide">
-            Buscar por nombre
-            <input
-              type="search"
-              value={name}
-              maxLength={100}
-              placeholder="Ej.: Mantenimiento"
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label>
-            Categoría
-            <select
-              value={categoryId}
-              onChange={(e) => {
-                setCategoryId(e.target.value);
-                setEquipmentId('');
-              }}
-            >
-              <option value="">Todas</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Equipo
-            <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)}>
-              <option value="">Todos</option>
-              {devicesInCategory.map((device) => (
-                <option key={device.id} value={device.id}>
-                  {device.name}
-                  {device.active === false ? ' (desactivado)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="is-wide">
-            Ordenar por
-            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              <option value="name">Equipo y nombre</option>
-              <option value="price-asc">Precio: de menor a mayor</option>
-              <option value="price-desc">Precio: de mayor a menor</option>
-            </select>
-          </label>
-        </div>
-        {!loading && items.length > 0 && (
-          <p className="small" role="status">
-            {visible.length === 1 ? '1 servicio' : `${visible.length} servicios`}
-            {filtered && ` de ${items.length} · `}
-            {filtered && (
-              <button type="button" className="link-button" onClick={clearFilters}>
-                Quitar filtros
-              </button>
-            )}
-          </p>
-        )}
-        {loading && <ListSkeleton label="Cargando catálogo…" count={4} />}
-        {!loading && !items.length && <p className="tech-empty">Aún no hay servicios.</p>}
-        {!loading && items.length > 0 && !visible.length && (
-          <p className="tech-empty">Ningún servicio coincide con los filtros.</p>
-        )}
-        {visible.map((item) => (
+    <div className="admin-layout services-layout">
+      <section className="service-list-panel">
+        <div className="service-list-head">
+          <h2>Catálogo</h2>
           <button
-            className="admin-item admin-service-item"
+            className="btn btn-primary"
             disabled={uploading}
-            key={item.id}
-            onClick={() =>
-              pick({
-                id: item.id,
-                title: item.title,
-                equipmentId: item.equipmentId ?? '',
-                description: item.description,
-                priceMinor: item.priceMinor,
-                durationMinutes: item.durationMinutes,
-                warrantyDays: item.warrantyDays,
-                availability: item.availability,
-                media: item.media,
-                cover: item.cover ?? null,
-              })
-            }
+            onClick={() => pick({ ...emptyService })}
           >
-            {serviceCover(item) && (
-              <img
-                src={serviceCover(item)!.thumbnail || serviceCover(item)!.url}
-                alt=""
-                loading="lazy"
-              />
-            )}
-            <strong>
-              {item.device} · {item.title}
-            </strong>
-            <span>
-              {money(item.priceMinor)} · {availabilityLabels[item.availability]}
-              {inactiveDevice(item.equipmentId) && (
-                <em className="is-off"> · Equipo desactivado: no se publica</em>
-              )}
-            </span>
+            + Nuevo servicio
           </button>
-        ))}
+          <div className="service-filters" role="search" aria-label="Filtrar servicios">
+            <label className="is-wide">
+              Buscar por nombre
+              <input
+                type="search"
+                value={name}
+                maxLength={100}
+                placeholder="Ej.: Mantenimiento"
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label>
+              Categoría
+              <select
+                value={categoryId}
+                onChange={(e) => {
+                  setCategoryId(e.target.value);
+                  setEquipmentId('');
+                }}
+              >
+                <option value="">Todas</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Equipo
+              <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)}>
+                <option value="">Todos</option>
+                {devicesInCategory.map((device) => (
+                  <option key={device.id} value={device.id}>
+                    {device.name}
+                    {device.active === false ? ' (desactivado)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="is-wide">
+              Ordenar por
+              <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                <option value="manual">Orden del catálogo (arrastrar)</option>
+                <option value="name">Equipo y nombre (A–Z)</option>
+                <option value="price-asc">Precio: de menor a mayor</option>
+                <option value="price-desc">Precio: de mayor a menor</option>
+              </select>
+            </label>
+          </div>
+          {!loading && items.length > 0 && (
+            <p className="small" role="status">
+              {visible.length === 1 ? '1 servicio' : `${visible.length} servicios`}
+              {filtered && ` de ${items.length} · `}
+              {filtered && (
+                <button type="button" className="link-button" onClick={clearFilters}>
+                  Quitar filtros
+                </button>
+              )}
+            </p>
+          )}
+          {sort === 'manual' && words && items.length > 0 && (
+            <p className="small">Quita la búsqueda por nombre para ordenar arrastrando.</p>
+          )}
+        </div>
+        <div className="service-list-scroll">
+          {loading && <ListSkeleton label="Cargando catálogo…" count={4} />}
+          {!loading && !items.length && <p className="tech-empty">Aún no hay servicios.</p>}
+          {!loading && items.length > 0 && !visible.length && (
+            <p className="tech-empty">Ningún servicio coincide con los filtros.</p>
+          )}
+          {groups.map((group) => (
+            <div className="service-group-admin" key={group.key}>
+              {group.label && <h3 className="service-group-label">{group.label}</h3>}
+              {group.sortable && canSort ? (
+                <SortableList
+                  items={group.items}
+                  getId={(item) => item.id}
+                  getLabel={(item) => item.title}
+                  onReorder={(ids) => void saveOrder(group.key, ids)}
+                  renderItem={(item, handle) => (
+                    <div className="service-row">
+                      {handle}
+                      {renderService(item)}
+                    </div>
+                  )}
+                />
+              ) : (
+                <ul className="sortable">
+                  {group.items.map((item) => (
+                    <li key={item.id}>{renderService(item)}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
       <form className="editor" onSubmit={save}>
         <h2>{draft.id ? 'Editar servicio' : 'Nuevo servicio'}</h2>
@@ -249,14 +329,11 @@ export function AdminServices({
         <div className="form-row">
           <label>
             Precio USD
-            <input
-              type="number"
-              min="0"
-              max="100000"
-              step="0.01"
+            <NumberField
+              decimals={2}
               required
               value={draft.priceMinor / 100}
-              onChange={(e) => update('priceMinor', Math.round(Number(e.target.value) * 100))}
+              onValue={(usd) => update('priceMinor', Math.round(Math.min(usd, 100000) * 100))}
             />
           </label>
           <label>
@@ -278,24 +355,18 @@ export function AdminServices({
         <div className="form-row">
           <label>
             Duración (minutos)
-            <input
-              type="number"
-              min="1"
-              max="1440"
+            <NumberField
               required
               value={draft.durationMinutes}
-              onChange={(e) => update('durationMinutes', Number(e.target.value))}
+              onValue={(minutes) => update('durationMinutes', Math.min(minutes, 1440))}
             />
           </label>
           <label>
             Garantía anunciada (días)
-            <input
-              type="number"
-              min="0"
-              max="3650"
+            <NumberField
               required
               value={draft.warrantyDays}
-              onChange={(e) => update('warrantyDays', Number(e.target.value))}
+              onValue={(days) => update('warrantyDays', Math.min(days, 3650))}
             />
           </label>
         </div>

@@ -436,3 +436,68 @@ button[aria-busy='true'] {
     display: none;
   }
 }
+
+/* Listas que se ordenan arrastrando (SortableList). */
+.sortable {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sortable-item {
+  position: relative;
+}
+.sortable-item.is-shifting:not(.is-dragging) {
+  transition: transform 160ms ease;
+}
+.sortable-item.is-dragging {
+  z-index: 5;
+}
+.sortable-item.is-dragging > * {
+  box-shadow: 0 14px 34px rgb(20 18 40 / 24%);
+}
+.sort-handle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  /* El dedo arrastra la fila, no la página. */
+  touch-action: none;
+}
+.sort-handle svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.sort-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (hover: hover) {
+  .sort-handle:hover:not(:disabled) {
+    background: var(--surface-soft);
+    color: var(--text);
+  }
+}
+.sort-handle:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+body.is-sorting,
+body.is-sorting * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sortable-item.is-shifting:not(.is-dragging) {
+    transition: none;
+  }
+}

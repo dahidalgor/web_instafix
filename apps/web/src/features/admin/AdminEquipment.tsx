@@ -2,6 +2,7 @@ import type { CatalogEquipment, Offering, ServiceCategory } from '@instafix/cont
 import { useState, type FormEvent } from 'react';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
+import { SortableList } from '../../components/ui/SortableList';
 import { api } from '../../lib/api';
 
 type Props = {
@@ -114,6 +115,22 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
   }
   const busy = busyKey !== null;
   const servicesOf = (id: string) => services.filter((item) => item.equipmentId === id).length;
+  // Orden mostrado mientras se guarda un arrastre (sin esperar a la recarga).
+  const [pendingOrder, setPendingOrder] = useState<Record<string, string[]>>({});
+  const sortedDevices = (categoryId: string) => {
+    const list = equipment.filter((item) => item.categoryId === categoryId);
+    const order = pendingOrder[categoryId];
+    return order ? [...list].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)) : list;
+  };
+  async function reorderDevices(categoryId: string, ids: string[]) {
+    setPendingOrder((value) => ({ ...value, [categoryId]: ids }));
+    await act(
+      `device:order:${categoryId}`,
+      () => send(`admin/categories/${categoryId}/equipment-order`, 'PUT', { ids }),
+      'Orden de los equipos guardado; la web lo muestra en este orden.',
+    );
+    setPendingOrder(({ [categoryId]: _done, ...rest }) => rest);
+  }
 
   return (
     <section className="catalog-admin">
@@ -158,7 +175,7 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
       )}
       <div className="catalog-admin-list">
         {categories.map((category, index) => {
-          const devices = equipment.filter((item) => item.categoryId === category.id);
+          const devices = sortedDevices(category.id);
           const editingCategory = editing?.kind === 'category' && editing.id === category.id;
           return (
             <article key={category.id} className="catalog-admin-category">
@@ -250,12 +267,21 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
                   </>
                 )}
               </header>
-              <ul className="catalog-admin-devices">
-                {devices.map((device) => {
+              <SortableList
+                className="catalog-admin-devices"
+                items={devices}
+                getId={(device) => device.id}
+                getLabel={(device) => device.name}
+                disabled={busy || editing !== null}
+                onReorder={(ids) => void reorderDevices(category.id, ids)}
+                renderItem={(device, handle) => {
                   const count = servicesOf(device.id);
                   const editingDevice = editing?.kind === 'equipment' && editing.id === device.id;
                   return (
-                    <li key={device.id} className={device.active === false ? 'is-inactive' : ''}>
+                    <div
+                      className={`catalog-admin-device${device.active === false ? ' is-inactive' : ''}`}
+                    >
+                      {!editingDevice && handle}
                       {editingDevice ? (
                         <form className="catalog-admin-inline" onSubmit={saveEdit}>
                           <input
@@ -364,10 +390,10 @@ export function AdminEquipment({ categories, equipment, services, load, loading 
                           </span>
                         </>
                       )}
-                    </li>
+                    </div>
                   );
-                })}
-              </ul>
+                }}
+              />
               <form
                 className="catalog-admin-inline"
                 onSubmit={(e) => void addDevice(e, category.id)}

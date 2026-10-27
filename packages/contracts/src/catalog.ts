@@ -69,6 +69,8 @@ export type Offering = OfferingInput & {
   device: string;
   category: string;
   currency: string;
+  /** Orden dentro de su equipo (lo fija Administración arrastrando). */
+  position?: number;
 };
 
 /** Imagen que representa al servicio: portada propia o, en servicios antiguos, la primera foto. */
@@ -99,4 +101,10 @@ export type CatalogEquipment = {
   category: string;
   /** Solo en administración: un equipo desactivado no se publica. */
   active?: boolean;
+  /** Orden dentro de su categoría. */
+  position?: number;
 };
+/** Nuevo orden completo de una lista (todos sus elementos, sin repetir). */
+export const reorderSchema = z
+  .object({ ids: z.array(z.string().min(1).max(100)).min(1).max(500) })
+  .strict();

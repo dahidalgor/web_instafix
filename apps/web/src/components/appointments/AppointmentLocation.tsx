@@ -32,16 +32,25 @@ export function locationLinks(a: LocationFields) {
     };
   }
   const link = mapsLink(a.address);
-  return link ? { view: link, directions: link } : null;
+  if (link) return { view: link, directions: link };
+  // Sin coordenadas ni enlace: la dirección escrita (o el sector) se busca en Google Maps.
+  const text = writtenAddress(a) || a.locationArea || '';
+  if (!text.trim()) return null;
+  const q = encodeURIComponent(`${text}, Ecuador`);
+  return {
+    view: `https://www.google.com/maps/search/?api=1&query=${q}`,
+    directions: `https://www.google.com/maps/dir/?api=1&destination=${q}`,
+  };
 }
+const writtenAddress = (a: LocationFields) =>
+  a.address && !looksLikeCoordinates(a.address) && !mapsLink(a.address) ? a.address : '';
 
 const looksLikeCoordinates = (text: string) => /^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(text.trim());
 
 /** Texto principal: calle y sector, nombre del lugar o, si no hay, una descripción útil. */
 export function locationSummary(a: LocationFields) {
   const point = coordinates(a);
-  const written =
-    a.address && !looksLikeCoordinates(a.address) && !mapsLink(a.address) ? a.address : '';
+  const written = writtenAddress(a);
   if (a.locationArea) return { title: a.locationArea, detail: a.locationName || written || null };
   if (a.locationName) return { title: a.locationName, detail: written || null };
   if (point)
@@ -102,7 +111,7 @@ export function AppointmentLocation({
             <a href={links.view} target="_blank" rel="noopener noreferrer">
               Abrir mapa<span className="visually-hidden"> (se abre en otra pestaña)</span>
             </a>
-            {directions && gps && (
+            {directions && links.directions !== links.view && (
               <a href={links.directions} target="_blank" rel="noopener noreferrer">
                 Cómo llegar<span className="visually-hidden"> (se abre en otra pestaña)</span>
               </a>
