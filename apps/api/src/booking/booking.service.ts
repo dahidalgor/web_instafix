@@ -40,21 +40,39 @@ export const BOOKING_LIMITS = { perPhoneDay: 3, perIpDay: 6, activePerPhone: 3 }
 const activeStatuses = ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'] as const;
 
 /**
- * Buzón propio de Instafix que se entrega a Cal.com como correo del asistente. Así Cal.com
- * no puede escribir al cliente (confirmación, solicitud, reprogramación o cancelación):
- * el correo real queda solo en PostgreSQL y lo usa Instafix.
+ * Buzón propio de Instafix (opcional). A Cal.com no se le envía ningún correo de asistente: la
+ * reserva va solo con el teléfono. Este buzón solo se usa si Cal.com rechaza una reserva por
+ * faltar el correo. El correo real del cliente queda solo en PostgreSQL y lo usa Instafix.
  */
 export const relayEmail = () => process.env.CAL_ATTENDEE_RELAY_EMAIL?.trim().toLowerCase() || null;
-/**
- * Cal.com exige un correo de asistente. Si no hay buzón puente y el cliente no dio correo,
- * se usa el remitente de Instafix (SMTP_FROM): la cita se crea sin escribir a terceros.
- */
+/** Respaldo del buzón puente: el remitente de Instafix (SMTP_FROM). */
 const fallbackAttendeeEmail = () =>
   process.env.SMTP_FROM?.match(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/)?.[0].toLowerCase() || null;
-/** Correos propios de Instafix entregados a Cal.com: nunca son el correo del cliente. */
+/**
+ * Correos que nunca son del cliente: los propios de Instafix entregados a Cal.com y los de
+ * relleno que Cal.com genera en las reservas solo con teléfono (p. ej. «…@sms.cal.com»).
+ */
 export const isRelayEmail = (email?: string | null) => {
   const value = email?.trim().toLowerCase();
-  return Boolean(value && (value === relayEmail() || value === fallbackAttendeeEmail()));
+  if (!value) return false;
+  const domain = value.split('@')[1] ?? '';
+  return (
+    value === relayEmail() ||
+    value === fallbackAttendeeEmail() ||
+    domain === 'cal.com' ||
+    domain.endsWith('.cal.com')
+  );
+};
+/** Cal.com rechazó la reserva porque falta el correo del asistente. */
+const emailRequired = (error: unknown) => {
+  if (!(error instanceof ProviderError) || error.disposition !== 'FAILED') return false;
+  const { httpStatus, providerMessage } = error as CalHttpError;
+  return (
+    httpStatus !== undefined &&
+    httpStatus >= 400 &&
+    httpStatus < 500 &&
+    /e-?mail/i.test(`${providerMessage ?? ''} ${error.message}`)
+  );
 };
 
 /** Al reprogramar, la cita vuelve a «pendiente de confirmación» y sin técnico. */
@@ -214,16 +232,8 @@ export async function createBooking(
     return bookingResult(duplicate, customer, email, false, false, phone);
   }
   await assertBookingQuota(phone, origin);
-  // El correo del cliente es opcional: sin él solo se coordina por WhatsApp.
-  // A Cal.com se le entrega siempre un correo propio de Instafix (buzón puente o remitente):
-  // así Cal.com no escribe al cliente y los avisos los envía solo Instafix por Brevo.
-  const attendeeEmail = relayEmail() || fallbackAttendeeEmail() || email;
-  if (!attendeeEmail)
-    throw coded(
-      ServiceUnavailableException,
-      'BOOKING_CONFIG',
-      'La agenda no acepta reservas en este momento por un problema de configuración. Escríbenos por WhatsApp y te agendamos.',
-    );
+  // El correo del cliente es opcional (sin él se coordina por WhatsApp) y nunca va a Cal.com:
+  // la reserva se crea solo con el teléfono y los avisos los envía Instafix por Brevo.
 
   // Referencia opaca para conciliar el webhook si la respuesta de Cal.com se pierde.
   const reference = newToken();
@@ -247,18 +257,31 @@ export async function createBooking(
   if (recheck && !recheck.available) throw slotTaken();
 
   let booking: CalBooking;
+  const calInput = {
+    start,
+    name,
+    phone,
+    request: input.request,
+    whatsappConsent: input.whatsappConsent,
+    reference,
+  };
   try {
-    booking = await createCalBooking({
-      start,
-      name,
-      email: attendeeEmail,
-      phone,
-      request: input.request,
-      whatsappConsent: input.whatsappConsent,
-      reference,
-    });
+    booking = await createCalBooking(calInput);
   } catch (error) {
-    return calFailure(error, start);
+    // Respaldo: si el tipo de evento de Cal.com volviera a exigir correo, se reintenta una vez
+    // con el buzón propio de Instafix (nunca el del cliente) para no dejar de recibir citas.
+    const fallback = relayEmail() || fallbackAttendeeEmail();
+    if (!emailRequired(error) || !fallback) return calFailure(error, start);
+    logEvent(
+      'booking.cal_email_required',
+      { hint: 'Cal.com pidió un correo de asistente: revisar las preguntas del tipo de evento' },
+      'warn',
+    );
+    try {
+      booking = await createCalBooking({ ...calInput, email: fallback });
+    } catch (retry) {
+      return calFailure(retry, start);
+    }
   }
   logEvent('booking.cal_created', {
     start: booking.start.toISOString(),

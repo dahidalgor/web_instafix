@@ -53,3 +53,20 @@ test('an invalid reference is quarantined and a guest never acquires a registere
     'OWNER_CONFLICT',
   );
 });
+
+test('correos que nunca son del cliente: buzón de Instafix y relleno de Cal.com', async () => {
+  const { isRelayEmail } = await import('../booking/booking.service');
+  const saved = process.env.CAL_ATTENDEE_RELAY_EMAIL;
+  process.env.CAL_ATTENDEE_RELAY_EMAIL = 'reservas@instafix.ec';
+  try {
+    assert.equal(isRelayEmail('Reservas@Instafix.ec'), true);
+    assert.equal(isRelayEmail('593969055752@sms.cal.com'), true);
+    assert.equal(isRelayEmail('alguien@cal.com'), true);
+    assert.equal(isRelayEmail('cliente@gmail.com'), false);
+    assert.equal(isRelayEmail('cliente@notcal.com'), false);
+    assert.equal(isRelayEmail(null), false);
+  } finally {
+    if (saved === undefined) delete process.env.CAL_ATTENDEE_RELAY_EMAIL;
+    else process.env.CAL_ATTENDEE_RELAY_EMAIL = saved;
+  }
+});

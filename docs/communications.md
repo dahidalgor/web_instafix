@@ -68,7 +68,7 @@ El correo muestra «Solicitud: “…”» con lo que describió el cliente; nun
 
 **Sin duplicados**: cada correo tiene una clave única (`email:<cita>:APPOINTMENT_CREATED`, `…:APPOINTMENT_CANCELLED`, `…:APPOINTMENT_RESCHEDULED:<nuevo inicio>`). La API y el webhook usan el mismo bloqueo de PostgreSQL; si el webhook llega antes que la respuesta de Cal.com, la API completa la misma fila. Los webhooks de reservas creadas por Instafix (`source = INSTAFIX_API`) solo actualizan el estado de Cal.com. Si Cal.com falla, no se guarda la cita ni se envía nada; si falla PostgreSQL después de crear en Cal.com, se cancela esa reserva.
 
-**Activación**: activados por defecto; solo `APPOINTMENT_EMAILS_ENABLED=false` los desactiva. A Cal.com se le entrega siempre un correo propio de Instafix (`CAL_ATTENDEE_RELAY_EMAIL` o, si no existe, el remitente de `SMTP_FROM`), nunca el del cliente: Cal.com no puede escribirle y no hay duplicados. Cuando un aviso no se envía queda una fila `SKIPPED` con el motivo; si Brevo lo rechaza, el historial guarda la respuesta SMTP (p. ej. «550 … not verified») sin direcciones.
+**Activación**: activados por defecto; solo `APPOINTMENT_EMAILS_ENABLED=false` los desactiva. A Cal.com no se le envía ningún correo de asistente: la reserva va solo con el teléfono (el tipo de evento no exige correo), así Cal.com no puede escribir al cliente y no hay duplicados. Solo si Cal.com rechazara una reserva por faltar el correo, se reintenta una vez con un buzón propio de Instafix (`CAL_ATTENDEE_RELAY_EMAIL` o el remitente de `SMTP_FROM`), nunca el del cliente. Los correos de relleno que Cal.com genere (p. ej. `…@sms.cal.com`) nunca se toman como correo del cliente. Cuando un aviso no se envía queda una fila `SKIPPED` con el motivo; si Brevo lo rechaza, el historial guarda la respuesta SMTP (p. ej. «550 … not verified») sin direcciones.
 
 **Causa de «no llegan los correos de cita agendada o cancelada» (18-10-2026, 2.ª revisión)**: sin `CAL_ATTENDEE_RELAY_EMAIL` y con `APPOINTMENT_EMAILS_ENABLED` vacío, los avisos quedaban desactivados (`SKIPPED`): ningún correo salía de Instafix.
 
@@ -104,3 +104,5 @@ WHATSAPP_OTP_ENABLED=true pnpm --filter @instafix/api whatsapp:test --to +5939XX
 ```
 
 Correo real controlado: Administración → Comunicaciones → «Enviar prueba real». «Aceptado» significa que Brevo recibió el mensaje; la llegada a la bandeja se comprueba en el buzón y en los registros de Brevo.
+
+**Reservas solo con teléfono (28-10-2026).** Causa del error «La agenda rechazó la reserva aunque el horario sigue libre»: el tipo de evento tenía un límite de reservas por persona y, como todas las reservas llevaban el mismo correo puente, Cal.com las contaba como de una sola persona. Se quitó el límite en Cal.com y la reserva ya no lleva correo de asistente.
