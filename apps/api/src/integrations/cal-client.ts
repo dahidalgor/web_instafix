@@ -121,7 +121,8 @@ export async function getCalSlots(start: string, end: string, timeZone: string) 
 export async function createCalBooking(input: {
   start: Date;
   name: string;
-  email: string;
+  /** Sin correo (lo normal): Cal.com identifica al asistente por su teléfono. */
+  email?: string | null;
   phone: string;
   request: string;
   whatsappConsent: boolean;
@@ -137,7 +138,9 @@ export async function createCalBooking(input: {
         eventTypeId: calEventTypeId(),
         attendee: {
           name: input.name,
-          email: input.email,
+          // El correo del cliente nunca se envía. Solo se manda uno propio de Instafix si Cal.com
+          // lo exige (ver createBooking); por defecto la reserva va solo con el teléfono.
+          ...(input.email ? { email: input.email } : {}),
           timeZone: 'America/Guayaquil',
           phoneNumber: input.phone,
           language: 'es',

@@ -31,6 +31,8 @@ setEmailProvider({
   },
 });
 const calBodies: any[] = [];
+/** Simula un tipo de evento de Cal.com que vuelve a exigir correo de asistente. */
+let calRequiresEmail = false;
 const original = globalThis.fetch;
 globalThis.fetch = (async (input: any, init?: RequestInit) => {
   const url = String(input);
@@ -43,6 +45,14 @@ globalThis.fetch = (async (input: any, init?: RequestInit) => {
     });
   if (url.endsWith('/bookings') && init?.method === 'POST') {
     calBodies.push(body);
+    if (calRequiresEmail && !body.attendee.email)
+      return Response.json(
+        {
+          status: 'error',
+          error: { code: 'BadRequestException', message: 'attendee email is required' },
+        },
+        { status: 400 },
+      );
     return Response.json({
       status: 'success',
       data: {
@@ -91,8 +101,8 @@ test(
         emails.filter((e) => e.to === email).map((e) => e.subject),
         ['Recibimos tu solicitud de visita · Instafix'],
       );
-      // Cal.com recibe un correo propio de Instafix: no puede escribir al cliente ni duplicar.
-      assert.equal(calBodies.at(-1).attendee.email, 'citas@instafix.ec');
+      // Cal.com no recibe ningún correo: no puede escribir al cliente ni duplicar avisos.
+      assert.equal('email' in calBodies.at(-1).attendee, false);
       assert.equal(JSON.stringify(calBodies.at(-1)).includes(email), false);
     } finally {
       await db.appointment.deleteMany({ where: { contactPhone: contact } });
@@ -161,3 +171,37 @@ test('a Brevo rejection is recorded with its real SMTP reason', { skip: !enabled
     setEmailProvider(previous);
   }
 });
+
+test(
+  'si Cal.com exige correo, se reintenta una vez con el buzón de Instafix (nunca el del cliente)',
+  { skip: !enabled },
+  async () => {
+    const controller = new BookingController();
+    const email = `cliente-${randomUUID()}@example.com`;
+    const contact = phone();
+    calRequiresEmail = true;
+    const before = calBodies.length;
+    try {
+      const result = await controller.create(
+        {
+          start: start(),
+          name: 'Cliente Respaldo',
+          email,
+          phone: contact,
+          request: 'Cambio de joysticks',
+          whatsappConsent: true,
+        },
+        req(),
+      );
+      assert.ok(result.appointmentId);
+      const sent = calBodies.slice(before);
+      assert.equal(sent.length, 2, 'un intento sin correo y un reintento');
+      assert.equal('email' in sent[0].attendee, false);
+      assert.equal(sent[1].attendee.email, 'citas@instafix.ec');
+      assert.equal(JSON.stringify(sent).includes(email), false);
+    } finally {
+      calRequiresEmail = false;
+      await db.appointment.deleteMany({ where: { contactPhone: contact } });
+    }
+  },
+);

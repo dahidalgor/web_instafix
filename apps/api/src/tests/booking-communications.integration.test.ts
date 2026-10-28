@@ -126,7 +126,9 @@ test(
         req(),
       );
       const create = calCalls.find((c) => c.url.endsWith('/bookings'))!;
-      assert.equal(create.body.attendee.email, RELAY);
+      // A Cal.com no se le envía ningún correo de asistente: solo el teléfono.
+      assert.equal('email' in create.body.attendee, false);
+      assert.equal(create.body.attendee.phoneNumber, phone);
       assert.equal(JSON.stringify(create.body).includes(email), false);
       assert.equal(create.body.bookingFieldsResponses.notes, 'Mi PS5 se apaga');
       assert.equal(await db.appointment.count({ where: { calUid: uid } }), 1);
