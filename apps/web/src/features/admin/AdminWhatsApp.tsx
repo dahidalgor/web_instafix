@@ -48,7 +48,14 @@ type Overview = {
   otp: Configuration & { template: string };
   cal: Configuration;
   jobs: Job[];
-  issues: { id: string; contactName: string; title: string; automationIssue: string }[];
+  issues: {
+    id: string;
+    contactName: string;
+    contactPhone: string;
+    title: string;
+    automationIssue: string;
+    needsConsent?: boolean;
+  }[];
 };
 const kinds: Record<string, string> = {
   INITIAL: 'Solicitud recibida (pide ubicación)',
@@ -135,6 +142,33 @@ export function AdminWhatsApp() {
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No se pudo actualizar');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+  /** El cliente confirmó (por llamada o en persona) que acepta WhatsApp: se registra y se envía. */
+  async function authorize(issue: Overview['issues'][number]) {
+    if (
+      !window.confirm(
+        `¿${issue.contactName} aceptó recibir WhatsApp de Instafix? Se registrará su autorización y se le enviará el mensaje de la cita.`,
+      )
+    )
+      return;
+    setBusyAction(`consent:${issue.id}`);
+    setMessage('');
+    try {
+      const result = await api<{ queued: boolean }>(
+        `admin/whatsapp/appointments/${issue.id}/consent`,
+        { method: 'POST' },
+      );
+      await load();
+      setMessage(
+        result.queued
+          ? `Autorización registrada. El WhatsApp a ${issue.contactName} sale en unos segundos.`
+          : `Autorización registrada para ${issue.contactName}. Recibirá los próximos avisos por WhatsApp.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No se pudo registrar la autorización');
     } finally {
       setBusyAction(null);
     }
@@ -239,12 +273,33 @@ export function AdminWhatsApp() {
             <div>
               <h3>Citas que necesitan atención</h3>
               {data.issues.map((issue) => (
-                <p key={issue.id}>
-                  <strong>
-                    {issue.contactName} · {issue.title}:
-                  </strong>{' '}
-                  {issue.automationIssue}
-                </p>
+                <div key={issue.id} className="whatsapp-issue">
+                  <p>
+                    <strong>
+                      {issue.contactName} · {issue.title}:
+                    </strong>{' '}
+                    {issue.automationIssue}
+                  </p>
+                  {issue.needsConsent && (
+                    <>
+                      <p className="small">
+                        Se agendó directamente en Cal.com, sin la casilla de autorización. Confirma
+                        con el cliente ({issue.contactPhone}) que acepta WhatsApp y envíalo desde
+                        aquí.
+                      </p>
+                      <BusyButton
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        busy={busyAction === `consent:${issue.id}`}
+                        disabled={busy}
+                        busyLabel="Enviando…"
+                        onClick={() => authorize(issue)}
+                      >
+                        Autorizó WhatsApp: enviar mensaje
+                      </BusyButton>
+                    </>
+                  )}
+                </div>
               ))}
             </div>
           )}

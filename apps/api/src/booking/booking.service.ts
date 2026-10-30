@@ -30,6 +30,7 @@ import { assertPhoneAllowed } from '../security/blocked-phones';
 import type { RequestOrigin } from '../security/client-identity';
 import { exclusive } from '../security/idempotency';
 import { rateLimited } from '../security/rate-events';
+import { WEB_CONSENT_ISSUE } from '../whatsapp/consent';
 
 /** Regla de negocio: una cita se reprograma como máximo 2 veces. */
 export const MAX_RESCHEDULES = 2;
@@ -308,9 +309,7 @@ export async function createBooking(
         calStatus: booking.status,
         whatsappConsentAt: input.whatsappConsent ? now : null,
         bookingIdentityIssue: null,
-        automationIssue: input.whatsappConsent
-          ? null
-          : 'Sin autorización de WhatsApp: coordinar la ubicación manualmente.',
+        automationIssue: input.whatsappConsent ? null : WEB_CONSENT_ISSUE,
       };
       // El webhook pudo llegar antes que esta respuesta: se completa esa misma fila.
       const existing = await tx.appointment.findUnique({ where: { calUid: booking.uid } });

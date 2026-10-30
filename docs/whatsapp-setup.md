@@ -97,8 +97,10 @@ En el evento `instafix/agenda-tu-cita-con-instafix`:
 2. Zona operativa `America/Guayaquil`.
    - **Aviso mínimo** (Limits → Minimum notice): pon un valor corto, por ejemplo **1 hora**. Instafix aplica su propia regla: se agenda **desde mañana** (fecha de Ecuador), incluido el primer horario de mañana aunque falten menos de 24 h (`BOOKING_MIN_DAYS_AHEAD`, por defecto 1). Con 24 h en Cal.com, esos horarios no aparecen.
 3. Teléfono del asistente (`attendeePhoneNumber`) obligatorio, con código internacional.
-4. Campo de texto obligatorio con identificador **`servicio`**.
-5. Casilla obligatoria **`whatsappConsent`**: «Autorizo a InstaFix a enviarme por WhatsApp la confirmación y los recordatorios de esta cita».
+4. Campo «¿Qué trabajo requiere?» (`notes`) obligatorio. La web de Instafix lo envía siempre.
+5. Autorización de WhatsApp: la web de Instafix la manda en la metadata de la reserva (`instafixWhatsappConsent`), no como campo de Cal.com. **No** crees una casilla `whatsappConsent` obligatoria: la API no la envía y Cal.com rechazaría las reservas de la web. Si quieres que quien reserve directamente en la página pública de Cal.com también pueda autorizar, crea la casilla **opcional** con identificador exacto `whatsappConsent`.
+   - Una reserva hecha en la página pública de Cal.com sin esa casilla aparece en Administración → WhatsApp → «Citas que necesitan atención» como «Falta autorización de WhatsApp en Cal.com». Confirma con el cliente que acepta WhatsApp y pulsa **«Autorizó WhatsApp: enviar mensaje»**: se registra la autorización (queda en el historial de administración) y sale el primer mensaje. Marcar «autoriza WhatsApp» al editar la cita hace lo mismo.
+   - Para que nadie reserve por fuera de la web, oculta el evento en tu perfil de Cal.com y no compartas su enlace directo (Instagram, Google, WhatsApp Business): comparte la web de Instafix.
 6. `CAL_API_KEY` de la cuenta propietaria, `CAL_EVENT_TYPE_ID` numérico, `CAL_API_VERSION=2026-02-25`.
 7. Webhook JSON predeterminado con secreto `CAL_WEBHOOK_SECRET` y eventos `BOOKING_REQUESTED`, `BOOKING_CREATED`, `BOOKING_RESCHEDULED`, `BOOKING_CANCELLED`, `BOOKING_REJECTED`.
 

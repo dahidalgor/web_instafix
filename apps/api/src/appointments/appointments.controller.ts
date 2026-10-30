@@ -25,6 +25,7 @@ import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '..
 import { z } from 'zod';
 import { cancelCalBooking } from '../integrations/cal-client';
 import { auditAdmin } from '../security/admin-audit';
+import { isConsentIssue } from '../whatsapp/consent';
 import { exclusive } from '../security/idempotency';
 
 /** createdAt = alta de la cita en Instafix; startsAt = inicio de la visita. Desempate por id. */
@@ -213,6 +214,10 @@ export class AppointmentsController {
                 whatsappConsentAt: whatsappConsent
                   ? existing.whatsappConsentAt || new Date()
                   : null,
+                // Autorizada desde el panel: el aviso de «falta autorización» ya no aplica.
+                ...(whatsappConsent && isConsentIssue(existing.automationIssue)
+                  ? { automationIssue: null }
+                  : {}),
               }
             : {}),
         },

@@ -8,6 +8,7 @@ import { db } from '../database/client';
 import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue';
 import { isRelayEmail, unassignedForReschedule } from '../booking/booking.service';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
+import { CAL_CONSENT_ISSUE } from '../whatsapp/consent';
 
 const envelope = z.object({
   triggerEvent: z.string(),
@@ -249,7 +250,7 @@ export async function receiveCalWebhook(body: unknown) {
       : !phone
         ? 'Falta un teléfono válido en Cal.com'
         : !consent
-          ? 'Falta autorización de WhatsApp en Cal.com'
+          ? CAL_CONSENT_ISSUE
           : !title
             ? 'Falta la descripción del trabajo (campo servicio)'
             : null;
