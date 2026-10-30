@@ -1,5 +1,24 @@
 # Diagnóstico de errores frecuentes · 18 de octubre de 2026
 
+## La web muestra todos los meses sin horarios
+
+La web no inventa horarios: muestra los que devuelve Cal.com (`GET /v2/slots` con `CAL_EVENT_TYPE_ID`). Si Cal.com falla, la web muestra un error; un calendario vacío significa que Cal.com respondió «sin horarios».
+
+**Revisión** (no muestra datos de clientes ni claves):
+
+- Administración → WhatsApp → **Agenda (Cal.com)**: horarios de los próximos 30 días y campos del evento que romperían las reservas.
+- Terminal:
+
+  ```sh
+  docker compose --env-file .env.production -f compose.production.yaml exec api pnpm cal:check
+  ```
+
+- Registro: `booking.slots_empty` cuando un mes entero llega vacío.
+
+**Causas habituales en Cal.com**: el evento no tiene una disponibilidad (horario) con horas, el rango de fechas reservables terminó, se cambió el evento o su ID (`CAL_EVENT_TYPE_ID`), un límite de reservas o un aviso mínimo muy alto. Ocultar el evento («Hidden») solo lo quita del perfil público: en el código de Cal.com no afecta a los horarios de la API. Si al ocultarlo desaparecieron, vuelve a mostrarlo y revisa qué más cambió en el evento.
+
+**Campos del evento**: la web envía `name`, `attendeePhoneNumber` y `notes`, y la autorización de WhatsApp en la metadata. Cualquier otro campo **obligatorio** (por ejemplo una casilla `whatsappConsent` obligatoria) hace que Cal.com rechace todas las reservas de la web; la revisión de la agenda lo avisa.
+
 ## «Las HH:MM acaban de dejar de estar disponibles» con cualquier horario
 
 **Causa**: el backend convertía cualquier rechazo 4xx de Cal.com en «horario ocupado» (409). Una clave de API inválida (401), permisos (403), un tipo de evento incorrecto (404) o un campo obligatorio de la reserva (400) aparecían como si el horario se hubiera ocupado. `GET /v2/slots` es público en Cal.com, así que los horarios se veían aunque crear la reserva fallara.

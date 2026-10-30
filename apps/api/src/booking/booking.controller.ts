@@ -21,6 +21,7 @@ import { authenticated, checkOrigin, sessionToken } from '../auth/session';
 import { newToken, tokenHash } from '../auth/security';
 import { db } from '../database/client';
 import { getCalSlots } from '../integrations/cal-client';
+import { logEvent } from '../common/log-event';
 import { cancelBooking, createBooking, rescheduleBooking } from './booking.service';
 
 const slotCache = new Map<string, { at: number; value: Record<string, string[]> }>();
@@ -64,6 +65,18 @@ export class BookingController {
       return { timeZone: 'America/Guayaquil', days: cached.value };
     try {
       const value = await getCalSlots(from, to, 'America/Guayaquil');
+      // Un mes entero sin horarios casi siempre es configuración de Cal.com (disponibilidad,
+      // rango de fechas, evento): queda en el registro. Administración → WhatsApp lo explica.
+      if (!Object.keys(value).length && end.getTime() - start.getTime() >= 20 * 86400000)
+        logEvent(
+          'booking.slots_empty',
+          {
+            from,
+            to,
+            hint: 'Cal.com no ofrece horarios: revisar Administración → WhatsApp → Agenda',
+          },
+          'warn',
+        );
       slotCache.set(key, { at: Date.now(), value });
       if (slotCache.size > 50) slotCache.delete(slotCache.keys().next().value!);
       return { timeZone: 'America/Guayaquil', days: value };

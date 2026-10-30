@@ -752,3 +752,8 @@
     overscroll-behavior: contain;
   }
 }
+/* Agenda de Cal.com con un problema que deja la web sin horarios o sin reservas. */
+.whatsapp-status.is-problem {
+  border-color: #c0392b;
+  border-left-width: 4px;
+}

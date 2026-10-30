@@ -122,13 +122,27 @@ const sources: Record<string, string> = {
   history: 'Historial',
 };
 
+type CalHealth = {
+  ok: boolean;
+  slots: number | null;
+  days: number | null;
+  event: { title: string | null; hidden: boolean | null } | null;
+  problems: string[];
+  notes: string[];
+};
+
 export function AdminWhatsApp() {
   const [data, setData] = useState<Overview | null>(null);
+  const [agenda, setAgenda] = useState<CalHealth | null>(null);
   const [message, setMessage] = useState('');
   // Acción en curso («refresh» o el id del envío): solo su botón muestra la espera.
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const busy = busyAction !== null;
   async function load() {
+    // La revisión de la agenda no bloquea el resto del panel.
+    void api<CalHealth>('admin/whatsapp/cal-health')
+      .then(setAgenda)
+      .catch(() => setAgenda(null));
     setData(await api<Overview>('admin/whatsapp'));
   }
   useEffect(() => {
@@ -273,6 +287,29 @@ export function AdminWhatsApp() {
                 {data.account.authenticationTemplate &&
                   ` · ${templateStatuses[data.account.authenticationTemplate.status] || data.account.authenticationTemplate.status}`}
               </p>
+            </div>
+          )}
+          {agenda && (
+            <div className={`whatsapp-status${agenda.ok ? '' : ' is-problem'}`}>
+              <h3>Agenda (Cal.com)</h3>
+              <p role={agenda.ok ? undefined : 'alert'}>
+                {agenda.slots === null
+                  ? 'No se pudieron consultar los horarios.'
+                  : agenda.slots
+                    ? `${agenda.slots} horarios disponibles en ${agenda.days} días de los próximos 30.`
+                    : 'Sin horarios disponibles en los próximos 30 días.'}
+                {agenda.event?.title && ` Evento: ${agenda.event.title}.`}
+              </p>
+              {agenda.problems.map((problem) => (
+                <p key={problem}>
+                  <strong>Revisar:</strong> {problem}
+                </p>
+              ))}
+              {agenda.notes.map((note) => (
+                <p key={note} className="small">
+                  {note}
+                </p>
+              ))}
             </div>
           )}
           {data.issues.length > 0 && (

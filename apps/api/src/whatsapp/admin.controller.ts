@@ -7,6 +7,7 @@ import { otpConfiguration } from './otp.provider';
 import { restoreBookingFlow } from '../appointments/whatsapp-consent';
 import { deliverNotification } from '../notifications/notification.service';
 import { auditAdmin } from '../security/admin-audit';
+import { calHealth } from '../integrations/cal-health';
 import { isConsentIssue } from './consent';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from './queue';
 import { WhatsAppService } from './whatsapp.service';
@@ -86,6 +87,11 @@ export class WhatsAppAdminController {
       messages: messages.map((m) => ({ ...m, outcome: outcomes.get(m.providerMessageId) ?? null })),
       webhookIssues,
     };
+  }
+  /** Revisión de la agenda: horarios de los próximos 30 días y campos del evento en Cal.com. */
+  @Get('cal-health') async calHealth(@Req() req: Request) {
+    await authenticated(req, true);
+    return calHealth();
   }
   /**
    * Reserva hecha directamente en Cal.com (sin la casilla de autorización): el equipo confirma
