@@ -339,7 +339,10 @@ export async function receiveCalWebhook(body: unknown) {
           },
         });
     if (!issue) await queueJob(tx, appointment, 'INITIAL', new Date());
-    if (!existing && fromApi && !issue)
+    // Reserva nueva (de la web con respuesta perdida o hecha directo en Cal.com): mismo flujo que
+    // una de la web desde el inicio. Aviso a técnicos y correo no dependen de la autorización de
+    // WhatsApp; solo el WhatsApp la espera. Una reprogramación no es una solicitud nueva.
+    if (!existing && !rescheduledFrom && phone && !identity.bookingIdentityIssue)
       await publishAppointmentEvent(tx, appointment, { type: 'appointment.created' });
     await saveEvent(issue ? 'NEEDS_REVIEW' : 'IMPORTED');
     return { ok: true };
