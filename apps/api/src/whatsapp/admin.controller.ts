@@ -4,7 +4,9 @@ import { authenticated, checkOrigin } from '../auth/session';
 import { db } from '../database/client';
 import { calConfiguration, whatsappConfiguration } from './config';
 import { otpConfiguration } from './otp.provider';
-import { lockAppointment } from './queue';
+import { auditAdmin } from '../security/admin-audit';
+import { isConsentIssue } from './consent';
+import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from './queue';
 import { WhatsAppService } from './whatsapp.service';
 import { WHATSAPP_BUDGET, eventTypeOf } from './budget';
 
@@ -74,11 +76,46 @@ export class WhatsAppAdminController {
       // Auditoría: cita, evento, canal, proveedor, estado (SENT, FAILED, PENDING o SUPPRESSED_*).
       jobs: jobs.map((job) => ({ ...job, channel: 'WHATSAPP', eventType: eventTypeOf(job.kind) })),
       budget: WHATSAPP_BUDGET,
-      issues,
+      issues: issues.map((issue) => ({
+        ...issue,
+        needsConsent: isConsentIssue(issue.automationIssue),
+      })),
       events,
       messages: messages.map((m) => ({ ...m, outcome: outcomes.get(m.providerMessageId) ?? null })),
       webhookIssues,
     };
+  }
+  /**
+   * Reserva hecha directamente en Cal.com (sin la casilla de autorización): el equipo confirma
+   * con el cliente que acepta WhatsApp y desde aquí se envía el primer mensaje.
+   */
+  @Post('appointments/:id/consent') async consent(@Param('id') id: string, @Req() req: Request) {
+    checkOrigin(req);
+    const admin = await authenticated(req, true);
+    return db.$transaction(async (tx) => {
+      await lockAppointment(tx, id);
+      const current = await tx.appointment.findUnique({ where: { id } });
+      if (!current || current.deletedAt || current.status === 'CANCELLED')
+        throw new BadRequestException('Cita no encontrada');
+      if (!current.contactPhone)
+        throw new BadRequestException('La cita no tiene un teléfono válido');
+      if (current.bookingIdentityIssue)
+        throw new BadRequestException('Revisa primero la identidad del cliente de esta cita');
+      await cancelPendingJobs(tx, id);
+      const appointment = await tx.appointment.update({
+        where: { id },
+        data: {
+          whatsappConsentAt: current.whatsappConsentAt || new Date(),
+          automationRevision: { increment: 1 },
+          ...(isConsentIssue(current.automationIssue) ? { automationIssue: null } : {}),
+        },
+      });
+      const sends = appointment.status === 'PENDING_LOCATION' && !appointment.locationReceivedAt;
+      if (sends) await queueJob(tx, appointment, 'INITIAL', new Date());
+      await queueReminders(tx, appointment);
+      await auditAdmin(admin.id, 'WHATSAPP_CONSENT_RECORDED', id, {}, tx);
+      return { ok: true, queued: sends };
+    });
   }
   @Post(':id/retry') async retry(@Param('id') id: string, @Req() req: Request) {
     checkOrigin(req);

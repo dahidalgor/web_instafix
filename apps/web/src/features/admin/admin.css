@@ -20,6 +20,13 @@
 .whatsapp-jobs h4 {
   margin-top: 0;
 }
+.whatsapp-issue {
+  margin-block: 14px;
+  overflow-wrap: anywhere;
+}
+.whatsapp-issue p {
+  margin-block: 0 6px;
+}
 .editor .checkbox-label {
   display: flex;
   align-items: start;
