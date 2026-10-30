@@ -19,7 +19,8 @@ export const appointmentSchema = z
     contactName: z.string().trim().max(100).optional(),
     contactPhone: z.string().trim().max(30).optional(),
     whatsappConsent: z.boolean().optional(),
-    title: z.string().trim().min(3).max(150),
+    // Igual que la solicitud de la reserva web (hasta 500): si no, esas citas no se pueden editar.
+    title: z.string().trim().min(3).max(500),
     device: z.string().trim().min(2).max(100),
     startsAt: z.string().datetime({ offset: true }),
     endsAt: z.string().datetime({ offset: true }),

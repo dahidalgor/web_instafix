@@ -284,19 +284,21 @@ export function AdminWhatsApp() {
                     <>
                       <p className="small">
                         Se agendó directamente en Cal.com, sin la casilla de autorización. Confirma
-                        con el cliente ({issue.contactPhone}) que acepta WhatsApp y envíalo desde
-                        aquí.
+                        con el cliente ({issue.contactPhone}) que acepta WhatsApp y márcalo aquí: se
+                        le envía el mensaje de la cita.
                       </p>
-                      <BusyButton
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        busy={busyAction === `consent:${issue.id}`}
-                        disabled={busy}
-                        busyLabel="Enviando…"
-                        onClick={() => authorize(issue)}
-                      >
-                        Autorizó WhatsApp: enviar mensaje
-                      </BusyButton>
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={busyAction === `consent:${issue.id}`}
+                          disabled={busy}
+                          onChange={(event) => {
+                            if (event.target.checked) void authorize(issue);
+                          }}
+                        />
+                        El cliente autorizó recibir mensajes de esta cita por WhatsApp.
+                        {busyAction === `consent:${issue.id}` && ' Enviando…'}
+                      </label>
                     </>
                   )}
                 </div>

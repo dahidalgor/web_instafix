@@ -27,12 +27,14 @@
 .whatsapp-issue p {
   margin-block: 0 6px;
 }
-.editor .checkbox-label {
+.editor .checkbox-label,
+.whatsapp-issue .checkbox-label {
   display: flex;
   align-items: start;
   gap: 12px;
 }
-.editor .checkbox-label input {
+.editor .checkbox-label input,
+.whatsapp-issue .checkbox-label input {
   width: auto;
   flex: 0 0 auto;
 }

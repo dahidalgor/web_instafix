@@ -383,7 +383,7 @@ export function AdminAppointments({
                   key === 'technician' && !!list.find((item) => item.id === id)?.assignedTechnician
                 }
                 required={key === 'title' || key === 'device'}
-                maxLength={key === 'address' ? 500 : 100}
+                maxLength={key === 'address' || key === 'title' ? 500 : 100}
                 value={String(draft[key as keyof typeof draft])}
                 onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
               />
