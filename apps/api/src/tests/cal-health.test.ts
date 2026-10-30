@@ -3,12 +3,25 @@ import { test } from 'node:test';
 import { calHealth } from '../integrations/cal-health';
 
 /** Cal.com simulado: `slots` por día y `fields` del formulario del evento. */
-function mockCal(slots: Record<string, { start: string }[]>, event: Record<string, unknown>) {
+const workdays = {
+  id: 7,
+  name: 'Horario laboral',
+  timeZone: 'America/Guayaquil',
+  availability: [{ days: ['Monday', 'Tuesday'], startTime: '09:00', endTime: '17:00' }],
+  overrides: [],
+};
+function mockCal(
+  slots: Record<string, { start: string }[]>,
+  event: Record<string, unknown>,
+  hours: Record<string, unknown> = workdays,
+) {
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes('/v2/slots'))
       return new Response(JSON.stringify({ status: 'success', data: slots }), { status: 200 });
+    if (url.includes('/v2/schedules/'))
+      return new Response(JSON.stringify({ status: 'success', data: hours }), { status: 200 });
     if (url.includes('/v2/event-types/'))
       return new Response(JSON.stringify({ status: 'success', data: event }), { status: 200 });
     throw new Error(`URL inesperada ${url}`);
@@ -78,4 +91,37 @@ test('campo obligatorio que la web no envía: avisa antes de que fallen las rese
   assert.ok(health.problems[0].includes('whatsappConsent'));
   assert.ok(health.notes.some((n) => n.includes('correo')));
   assert.ok(health.notes.some((n) => n.includes('24 h')));
+});
+
+test('horario sin horas o rango de fechas vencido: dice qué cambiar en Cal.com', async (t) => {
+  Object.assign(process.env, env);
+  t.after(
+    mockCal(
+      {},
+      {
+        title: 'Agenda',
+        hidden: true,
+        scheduleId: 7,
+        bookingFields: defaults,
+        bookingWindow: { type: 'range', value: ['2026-09-01', '2026-10-31'] },
+      },
+      { ...workdays, availability: [] },
+    ),
+  );
+  const health = await calHealth(now);
+  assert.equal(health.ok, false);
+  assert.ok(health.problems.some((p) => p.includes('terminó el 2026-10-31')));
+  assert.ok(health.problems.some((p) => p.includes('no tiene días con horas')));
+  assert.equal(health.schedule?.name, 'Horario laboral');
+  assert.equal((health.config as { scheduleId: number }).scheduleId, 7);
+  // Con otras causas visibles, el evento oculto queda solo como nota informativa.
+  assert.ok(health.notes.some((n) => n.includes('Su enlace directo sigue funcionando')));
+});
+
+test('sin horarios y sin otra causa visible: sugiere volver a mostrar el evento', async (t) => {
+  Object.assign(process.env, env);
+  t.after(mockCal({}, { title: 'Agenda', hidden: true, scheduleId: 7, bookingFields: defaults }));
+  const health = await calHealth(now);
+  assert.equal(health.slots, 0);
+  assert.ok(health.notes.some((n) => n.includes('vuelve a mostrarlo')));
 });

@@ -3,6 +3,7 @@ import { ProviderError } from './provider-error';
 
 const TIME_ZONE = 'America/Guayaquil';
 const eventTypesVersion = () => process.env.CAL_EVENT_TYPES_API_VERSION || '2024-06-14';
+const schedulesVersion = () => process.env.CAL_SCHEDULES_API_VERSION || '2024-06-11';
 
 /** Campos del formulario de Cal.com que la web de Instafix envía al reservar. */
 const SENT_FIELDS = new Set(['name', 'attendeePhoneNumber', 'notes']);
@@ -19,17 +20,27 @@ export type CalHealth = {
     lengthInMinutes: number | null;
     minimumBookingNotice: number | null;
   } | null;
+  /** Ajustes del evento que deciden si hay horarios (sin datos de clientes). */
+  config: Record<string, unknown> | null;
+  /** Horario (disponibilidad) que usa el evento. */
+  schedule: {
+    id: number | null;
+    name: string | null;
+    timeZone: string | null;
+    availability: { days: string[]; startTime: string; endTime: string }[];
+    overrides: number;
+  } | null;
   problems: string[];
   notes: string[];
 };
 
-async function eventType() {
+async function calGet(path: string, version: string) {
   if (!process.env.CAL_API_KEY) throw new ProviderError('Falta configurar Cal.com', 'FAILED');
-  const response = await fetch(`https://api.cal.com/v2/event-types/${calEventTypeId()}`, {
+  const response = await fetch(`https://api.cal.com/v2${path}`, {
     redirect: 'error',
     headers: {
       Authorization: `Bearer ${process.env.CAL_API_KEY}`,
-      'cal-api-version': eventTypesVersion(),
+      'cal-api-version': version,
     },
     signal: AbortSignal.timeout(12000),
   });
@@ -37,6 +48,10 @@ async function eventType() {
   const body = (await response.json().catch(() => null)) as { data?: unknown } | null;
   return (body?.data ?? null) as Record<string, unknown> | null;
 }
+const eventType = () => calGet(`/event-types/${calEventTypeId()}`, eventTypesVersion());
+/** Horario del evento; sin uno propio, el horario predeterminado de la cuenta. */
+const schedule = (id: number | null) =>
+  calGet(id ? `/schedules/${id}` : '/schedules/default', schedulesVersion());
 
 /**
  * Revisión de la agenda para Administración: que Cal.com ofrezca horarios y que el tipo de
@@ -66,6 +81,8 @@ export async function calHealth(now = new Date()): Promise<CalHealth> {
     );
   }
   let event: CalHealth['event'] = null;
+  let config: CalHealth['config'] = null;
+  let hours: CalHealth['schedule'] = null;
   try {
     const data = await eventType();
     if (data) {
@@ -89,9 +106,72 @@ export async function calHealth(now = new Date()): Promise<CalHealth> {
             `El campo «${id}» es obligatorio en Cal.com y la web no lo envía: Cal.com rechazará las reservas. Hazlo opcional.`,
           );
       }
+      // Solo ajustes de agenda: nunca datos de reservas ni de clientes.
+      const pick = (keys: string[]) =>
+        Object.fromEntries(keys.filter((k) => data[k] !== undefined).map((k) => [k, data[k]]));
+      config = pick([
+        'id',
+        'slug',
+        'hidden',
+        'scheduleId',
+        'lengthInMinutes',
+        'minimumBookingNotice',
+        'bookingWindow',
+        'bookingLimitsCount',
+        'bookingLimitsDuration',
+        'bookerActiveBookingsLimit',
+        'onlyShowFirstAvailableSlot',
+        'slotInterval',
+        'offsetStart',
+        'beforeEventBuffer',
+        'afterEventBuffer',
+        'seats',
+        'confirmationPolicy',
+        'requiresConfirmation',
+        'disableGuests',
+      ]);
+      const window = data.bookingWindow as
+        { type?: string; value?: unknown; rolling?: boolean } | null | undefined;
+      if (window?.type === 'range' && Array.isArray(window.value)) {
+        const end = String(window.value[1] ?? '').slice(0, 10);
+        if (end && end < dayIn(now, TIME_ZONE))
+          problems.push(
+            `El rango de fechas reservables del evento terminó el ${end}: Cal.com no ofrece fechas después. Cámbialo en el evento → Limits → «Limit future bookings».`,
+          );
+      }
+      try {
+        const scheduleId = typeof data.scheduleId === 'number' ? data.scheduleId : null;
+        const found = await schedule(scheduleId);
+        if (found) {
+          const availability = (Array.isArray(found.availability) ? found.availability : []) as {
+            days?: string[];
+            startTime?: string;
+            endTime?: string;
+          }[];
+          hours = {
+            id: typeof found.id === 'number' ? found.id : scheduleId,
+            name: typeof found.name === 'string' ? found.name : null,
+            timeZone: typeof found.timeZone === 'string' ? found.timeZone : null,
+            availability: availability.map((a) => ({
+              days: a.days ?? [],
+              startTime: a.startTime ?? '',
+              endTime: a.endTime ?? '',
+            })),
+            overrides: Array.isArray(found.overrides) ? found.overrides.length : 0,
+          };
+          if (!hours.availability.some((a) => a.days.length))
+            problems.push(
+              `El horario «${hours.name ?? hours.id}» no tiene días con horas: Cal.com no ofrece horarios. Añade días y horas en Cal.com → Availability.`,
+            );
+        }
+      } catch {
+        notes.push('No se pudo leer el horario (Availability) del evento en Cal.com.');
+      }
       if (event.hidden)
         notes.push(
-          'El evento está oculto en tu perfil de Cal.com. Su enlace directo sigue funcionando.',
+          slots === 0 && !problems.some((p) => !p.startsWith('Cal.com no ofrece'))
+            ? 'El evento está oculto en tu perfil de Cal.com y no hay otra causa visible: vuelve a mostrarlo y repite la revisión para descartarlo.'
+            : 'El evento está oculto en tu perfil de Cal.com. Su enlace directo sigue funcionando.',
         );
       if ((event.minimumBookingNotice ?? 0) > 12 * 60)
         notes.push(
@@ -101,5 +181,14 @@ export async function calHealth(now = new Date()): Promise<CalHealth> {
   } catch {
     notes.push('No se pudo leer la configuración del evento en Cal.com.');
   }
-  return { ok: problems.length === 0, slots, days, event, problems, notes };
+  return {
+    ok: problems.length === 0,
+    slots,
+    days,
+    event,
+    config,
+    schedule: hours,
+    problems,
+    notes,
+  };
 }
