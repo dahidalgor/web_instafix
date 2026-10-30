@@ -125,3 +125,26 @@ test('sin horarios y sin otra causa visible: sugiere volver a mostrar el evento'
   assert.equal(health.slots, 0);
   assert.ok(health.notes.some((n) => n.includes('vuelve a mostrarlo')));
 });
+
+test('límites de frecuencia o duración activados: los señala como causa', async (t) => {
+  Object.assign(process.env, env);
+  t.after(
+    mockCal(
+      {},
+      {
+        title: 'Agenda',
+        hidden: false,
+        scheduleId: 7,
+        bookingFields: defaults,
+        bookingLimitsCount: { day: 2, week: 0 },
+        bookingLimitsDuration: { month: 240 },
+      },
+    ),
+  );
+  const health = await calHealth(now);
+  assert.equal(health.ok, false);
+  const limit = health.problems.find((p) => p.includes('Limit booking frequency'));
+  assert.ok(limit?.includes('day: 2'));
+  assert.ok(limit?.includes('month: 240 min'));
+  assert.ok(!limit?.includes('week'));
+});

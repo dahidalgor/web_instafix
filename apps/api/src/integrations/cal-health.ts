@@ -130,6 +130,31 @@ export async function calHealth(now = new Date()): Promise<CalHealth> {
         'requiresConfirmation',
         'disableGuests',
       ]);
+      // «Limit booking frequency» y «Limit total booking duration»: al alcanzar el tope, Cal.com
+      // deja de ofrecer horarios en todo ese día, semana o mes.
+      const limits = (value: unknown) =>
+        value && typeof value === 'object'
+          ? Object.entries(value as Record<string, unknown>).filter(
+              ([key, v]) => key !== 'disabled' && typeof v === 'number' && v > 0,
+            )
+          : [];
+      const frequency = limits(data.bookingLimitsCount);
+      const duration = limits(data.bookingLimitsDuration);
+      if (frequency.length || duration.length) {
+        const active = [
+          frequency.length &&
+            `«Limit booking frequency» (${frequency.map(([k, v]) => `${k}: ${v}`).join(', ')})`,
+          duration.length &&
+            `«Limit total booking duration» (${duration.map(([k, v]) => `${k}: ${v} min`).join(', ')})`,
+        ]
+          .filter(Boolean)
+          .join(' y ');
+        (slots === 0 ? problems : notes).push(
+          slots === 0
+            ? `El evento tiene activado ${active}. Al llegar al tope Cal.com deja de ofrecer horarios: es la causa más probable del calendario vacío. Desactívalo en el evento → Limits.`
+            : `El evento tiene activado ${active}. Al llegar al tope, Cal.com deja de ofrecer horarios en ese periodo.`,
+        );
+      }
       const window = data.bookingWindow as
         { type?: string; value?: unknown; rolling?: boolean } | null | undefined;
       if (window?.type === 'range' && Array.isArray(window.value)) {
