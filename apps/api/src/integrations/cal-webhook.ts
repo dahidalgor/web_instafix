@@ -10,6 +10,20 @@ import { isRelayEmail, unassignedForReschedule } from '../booking/booking.servic
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { CAL_CONSENT_ISSUE } from '../whatsapp/consent';
 
+/**
+ * Evento actual y, tras cambiar de evento en Cal.com, los anteriores
+ * (CAL_PREVIOUS_EVENT_TYPE_IDS, separados por comas): las citas ya agendadas en el evento viejo
+ * siguen recibiendo cancelaciones y cambios. Las reservas nuevas usan solo el actual.
+ */
+export function calEventTypeIds() {
+  return [
+    process.env.CAL_EVENT_TYPE_ID,
+    ...(process.env.CAL_PREVIOUS_EVENT_TYPE_IDS || '').split(','),
+  ]
+    .map((id) => Number(String(id ?? '').trim()))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
 const envelope = z.object({
   triggerEvent: z.string(),
   createdAt: z.string().datetime({ offset: true }),
@@ -44,7 +58,7 @@ export async function receiveCalWebhook(body: unknown) {
   if (!process.env.CAL_EVENT_TYPE_ID)
     throw new ServiceUnavailableException('Falta configurar el tipo de evento Cal');
   const event = parsed.data;
-  if (event.payload.eventTypeId !== Number(process.env.CAL_EVENT_TYPE_ID)) return { ignored: true };
+  if (!calEventTypeIds().includes(event.payload.eventTypeId)) return { ignored: true };
   const accepted = [
     'BOOKING_REQUESTED',
     'BOOKING_CREATED',
