@@ -104,6 +104,18 @@ En el evento `instafix/agenda-tu-cita-con-instafix`:
 6. `CAL_API_KEY` de la cuenta propietaria, `CAL_EVENT_TYPE_ID` numérico, `CAL_API_VERSION=2026-02-25`.
 7. Webhook JSON predeterminado con secreto `CAL_WEBHOOK_SECRET` y eventos `BOOKING_REQUESTED`, `BOOKING_CREATED`, `BOOKING_RESCHEDULED`, `BOOKING_CANCELLED`, `BOOKING_REJECTED`.
 
+### Cambiar a un evento nuevo de Cal.com
+
+Instafix no usa el enlace del evento (público ni privado): consulta horarios y crea reservas por la API con el ID del evento. Para pasar a un evento nuevo:
+
+1. Crea el evento con la configuración de esta sección: duración, requiere confirmación, horario (Availability) con días y horas, aviso mínimo de 1 h, teléfono obligatorio, «¿Qué trabajo requiere?» (`notes`) obligatorio, correo opcional y la casilla `whatsappConsent` opcional.
+2. Copia su ID: es el número de la dirección al abrir el evento en Cal.com (`/event-types/<ID>`).
+3. Webhook: si el webhook de Instafix está dentro del evento viejo, créalo igual en el nuevo (misma URL, secreto y eventos). Si está en Settings → Developer → Webhooks, ya cubre todos los eventos.
+4. En `.env.production`: `CAL_EVENT_TYPE_ID=<ID nuevo>` y `CAL_PREVIOUS_EVENT_TYPE_IDS=<ID viejo>`. Así las citas ya agendadas en el evento viejo siguen recibiendo cancelaciones y cambios.
+5. Reinicia la API y revisa: `docker compose --env-file .env.production -f compose.production.yaml up -d api` y luego `... exec api pnpm cal:check`.
+
+No borres el evento viejo mientras tenga citas pendientes; ocúltalo.
+
 ## Operación
 
 - Cola `AutomationJob` revisada cada 15 s; bandeja de webhooks cada 3 s. Sobreviven reinicios y se coordinan con PostgreSQL.
