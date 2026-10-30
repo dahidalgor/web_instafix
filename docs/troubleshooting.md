@@ -15,6 +15,8 @@ La web no inventa horarios: muestra los que devuelve Cal.com (`GET /v2/slots` co
 
 - Registro: `booking.slots_empty` cuando un mes entero llega vacío.
 
+**Caso del 30-10-2026**: el evento tenía activados «Limit booking frequency» y «Limit total booking duration» (Limits). Al alcanzar el tope, Cal.com dejó de ofrecer horarios en toda la agenda, también en su propia página. La revisión de la agenda ahora los señala.
+
 **Causas habituales en Cal.com**: el evento no tiene una disponibilidad (horario) con horas, el rango de fechas reservables terminó, se cambió el evento o su ID (`CAL_EVENT_TYPE_ID`), un límite de reservas o un aviso mínimo muy alto. Ocultar el evento («Hidden») solo lo quita del perfil público: en el código de Cal.com no afecta a los horarios de la API. Si al ocultarlo desaparecieron, vuelve a mostrarlo y revisa qué más cambió en el evento.
 
 **Campos del evento**: la web envía `name`, `attendeePhoneNumber` y `notes`, y la autorización de WhatsApp en la metadata. Cualquier otro campo **obligatorio** (por ejemplo una casilla `whatsappConsent` obligatoria) hace que Cal.com rechace todas las reservas de la web; la revisión de la agenda lo avisa.
