@@ -13,10 +13,11 @@ import type { WhatsAppService } from '../whatsapp/whatsapp.service';
 
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 
-async function person(role: 'ADMIN' | 'CUSTOMER') {
+async function person(role: 'ADMIN' | 'CUSTOMER' | 'TECHNICIAN', email?: string) {
   const user = await db.user.create({
     data: {
       name: `${role} Autoriza`,
+      email,
       phone: `+59393${randomInt(1000000, 9999999)}`,
       passwordHash: await hashPassword('clave-autoriza-123'),
       role,
@@ -32,6 +33,33 @@ async function person(role: 'ADMIN' | 'CUSTOMER') {
     socket: { remoteAddress: `10.7.${randomInt(0, 255)}.${randomInt(1, 254)}` },
   } as unknown as Request;
   return { user, req };
+}
+/** Técnico con un dispositivo suscrito a avisos push (destinatario de «nueva solicitud»). */
+async function technicianWithPush() {
+  const { user } = await person('TECHNICIAN');
+  await db.pushSubscription.create({
+    data: {
+      userId: user.id,
+      endpointHash: randomUUID(),
+      endpoint: `https://fcm.googleapis.com/fcm/send/${randomUUID()}`,
+      p256dh: 'clave',
+      auth: 'auth',
+      installationId: randomUUID(),
+    },
+  });
+  return user;
+}
+async function cleanup(uid: string, userIds: string[]) {
+  const row = await db.appointment.findUnique({ where: { calUid: uid } });
+  if (row) {
+    await db.notification.deleteMany({ where: { appointmentId: row.id } });
+    await db.automationJob.deleteMany({ where: { appointmentId: row.id } });
+    await db.integrationEvent.deleteMany({ where: { sourceId: row.id } });
+    await db.appointment.delete({ where: { id: row.id } });
+  }
+  await db.integrationEvent.deleteMany({ where: { sourceId: uid } });
+  await db.adminAction.deleteMany({ where: { actorId: { in: userIds } } });
+  await db.user.deleteMany({ where: { id: { in: userIds } } });
 }
 const status = async (promise: Promise<unknown>) => {
   try {
@@ -49,18 +77,13 @@ test(
     const saved = { ...process.env };
     process.env.CAL_EVENT_TYPE_ID = '987654329';
     const uid = `consent-${randomUUID()}`;
-    const contact = `+59399${randomInt(1000000, 9999999)}`;
     const admin = await person('ADMIN');
-    const customer = await person('CUSTOMER');
+    // El cliente ya tiene cuenta con ese teléfono verificado y un correo.
+    const customer = await person('CUSTOMER', `saul-${randomUUID().slice(0, 8)}@example.com`);
+    const contact = customer.user.phone;
+    const tech = await technicianWithPush();
     t.after(async () => {
-      const row = await db.appointment.findUnique({ where: { calUid: uid } });
-      if (row) {
-        await db.automationJob.deleteMany({ where: { appointmentId: row.id } });
-        await db.appointment.delete({ where: { id: row.id } });
-      }
-      await db.integrationEvent.deleteMany({ where: { sourceId: uid } });
-      await db.adminAction.deleteMany({ where: { actorId: admin.user.id } });
-      await db.user.deleteMany({ where: { id: { in: [admin.user.id, customer.user.id] } } });
+      await cleanup(uid, [admin.user.id, customer.user.id, tech.id]);
       process.env = saved;
     });
     const start = new Date(Date.now() + 3 * 86400000);
@@ -89,11 +112,31 @@ test(
     assert.equal(overview.issues.find((i) => i.id === booked.id)?.needsConsent, true);
 
     assert.equal(await status(controller.consent(booked.id, customer.req)), 403);
-    assert.deepEqual(await controller.consent(booked.id, admin.req), { ok: true, queued: true });
+    assert.equal(await db.notification.count({ where: { appointmentId: booked.id } }), 0);
+    assert.deepEqual(await controller.consent(booked.id, admin.req), {
+      ok: true,
+      queued: true,
+      linked: true,
+    });
 
     const after = await db.appointment.findUniqueOrThrow({ where: { id: booked.id } });
     assert.equal(after.automationIssue, null, 'el aviso desaparece de «necesitan atención»');
     assert.ok(after.whatsappConsentAt);
+    // Flujo normal: cita en la cuenta del cliente, aviso a técnicos y correo de cita recibida.
+    assert.equal(after.userId, customer.user.id);
+    assert.equal(after.contactEmail, customer.user.email);
+    const notices = await db.notification.findMany({ where: { appointmentId: booked.id } });
+    assert.ok(
+      notices.some(
+        (n) =>
+          n.channel === 'WEB_PUSH' && n.kind === 'APPOINTMENT_REQUESTED' && n.recipient === tech.id,
+      ),
+      'el técnico recibe «Nueva solicitud de cita»',
+    );
+    assert.ok(
+      notices.some((n) => n.channel === 'EMAIL'),
+      'correo de cita recibida al cliente',
+    );
     const jobs = await db.automationJob.findMany({ where: { appointmentId: booked.id } });
     assert.deepEqual(
       jobs.map((j) => [j.kind, j.status, j.recipient]),
@@ -117,15 +160,9 @@ test(
     const uid = `consent-edit-${randomUUID()}`;
     const contact = `+59399${randomInt(1000000, 9999999)}`;
     const admin = await person('ADMIN');
+    const tech = await technicianWithPush();
     t.after(async () => {
-      const row = await db.appointment.findUnique({ where: { calUid: uid } });
-      if (row) {
-        await db.automationJob.deleteMany({ where: { appointmentId: row.id } });
-        await db.appointment.delete({ where: { id: row.id } });
-      }
-      await db.integrationEvent.deleteMany({ where: { sourceId: uid } });
-      await db.adminAction.deleteMany({ where: { actorId: admin.user.id } });
-      await db.user.deleteMany({ where: { id: admin.user.id } });
+      await cleanup(uid, [admin.user.id, tech.id]);
       process.env = saved;
     });
     const start = new Date(Date.now() + 3 * 86400000);
@@ -165,6 +202,13 @@ test(
     const after = await db.appointment.findUniqueOrThrow({ where: { id: item.id } });
     assert.ok(after.whatsappConsentAt);
     assert.equal(after.automationIssue, null);
+    assert.equal(after.userId, null, 'sin cuenta con ese teléfono: sigue como invitado');
+    assert.equal(
+      await db.notification.count({
+        where: { appointmentId: item.id, channel: 'WEB_PUSH', recipient: tech.id },
+      }),
+      1,
+    );
     const jobs = await db.automationJob.findMany({ where: { appointmentId: item.id } });
     assert.deepEqual(
       jobs.map((j) => [j.kind, j.status]),
@@ -175,6 +219,11 @@ test(
     assert.equal(
       await db.automationJob.count({ where: { appointmentId: item.id, status: 'PENDING' } }),
       1,
+    );
+    assert.equal(
+      await db.notification.count({ where: { appointmentId: item.id, channel: 'WEB_PUSH' } }),
+      1,
+      'guardar otra vez no repite el aviso al técnico',
     );
   },
 );

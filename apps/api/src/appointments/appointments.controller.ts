@@ -26,6 +26,8 @@ import { z } from 'zod';
 import { cancelCalBooking } from '../integrations/cal-client';
 import { auditAdmin } from '../security/admin-audit';
 import { isConsentIssue } from '../whatsapp/consent';
+import { deliverNotification } from '../notifications/notification.service';
+import { restoreBookingFlow } from './whatsapp-consent';
 import { exclusive } from '../security/idempotency';
 
 /** createdAt = alta de la cita en Instafix; startsAt = inicio de la visita. Desempate por id. */
@@ -134,10 +136,10 @@ export class AppointmentsController {
     @Req() req: Request,
   ) {
     checkOrigin(req);
-    await authenticated(req, true);
+    const admin = await authenticated(req, true);
     const parsed = appointmentSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException('Revisa los datos y las fechas de la cita');
-    return db.$transaction(async (tx) => {
+    const outcome = await db.$transaction(async (tx) => {
       await lockAppointment(tx, id);
       const existing = await tx.appointment.findUnique({ where: { id } });
       if (!existing || existing.deletedAt || existing.userId !== parsed.data.userId)
@@ -222,13 +224,25 @@ export class AppointmentsController {
             : {}),
         },
       });
-      if (changed && appointment.whatsappConsentAt) {
-        if (appointment.status === 'PENDING_LOCATION' && !appointment.locationReceivedAt)
-          await queueJob(tx, appointment, 'INITIAL', new Date());
-        await queueReminders(tx, appointment);
+      // Reserva de Cal.com sin autorización que el equipo acaba de autorizar: flujo normal
+      // (cuenta del cliente, aviso a técnicos y correo de cita recibida).
+      const restored =
+        whatsappConsent && isConsentIssue(existing.automationIssue)
+          ? await restoreBookingFlow(tx, appointment, admin.id)
+          : null;
+      const saved = restored?.appointment ?? appointment;
+      if (changed && saved.whatsappConsentAt) {
+        if (saved.status === 'PENDING_LOCATION' && !saved.locationReceivedAt)
+          await queueJob(tx, saved, 'INITIAL', new Date());
+        await queueReminders(tx, saved);
       }
-      return appointment;
+      return { saved, notifications: restored?.notifications ?? [] };
     });
+    for (const notification of outcome.notifications)
+      await deliverNotification(notification).catch(() => {
+        // La bandeja de avisos reintentará.
+      });
+    return outcome.saved;
   }
 
   /**

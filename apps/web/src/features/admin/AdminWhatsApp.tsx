@@ -157,15 +157,21 @@ export function AdminWhatsApp() {
     setBusyAction(`consent:${issue.id}`);
     setMessage('');
     try {
-      const result = await api<{ queued: boolean }>(
+      const result = await api<{ queued: boolean; linked: boolean }>(
         `admin/whatsapp/appointments/${issue.id}/consent`,
         { method: 'POST' },
       );
       await load();
       setMessage(
-        result.queued
-          ? `Autorización registrada. El WhatsApp a ${issue.contactName} sale en unos segundos.`
-          : `Autorización registrada para ${issue.contactName}. Recibirá los próximos avisos por WhatsApp.`,
+        [
+          result.queued
+            ? `Autorización registrada. El WhatsApp a ${issue.contactName} sale en unos segundos.`
+            : `Autorización registrada para ${issue.contactName}. Recibirá los próximos avisos por WhatsApp.`,
+          'La cita sigue el flujo normal de una reserva de la web.',
+          result.linked ? 'Quedó en la cuenta del cliente.' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No se pudo registrar la autorización');

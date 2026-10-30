@@ -4,6 +4,8 @@ import { authenticated, checkOrigin } from '../auth/session';
 import { db } from '../database/client';
 import { calConfiguration, whatsappConfiguration } from './config';
 import { otpConfiguration } from './otp.provider';
+import { restoreBookingFlow } from '../appointments/whatsapp-consent';
+import { deliverNotification } from '../notifications/notification.service';
 import { auditAdmin } from '../security/admin-audit';
 import { isConsentIssue } from './consent';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from './queue';
@@ -92,7 +94,7 @@ export class WhatsAppAdminController {
   @Post('appointments/:id/consent') async consent(@Param('id') id: string, @Req() req: Request) {
     checkOrigin(req);
     const admin = await authenticated(req, true);
-    return db.$transaction(async (tx) => {
+    const outcome = await db.$transaction(async (tx) => {
       await lockAppointment(tx, id);
       const current = await tx.appointment.findUnique({ where: { id } });
       if (!current || current.deletedAt || current.status === 'CANCELLED')
@@ -102,20 +104,31 @@ export class WhatsAppAdminController {
       if (current.bookingIdentityIssue)
         throw new BadRequestException('Revisa primero la identidad del cliente de esta cita');
       await cancelPendingJobs(tx, id);
-      const appointment = await tx.appointment.update({
+      const wasPending = isConsentIssue(current.automationIssue);
+      let appointment = await tx.appointment.update({
         where: { id },
         data: {
           whatsappConsentAt: current.whatsappConsentAt || new Date(),
           automationRevision: { increment: 1 },
-          ...(isConsentIssue(current.automationIssue) ? { automationIssue: null } : {}),
+          ...(wasPending ? { automationIssue: null } : {}),
         },
       });
+      // Reserva que quedó fuera del flujo por falta de autorización: se normaliza.
+      const restored = wasPending
+        ? await restoreBookingFlow(tx, appointment, admin.id)
+        : { appointment, notifications: [] as string[], linked: false };
+      appointment = restored.appointment;
       const sends = appointment.status === 'PENDING_LOCATION' && !appointment.locationReceivedAt;
       if (sends) await queueJob(tx, appointment, 'INITIAL', new Date());
       await queueReminders(tx, appointment);
-      await auditAdmin(admin.id, 'WHATSAPP_CONSENT_RECORDED', id, {}, tx);
-      return { ok: true, queued: sends };
+      await auditAdmin(admin.id, 'WHATSAPP_CONSENT_RECORDED', id, { linked: restored.linked }, tx);
+      return { queued: sends, linked: restored.linked, notifications: restored.notifications };
     });
+    for (const notification of outcome.notifications)
+      await deliverNotification(notification).catch(() => {
+        // La bandeja de avisos reintentará.
+      });
+    return { ok: true, queued: outcome.queued, linked: outcome.linked };
   }
   @Post(':id/retry') async retry(@Param('id') id: string, @Req() req: Request) {
     checkOrigin(req);
