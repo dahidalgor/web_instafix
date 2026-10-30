@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import type { Request } from 'express';
 import { hashPassword, newToken, tokenHash } from '../auth/security';
 import { db } from '../database/client';
+import { AppointmentsController } from '../appointments/appointments.controller';
 import { receiveCalWebhook } from '../integrations/cal-webhook';
 import { WhatsAppAdminController } from '../whatsapp/admin.controller';
 import { CAL_CONSENT_ISSUE } from '../whatsapp/consent';
@@ -102,6 +103,77 @@ test(
       await db.adminAction.count({
         where: { actorId: admin.user.id, action: 'WHATSAPP_CONSENT_RECORDED', target: booked.id },
       }),
+      1,
+    );
+  },
+);
+
+test(
+  'casilla «autorizó WhatsApp» al editar una reserva de Cal.com: guarda, quita el aviso y envía',
+  { skip: !enabled },
+  async (t) => {
+    const saved = { ...process.env };
+    process.env.CAL_EVENT_TYPE_ID = '987654330';
+    const uid = `consent-edit-${randomUUID()}`;
+    const contact = `+59399${randomInt(1000000, 9999999)}`;
+    const admin = await person('ADMIN');
+    t.after(async () => {
+      const row = await db.appointment.findUnique({ where: { calUid: uid } });
+      if (row) {
+        await db.automationJob.deleteMany({ where: { appointmentId: row.id } });
+        await db.appointment.delete({ where: { id: row.id } });
+      }
+      await db.integrationEvent.deleteMany({ where: { sourceId: uid } });
+      await db.adminAction.deleteMany({ where: { actorId: admin.user.id } });
+      await db.user.deleteMany({ where: { id: admin.user.id } });
+      process.env = saved;
+    });
+    const start = new Date(Date.now() + 3 * 86400000);
+    start.setUTCSeconds(0, 0);
+    // Descripción larga (como las de la web, hasta 500): el formulario debe poder guardarla.
+    const request = `Cambio de joystick PS5. ${'El análogo izquierdo se mueve solo. '.repeat(6)}`;
+    await receiveCalWebhook({
+      triggerEvent: 'BOOKING_CREATED',
+      createdAt: new Date().toISOString(),
+      payload: {
+        uid,
+        eventTypeId: 987654330,
+        startTime: start.toISOString(),
+        endTime: new Date(start.getTime() + 3600000).toISOString(),
+        attendees: [{ name: 'Saúl Prueba', phoneNumber: contact }],
+        responses: { notes: { value: request } },
+      },
+    });
+    const item = await db.appointment.findUniqueOrThrow({ where: { calUid: uid } });
+    assert.equal(item.automationIssue, CAL_CONSENT_ISSUE);
+    // Lo mismo que envía el formulario de Administración al marcar la casilla y guardar.
+    const form = {
+      userId: item.userId,
+      contactName: item.contactName,
+      contactPhone: item.contactPhone,
+      whatsappConsent: true,
+      title: item.title,
+      device: item.device,
+      startsAt: item.startsAt.toISOString(),
+      endsAt: item.endsAt.toISOString(),
+      timeZone: item.timeZone,
+      address: item.address,
+      technician: item.technician,
+      status: item.status,
+    };
+    await new AppointmentsController().editAppointment(item.id, form, admin.req);
+    const after = await db.appointment.findUniqueOrThrow({ where: { id: item.id } });
+    assert.ok(after.whatsappConsentAt);
+    assert.equal(after.automationIssue, null);
+    const jobs = await db.automationJob.findMany({ where: { appointmentId: item.id } });
+    assert.deepEqual(
+      jobs.map((j) => [j.kind, j.status]),
+      [['INITIAL', 'PENDING']],
+    );
+    // Guardar otra vez sin cambios no duplica el mensaje.
+    await new AppointmentsController().editAppointment(item.id, form, admin.req);
+    assert.equal(
+      await db.automationJob.count({ where: { appointmentId: item.id, status: 'PENDING' } }),
       1,
     );
   },
