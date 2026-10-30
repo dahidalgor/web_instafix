@@ -112,7 +112,9 @@ test(
     assert.equal(overview.issues.find((i) => i.id === booked.id)?.needsConsent, true);
 
     assert.equal(await status(controller.consent(booked.id, customer.req)), 403);
-    assert.equal(await db.notification.count({ where: { appointmentId: booked.id } }), 0);
+    // Desde el inicio, sin esperar la autorización: el técnico ya recibió la solicitud.
+    const techPush = { appointmentId: booked.id, channel: 'WEB_PUSH', recipient: tech.id };
+    assert.equal(await db.notification.count({ where: techPush }), 1);
     assert.deepEqual(await controller.consent(booked.id, admin.req), {
       ok: true,
       queued: true,
@@ -137,6 +139,7 @@ test(
       notices.some((n) => n.channel === 'EMAIL'),
       'correo de cita recibida al cliente',
     );
+    assert.equal(await db.notification.count({ where: techPush }), 1, 'sin aviso repetido');
     const jobs = await db.automationJob.findMany({ where: { appointmentId: booked.id } });
     assert.deepEqual(
       jobs.map((j) => [j.kind, j.status, j.recipient]),
