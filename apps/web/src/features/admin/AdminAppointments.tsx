@@ -79,6 +79,8 @@ export function AdminAppointments({
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [draft, setDraft] = useState({ ...empty });
+  // Reserva de Cal.com: la fecha se cambia aparte (se mueve en Cal.com y se avisa al cliente).
+  const [move, setMove] = useState({ startsAt: '', keepTechnician: true });
   const [id, setId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   // Acción en curso: solo su botón muestra la espera; el resto queda desactivado.
@@ -120,6 +122,7 @@ export function AdminAppointments({
       }),
     );
     setId(item.id);
+    setMove({ startsAt: localDate(item.startsAt), keepTechnician: true });
     setConfirmDelete(false);
     setLinkUserId('');
     setIdentityVerified(false);
@@ -160,6 +163,52 @@ export function AdminAppointments({
       );
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'No se pudo eliminar la cita.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+  async function reschedule(item: AdminAppointment) {
+    if (!move.startsAt) return;
+    const when = new Date(move.startsAt);
+    const keep = move.keepTechnician && !!item.assignedTechnician && item.status === 'CONFIRMED';
+    const label = when.toLocaleString('es-EC', { dateStyle: 'full', timeStyle: 'short' });
+    if (
+      !window.confirm(
+        `¿Cambiar la cita de ${item.contactName || 'este cliente'} al ${label}? Se moverá en Cal.com y se avisará al cliente.`,
+      )
+    )
+      return;
+    setBusyAction('reschedule');
+    setMessage('');
+    try {
+      const result = await api<{ unchanged: boolean; kept: boolean; cal: string }>(
+        `admin/appointments/${item.id}/reschedule`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ startsAt: when.toISOString(), keepTechnician: keep }),
+        },
+      );
+      await load();
+      setId(null);
+      setDraft({ ...empty });
+      setFormOpen(false);
+      setMessage(
+        result.unchanged
+          ? 'La cita ya tenía esa fecha y hora.'
+          : [
+              `Cita cambiada al ${label}. El cliente recibe el aviso por correo y WhatsApp (si lo autorizó).`,
+              result.kept
+                ? `Sigue asignada a ${item.assignedTechnician?.name}.`
+                : 'Vuelve a «pendiente de confirmación» para que un técnico la tome.',
+              result.cal === 'PENDING'
+                ? 'Cal.com aún no refleja la confirmación; se reintenta.'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' '),
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo cambiar la fecha.');
     } finally {
       setBusyAction(null);
     }
@@ -413,6 +462,50 @@ export function AdminAppointments({
               onChange={(e) => setDraft({ ...draft, endsAt: e.target.value })}
             />
           </label>
+          {list
+            .filter(
+              (item) =>
+                item.id === id &&
+                item.calUid &&
+                ['PENDING_LOCATION', 'CONFIRMED'].includes(item.status),
+            )
+            .map((item) => (
+              <fieldset key={`move-${item.id}`} className="appt-move">
+                <legend>Cambiar fecha y hora</legend>
+                <p className="small">
+                  Reserva de Cal.com: el cambio se hace en Cal.com y el cliente recibe el aviso. La
+                  duración la pone el evento de Cal.com.
+                </p>
+                <label>
+                  Nueva fecha y hora
+                  <input
+                    type="datetime-local"
+                    value={move.startsAt}
+                    onChange={(e) => setMove({ ...move, startsAt: e.target.value })}
+                  />
+                </label>
+                {item.status === 'CONFIRMED' && item.assignedTechnician && (
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={move.keepTechnician}
+                      onChange={(e) => setMove({ ...move, keepTechnician: e.target.checked })}
+                    />
+                    Mantener a {item.assignedTechnician.name} como técnico de la visita.
+                  </label>
+                )}
+                <BusyButton
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !move.startsAt || move.startsAt === localDate(item.startsAt)}
+                  busy={busyAction === 'reschedule'}
+                  busyLabel="Cambiando…"
+                  onClick={() => reschedule(item)}
+                >
+                  Cambiar fecha y hora
+                </BusyButton>
+              </fieldset>
+            ))}
           <label>
             Zona horaria para el cliente
             <select

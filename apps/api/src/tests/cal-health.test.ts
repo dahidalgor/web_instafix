@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { firstBookableDay } from '../integrations/cal-client';
 import { calHealth } from '../integrations/cal-health';
 
 /** Cal.com simulado: `slots` por día y `fields` del formulario del evento. */
@@ -31,7 +32,9 @@ function mockCal(
   };
 }
 const env = { CAL_API_KEY: 'cal_test', CAL_EVENT_TYPE_ID: '123' };
-const now = new Date('2026-11-02T15:00:00Z');
+const now = new Date();
+// Primer día que la web ofrece: los horarios simulados caen ahí (las fechas no envejecen).
+const day = firstBookableDay(now);
 const defaults = [
   { slug: 'name', required: true },
   { slug: 'attendeePhoneNumber', required: true },
@@ -44,10 +47,7 @@ test('agenda sana: horarios, evento oculto solo como nota', async (t) => {
   t.after(
     mockCal(
       {
-        '2026-11-03': [
-          { start: '2026-11-03T09:00:00-05:00' },
-          { start: '2026-11-03T10:00:00-05:00' },
-        ],
+        [day]: [{ start: `${day}T09:00:00-05:00` }, { start: `${day}T10:00:00-05:00` }],
       },
       { title: 'Agenda', hidden: true, bookingFields: defaults, minimumBookingNotice: 60 },
     ),
@@ -72,7 +72,7 @@ test('campo obligatorio que la web no envía: avisa antes de que fallen las rese
   Object.assign(process.env, env);
   t.after(
     mockCal(
-      { '2026-11-03': [{ start: '2026-11-03T09:00:00-05:00' }] },
+      { [day]: [{ start: `${day}T09:00:00-05:00` }] },
       {
         title: 'Agenda',
         bookingFields: [

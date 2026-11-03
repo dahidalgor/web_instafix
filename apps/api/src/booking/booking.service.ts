@@ -25,7 +25,7 @@ import { logEvent } from '../common/log-event';
 import { ProviderError } from '../integrations/provider-error';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
-import { cancelPendingJobs, lockAppointment, queueJob } from '../whatsapp/queue';
+import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
 import { assertPhoneAllowed } from '../security/blocked-phones';
 import type { RequestOrigin } from '../security/client-identity';
 import { exclusive } from '../security/idempotency';
@@ -565,5 +565,110 @@ export async function rescheduleBooking(
       emailSent: await deliverNow(notifications),
       unchanged: false,
     };
+  });
+}
+
+/**
+ * Reprogramación hecha por administración: mueve la reserva en Cal.com (la agenda sigue siendo
+ * la real) y avisa al cliente igual que cuando reprograma él (correo y WhatsApp «reprogramada»).
+ * A diferencia del cliente, no tiene límite de cambios, admite el mismo día y puede conservar al
+ * técnico asignado; si no, la cita vuelve a «pendiente de confirmación» para que otro la tome.
+ */
+export async function adminRescheduleBooking(
+  adminId: string,
+  id: string,
+  startValue: string,
+  keepTechnician: boolean,
+) {
+  const start = new Date(startValue);
+  return exclusive(`appointment:${id}`, async () => {
+    const appointment = await db.appointment.findFirst({ where: { id, deletedAt: null } });
+    if (!appointment || !['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status))
+      throw new BadRequestException(
+        'Solo se puede cambiar la fecha de una cita pendiente o confirmada.',
+      );
+    if (!appointment.calUid)
+      throw new BadRequestException(
+        'Esta cita no está en Cal.com: cambia la fecha en el formulario y guarda.',
+      );
+    if (appointment.startsAt.getTime() === start.getTime())
+      return {
+        ok: true,
+        startsAt: appointment.startsAt.toISOString(),
+        unchanged: true,
+        kept: false,
+      };
+    if (start.getTime() < Date.now() + 5 * 60000)
+      throw new BadRequestException('Elige una fecha y hora futuras.');
+    const calUid = appointment.calUid;
+    let booking: CalBooking;
+    try {
+      booking = await rescheduleCalBooking(calUid, start, 'Reprogramada por Instafix');
+    } catch (error) {
+      return calFailure(error, start);
+    }
+    const now = new Date();
+    // Se conserva al técnico solo si la cita ya estaba confirmada con uno.
+    const kept =
+      keepTechnician && appointment.status === 'CONFIRMED' && !!appointment.assignedTechnicianId;
+    const notifications = await db.$transaction(async (tx) => {
+      await calLock(tx);
+      await lockAppointment(tx, appointment.id);
+      await cancelPendingJobs(tx, appointment.id);
+      // El webhook pudo crear ya una fila para el nuevo uid: se descarta en favor de esta.
+      const duplicate = await tx.appointment.findUnique({ where: { calUid: booking.uid } });
+      if (duplicate && duplicate.id !== appointment.id) {
+        await cancelPendingJobs(tx, duplicate.id);
+        await tx.appointment.delete({ where: { id: duplicate.id } });
+      }
+      const updated = await tx.appointment.update({
+        where: { id: appointment.id },
+        data: {
+          calUid: booking.uid,
+          calStatus: booking.status,
+          startsAt: booking.start,
+          endsAt: booking.end,
+          rescheduleCount: { increment: 1 },
+          automationRevision: { increment: 1 },
+          ...(kept ? {} : { ...unassignedForReschedule, locationRequestedAt: now }),
+        },
+      });
+      await markCalEvent(tx, calUid, 'CANCELLED', now);
+      await markCalEvent(tx, booking.uid, 'RESCHEDULED_BY_API', now);
+      await tx.adminAction.create({
+        data: {
+          actorId: adminId,
+          action: 'APPOINTMENT_RESCHEDULED',
+          target: appointment.id,
+          detail: {
+            from: appointment.startsAt.toISOString(),
+            to: booking.start.toISOString(),
+            keptTechnician: kept,
+          },
+        },
+      });
+      if (appointment.assignedTechnicianId && !kept)
+        await tx.appointmentActivity.create({
+          data: {
+            appointmentId: appointment.id,
+            actorId: adminId,
+            action: 'UNASSIGNED_BY_RESCHEDULE',
+            detail: { previousTechnicianId: appointment.assignedTechnicianId },
+          },
+        });
+      if (!kept && !updated.locationReceivedAt && updated.whatsappConsentAt)
+        await queueJob(tx, updated, 'INITIAL', now, updated.startsAt);
+      // Con el técnico conservado, el recordatorio del día anterior se programa para la fecha nueva.
+      if (kept) await queueReminders(tx, updated, now);
+      return publishAppointmentEvent(
+        tx,
+        updated,
+        { type: 'appointment.rescheduled', previousStartsAt: appointment.startsAt },
+        now,
+      );
+    });
+    await deliverNow(notifications);
+    logEvent('booking.admin_rescheduled', { appointmentId: appointment.id, keptTechnician: kept });
+    return { ok: true, startsAt: booking.start.toISOString(), unchanged: false, kept };
   });
 }
