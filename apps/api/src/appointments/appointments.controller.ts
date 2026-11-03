@@ -28,6 +28,8 @@ import { auditAdmin } from '../security/admin-audit';
 import { isConsentIssue } from '../whatsapp/consent';
 import { deliverNotification } from '../notifications/notification.service';
 import { restoreBookingFlow } from './whatsapp-consent';
+import { adminRescheduleBooking } from '../booking/booking.service';
+import { syncCalConfirmation } from '../staff/staff-appointments.service';
 import { exclusive } from '../security/idempotency';
 
 /** createdAt = alta de la cita en Instafix; startsAt = inicio de la visita. Desempate por id. */
@@ -130,6 +132,36 @@ export class AppointmentsController {
     });
   }
 
+  /**
+   * Cambiar fecha y hora de una reserva de Cal.com: se mueve en Cal.com y se avisa al cliente.
+   * Las citas manuales (sin Cal.com) cambian su fecha en el formulario normal.
+   */
+  @Post('admin/appointments/:id/reschedule') async rescheduleAppointment(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    checkOrigin(req);
+    const admin = await authenticated(req, true);
+    const parsed = z
+      .object({
+        startsAt: z.string().datetime({ offset: true }),
+        keepTechnician: z.boolean().default(true),
+      })
+      .strict()
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Indica la nueva fecha y hora');
+    const result = await adminRescheduleBooking(
+      admin.id,
+      id,
+      parsed.data.startsAt,
+      parsed.data.keepTechnician,
+    );
+    // Técnico conservado: Cal.com recibe la confirmación de la reserva nueva (o se reintenta).
+    const cal = result.kept ? await syncCalConfirmation(id) : 'NOT_APPLICABLE';
+    return { ...result, cal };
+  }
+
   @Patch('admin/appointments/:id') async editAppointment(
     @Param('id') id: string,
     @Body() body: unknown,
@@ -153,7 +185,7 @@ export class AppointmentsController {
           data.status !== existing.status)
       )
         throw new BadRequestException(
-          'Reprograma o cancela esta reserva desde Cal.com. La confirmación se realiza al recibir su ubicación.',
+          'Para cambiar la fecha de esta reserva usa «Cambiar fecha y hora» en la cita; el estado lo cambian los técnicos o Cal.com.',
         );
       const phone =
         data.contactPhone === undefined

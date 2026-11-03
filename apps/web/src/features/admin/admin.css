@@ -757,3 +757,20 @@
   border-color: #c0392b;
   border-left-width: 4px;
 }
+/* Cambiar fecha y hora de una reserva de Cal.com dentro del editor de citas. */
+.appt-move {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #ddd4e4;
+  border-radius: 14px;
+  padding: 16px;
+  margin: 0;
+  min-width: 0;
+}
+.appt-move legend {
+  font-weight: 600;
+  padding-inline: 6px;
+}
+.appt-move .small {
+  margin: 0;
+}
