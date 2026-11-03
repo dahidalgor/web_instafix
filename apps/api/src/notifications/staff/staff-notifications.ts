@@ -1,6 +1,8 @@
 import {
   appointmentPanelPath,
   appointmentRequestedMessage,
+  completionReminderDelaysHours,
+  completionReminderMessage,
   type StaffNotificationType,
   type StaffPushPayload,
 } from '@instafix/contracts';
@@ -34,6 +36,8 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
   APPOINTMENT_CANCELLED: ['ADMIN'],
   APPOINTMENT_RESCHEDULED: ['ADMIN'],
   APPOINTMENT_ASSIGNED: ['TECHNICIAN'],
+  // Solo al técnico asignado a la visita (un administrador también puede tomar visitas).
+  COMPLETION_REMINDER: ['ADMIN', 'TECHNICIAN'],
   // Prueba enviada por el propio usuario a sus dispositivos (POST /staff/push/test).
   TEST: ['ADMIN', 'TECHNICIAN'],
 };
@@ -41,6 +45,7 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
 /** Tipos que hoy tienen un productor real (el resto está preparado en las reglas). */
 export const producedStaffNotifications: readonly StaffNotificationType[] = [
   'APPOINTMENT_REQUESTED',
+  'COMPLETION_REMINDER',
 ];
 
 /** Roles que pueden registrar dispositivos para recibir avisos del equipo. */
@@ -110,6 +115,66 @@ export async function enqueueAppointmentRequested(
   return ids;
 }
 
+/** Estados en los que el trabajo aún puede (y debe) marcarse como completado. */
+const OPEN_WORK = ['CONFIRMED', 'IN_PROGRESS'];
+
+/**
+ * Programa los recordatorios «marca el trabajo como completado» al técnico asignado: 2 h y 4 h
+ * después del fin previsto (siempre con 2 h entre ambos, aunque se confirme tarde). Al enviarse
+ * se comprueba que el trabajo siga abierto, con el mismo técnico y el mismo horario: completar,
+ * cancelar, reasignar o reprogramar la cita anula los recordatorios pendientes sin enviarlos.
+ * La clave incluye el fin previsto: tras reprogramar se programan unos nuevos.
+ */
+export async function scheduleCompletionReminders(
+  tx: Prisma.TransactionClient,
+  appointment: Appointment,
+  now = new Date(),
+) {
+  const technicianId = appointment.assignedTechnicianId;
+  if (!technicianId || !OPEN_WORK.includes(appointment.status) || appointment.deletedAt) return [];
+  const type: StaffNotificationType = 'COMPLETION_REMINDER';
+  const ends = appointment.endsAt.toISOString();
+  const ids: string[] = [];
+  let previous = 0;
+  for (const [index, hours] of completionReminderDelaysHours.entries()) {
+    const stage = (index + 1) as 1 | 2;
+    const dueAt = new Date(
+      Math.max(appointment.endsAt.getTime() + hours * 3600000, now.getTime(), previous),
+    );
+    previous = dueAt.getTime() + 2 * 3600000;
+    const { title, body } = completionReminderMessage(appointment, stage);
+    const dedupeKey = staffNotificationKey(
+      type,
+      `${appointment.id}:${ends}:${stage}`,
+      technicianId,
+    );
+    const row = await tx.notification.upsert({
+      where: { dedupeKey },
+      update: {},
+      create: {
+        dedupeKey,
+        channel: 'WEB_PUSH',
+        kind: type,
+        appointmentId: appointment.id,
+        recipient: technicianId,
+        dueAt,
+        data: {
+          title,
+          body,
+          url: appointmentPanelPath(appointment.id),
+          createdAt: now,
+          // Para validar al enviar y medir la caducidad desde la hora prevista, no la creación.
+          scheduledFor: dueAt,
+          endsAt: ends,
+          stage,
+        },
+      },
+    });
+    ids.push(row.id);
+  }
+  return ids;
+}
+
 type Row = Notification & { appointment: Appointment | null };
 
 /** Entrega una fila WEB_PUSH ya reclamada (status SENDING) por `deliverNotification`. */
@@ -135,7 +200,26 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
     await finish('CANCELLED', 'La cita fue cancelada o eliminada antes del envío');
     return 'CANCELLED' as const;
   }
-  if (now.getTime() - row.createdAt.getTime() > STALE_AFTER_MS) {
+  const meta = row.data as { scheduledFor?: string; endsAt?: string };
+  if (type === 'COMPLETION_REMINDER') {
+    const a = row.appointment;
+    const reason = !OPEN_WORK.includes(a.status)
+      ? a.status === 'COMPLETED'
+        ? 'El trabajo ya se marcó como completado'
+        : 'La cita ya no está activa'
+      : a.assignedTechnicianId !== row.recipient
+        ? 'La cita ya no está asignada a este técnico'
+        : meta.endsAt && a.endsAt.toISOString() !== meta.endsAt
+          ? 'La cita se reprogramó: hay recordatorios nuevos'
+          : null;
+    if (reason) {
+      await finish('CANCELLED', reason);
+      return 'CANCELLED' as const;
+    }
+  }
+  // Un aviso programado caduca contando desde su hora prevista, no desde que se creó.
+  const since = meta.scheduledFor ? new Date(meta.scheduledFor).getTime() : row.createdAt.getTime();
+  if (now.getTime() - since > STALE_AFTER_MS) {
     await finish('CANCELLED', 'Aviso caducado: no se envió a tiempo');
     return 'CANCELLED' as const;
   }

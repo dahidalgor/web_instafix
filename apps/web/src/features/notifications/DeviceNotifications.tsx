@@ -105,6 +105,13 @@ export function DeviceNotifications() {
           </div>
         </div>
       )}
+      {status?.receivesNotifications && (
+        <p className="push-help">
+          Recibes: nuevas solicitudes de cita y, en tus visitas, un recordatorio para marcar el
+          trabajo como completado 2 horas después de la hora de fin (y otro 2 horas más tarde si
+          sigue pendiente).
+        </p>
+      )}
       {status && !status.receivesNotifications && (
         <p className="push-help">Tu rol todavía no recibe avisos automáticos.</p>
       )}

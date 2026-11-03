@@ -4,12 +4,14 @@
  * pruebas. No incluye datos de contacto del cliente: solo lo necesario para abrir la cita.
  */
 
-/** Hechos de negocio que pueden avisar al equipo. Hoy solo se envía APPOINTMENT_REQUESTED. */
+/** Hechos de negocio que pueden avisar al equipo. */
 export const staffNotificationTypes = [
   'APPOINTMENT_REQUESTED',
   'APPOINTMENT_CANCELLED',
   'APPOINTMENT_RESCHEDULED',
   'APPOINTMENT_ASSIGNED',
+  /** Al técnico asignado: marcar como completado el trabajo (2 h y 4 h después del fin). */
+  'COMPLETION_REMINDER',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */
   'TEST',
 ] as const;
@@ -152,4 +154,29 @@ export function appointmentRequestedMessage(input: {
     title: 'Nueva solicitud de cita',
     body: `${who} está solicitando una cita para ${day} a las ${time}.`,
   };
+}
+
+/** Recordatorios para completar un trabajo: horas después del fin previsto de la visita. */
+export const completionReminderDelaysHours = [2, 4] as const;
+
+/**
+ * Título y cuerpo del recordatorio al técnico para marcar el trabajo como completado.
+ * `stage` 1 = primer aviso (2 h después del fin), 2 = segundo y último (4 h después).
+ */
+export function completionReminderMessage(
+  input: { contactName: string | null | undefined; startsAt: Date; timeZone: string },
+  stage: 1 | 2,
+) {
+  const { time } = formatAppointmentMoment(input.startsAt, input.timeZone);
+  const who = customerFirstName(input.contactName);
+  const visit = who ? `la visita de ${who}` : 'la visita';
+  return stage === 1
+    ? {
+        title: `¿Terminaste ${visit}?`,
+        body: `Marca como completado el trabajo de las ${time} y registra los servicios realizados.`,
+      }
+    : {
+        title: `Falta completar ${visit}`,
+        body: `El trabajo de las ${time} sigue sin completar. Márcalo para cerrar la cita y activar la garantía del cliente.`,
+      };
 }
