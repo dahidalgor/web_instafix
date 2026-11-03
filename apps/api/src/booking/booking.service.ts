@@ -25,6 +25,7 @@ import { logEvent } from '../common/log-event';
 import { ProviderError } from '../integrations/provider-error';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
+import { scheduleCompletionReminders } from '../notifications/staff/staff-notifications';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
 import { assertPhoneAllowed } from '../security/blocked-phones';
 import type { RequestOrigin } from '../security/client-identity';
@@ -659,7 +660,11 @@ export async function adminRescheduleBooking(
       if (!kept && !updated.locationReceivedAt && updated.whatsappConsentAt)
         await queueJob(tx, updated, 'INITIAL', now, updated.startsAt);
       // Con el técnico conservado, el recordatorio del día anterior se programa para la fecha nueva.
-      if (kept) await queueReminders(tx, updated, now);
+      if (kept) {
+        await queueReminders(tx, updated, now);
+        // Recordatorios de «completar trabajo» para el nuevo horario (los viejos se anulan solos).
+        await scheduleCompletionReminders(tx, updated, now);
+      }
       return publishAppointmentEvent(
         tx,
         updated,

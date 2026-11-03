@@ -3,7 +3,10 @@ import { queueJob, queueReminders } from '../whatsapp/queue';
 import type { MessageKind } from '../whatsapp/messages';
 import type { RequestOrigin } from '../security/client-identity';
 import { enqueueAppointmentEmail } from './notification.service';
-import { enqueueAppointmentRequested } from './staff/staff-notifications';
+import {
+  enqueueAppointmentRequested,
+  scheduleCompletionReminders,
+} from './staff/staff-notifications';
 
 /**
  * Eventos internos de cita. AppointmentService publica el hecho una vez confirmado por
@@ -61,6 +64,8 @@ export async function publishAppointmentEvent(
       await email('APPOINTMENT_CONFIRMED', { technicianName: event.technicianName });
       await whatsapp('CONFIRMED');
       await queueReminders(tx, appointment, now);
+      // Al técnico: recordatorios para marcar el trabajo como completado (2 h y 4 h después).
+      await scheduleCompletionReminders(tx, appointment, now);
       break;
     case 'appointment.completed':
       // Punto de extensión (encuesta, garantía, factura). Hoy no envía mensajes.

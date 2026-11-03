@@ -56,6 +56,7 @@ Service worker /sw.js                                        apps/web/src/sw/
 | `APPOINTMENT_CANCELLED`   | Administradores                            | Regla preparada, sin productor |
 | `APPOINTMENT_RESCHEDULED` | Administradores                            | Regla preparada, sin productor |
 | `APPOINTMENT_ASSIGNED`    | Técnicos                                   | Regla preparada, sin productor |
+| `COMPLETION_REMINDER`     | El técnico asignado a la visita            | Implementado                   |
 
 Solo cuenta como solicitud nueva el hecho `appointment.created` de una reserva hecha por el
 cliente (estado `PENDING_LOCATION`). Una edición, una reprogramación, una consulta de
@@ -66,7 +67,16 @@ tocar el aviso se abre la ficha de esa cita en su panel. Los avisos se activan e
 Notificaciones** (técnicos) o **Mi cuenta → Notificaciones** (administración). Cerrar sesión
 desactiva los avisos de ese dispositivo.
 
-**Avisos a un técnico concreto (siguiente paso).** Por ejemplo, «te asignaron una cita»:
+**Recordatorio para completar el trabajo** (`COMPLETION_REMINDER`). Al confirmar una cita (un técnico la toma, o administración la reprograma conservando al técnico) se programan dos avisos para el técnico asignado, en la bandeja con `dueAt`:
+
+| Cuándo                       | Título                              | Texto                                                                                                         |
+| ---------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 2 h después del fin previsto | «¿Terminaste la visita de Saúl?»    | «Marca como completado el trabajo de las 10H00 y registra los servicios realizados.»                          |
+| 2 h después del primero      | «Falta completar la visita de Saúl» | «El trabajo de las 10H00 sigue sin completar. Márcalo para cerrar la cita y activar la garantía del cliente.» |
+
+Al tocarlo se abre la cita en el panel técnico. Antes de enviar cada uno se comprueba que el trabajo siga abierto (confirmado o en servicio), con el mismo técnico y el mismo horario: si ya se completó, se canceló, se reasignó o se reprogramó, no se envía (queda `CANCELLED` con el motivo). Si se confirma tarde, el primero sale al confirmar y el segundo 2 h después. Caducan 24 h después de su hora prevista.
+
+**Otros avisos a un técnico concreto.** Por ejemplo, «te asignaron una cita»:
 
 1. Añadir el caso a `publishAppointmentEvent`, por ejemplo `appointment.confirmed`.
 2. Llamar a una función que encole el aviso para el técnico asignado, en lugar de para todo un
