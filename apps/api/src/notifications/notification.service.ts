@@ -3,7 +3,11 @@ import type { Appointment, Prisma } from '@prisma/client';
 import { maskRecipient } from '../communications/log';
 import { retryCalConfirmations } from '../staff/staff-appointments.service';
 import { db } from '../database/client';
-import { configuredStaffChannels, deliverStaffNotification } from './staff/staff-notifications';
+import {
+  configuredStaffChannels,
+  deliverStaffNotification,
+  scheduleDailyAgendas,
+} from './staff/staff-notifications';
 import {
   appointmentEmailsEnabled,
   EmailDeliveryError,
@@ -168,6 +172,7 @@ export async function deliverNotification(id: string, now = new Date()): Promise
 export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
+  private agendaCheckedAt = 0;
   onModuleInit() {
     this.timer = setInterval(() => void this.tick(), 15000);
     this.timer.unref();
@@ -192,6 +197,13 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
           lastError: 'Envío interrumpido; revisar antes de repetir',
         },
       });
+      // Resumen diario de trabajos a los técnicos (una vez por minuto basta).
+      if (channels.includes('WEB_PUSH') && Date.now() - this.agendaCheckedAt >= 60000) {
+        this.agendaCheckedAt = Date.now();
+        await scheduleDailyAgendas().catch(() =>
+          console.error('No se pudo preparar el resumen diario de trabajos'),
+        );
+      }
       const due = await db.notification.findMany({
         where: {
           status: { in: ['PENDING', 'RETRY'] },

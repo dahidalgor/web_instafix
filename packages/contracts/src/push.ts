@@ -12,6 +12,8 @@ export const staffNotificationTypes = [
   'APPOINTMENT_ASSIGNED',
   /** Al técnico asignado: marcar como completado el trabajo (2 h y 4 h después del fin). */
   'COMPLETION_REMINDER',
+  /** Al técnico: sus trabajos de mañana (19H00) y de hoy (08H00). */
+  'DAILY_AGENDA',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */
   'TEST',
 ] as const;
@@ -179,4 +181,38 @@ export function completionReminderMessage(
         title: `Falta completar ${visit}`,
         body: `El trabajo de las ${time} sigue sin completar. Márcalo para cerrar la cita y activar la garantía del cliente.`,
       };
+}
+
+/** Horas de Ecuador a las que sale el resumen de trabajos del técnico. */
+export const dailyAgendaHours = { TOMORROW: 19, TODAY: 8 } as const;
+export type DailyAgendaStage = keyof typeof dailyAgendaHours;
+
+/**
+ * Resumen de trabajos del técnico: «10H00 Saúl · 14H30 Ana». Ordenado por hora; si no cabe en
+ * el aviso termina en «y N más».
+ */
+export function dailyAgendaMessage(
+  jobs: { contactName: string | null | undefined; startsAt: Date; timeZone: string }[],
+  stage: DailyAgendaStage,
+) {
+  const items = [...jobs]
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .map((job) => {
+      const { time } = formatAppointmentMoment(job.startsAt, job.timeZone);
+      return `${time} ${customerFirstName(job.contactName) ?? 'Cliente'}`;
+    });
+  let body = '';
+  for (const [index, item] of items.entries()) {
+    const rest = items.length - index - 1;
+    const next = body ? `${body} · ${item}` : item;
+    if (next.length + (rest ? ` y ${rest} más`.length : 0) > 250) {
+      body = `${body} y ${items.length - index} más`;
+      break;
+    }
+    body = next;
+  }
+  const count = `${items.length} ${items.length === 1 ? 'trabajo' : 'trabajos'}`;
+  return stage === 'TODAY'
+    ? { title: '¡Recuerda tus trabajos de hoy!', body }
+    : { title: `Mañana tienes ${count}`, body };
 }
