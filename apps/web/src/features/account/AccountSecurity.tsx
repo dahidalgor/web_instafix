@@ -12,9 +12,9 @@ import { api } from '../../lib/api';
 import { PhoneField } from './PhoneField';
 import { PhoneVerification } from './PhoneVerification';
 
-type Panel = null | 'email' | 'phone' | 'password' | 'verify';
+type Panel = null | 'name' | 'email' | 'phone' | 'password' | 'verify';
 
-/** Ajustes de la cuenta: WhatsApp (obligatorio), correo (opcional) y contraseña. */
+/** Ajustes de la cuenta: nombre, WhatsApp (obligatorio), correo (opcional) y contraseña. */
 export function AccountSecurity({
   user,
   onUser,
@@ -69,6 +69,22 @@ export function AccountSecurity({
       setPanel('verify');
       setTicket(next);
     });
+  async function changeName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    await run('name', async () => {
+      const next = await api<AccountUser>('my/name', {
+        method: 'POST',
+        body: JSON.stringify({
+          firstName: String(data.get('firstName') ?? ''),
+          lastName: String(data.get('lastName') ?? ''),
+        }),
+      });
+      onUser(next);
+      setPanel(null);
+      setMessage(`Nombre actualizado: ${next.name}.`);
+    });
+  }
   async function changeEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -120,6 +136,66 @@ export function AccountSecurity({
   }
   return (
     <div className="security-list">
+      <article className="security-item">
+        <div>
+          <p className="eyebrow">Nombre</p>
+          <strong>{user.name}</strong>
+        </div>
+        <div className="security-actions">
+          <button
+            type="button"
+            className={`btn btn-small ${panel === 'name' ? 'btn-ghost' : 'btn-secondary'}`}
+            aria-expanded={panel === 'name'}
+            aria-controls="security-name"
+            onClick={() => open(panel === 'name' ? null : 'name')}
+          >
+            {panel === 'name' ? 'Cancelar' : 'Cambiar nombre'}
+          </button>
+        </div>
+      </article>
+      {panel === 'name' && (
+        <form className="security-panel" id="security-name" onSubmit={changeName}>
+          <label>
+            Nombre
+            <input
+              name="firstName"
+              autoComplete="given-name"
+              required
+              minLength={2}
+              maxLength={50}
+              defaultValue={user.firstName ?? user.name.split(' ')[0] ?? ''}
+            />
+          </label>
+          <label>
+            Apellido
+            <input
+              name="lastName"
+              autoComplete="family-name"
+              required
+              minLength={2}
+              maxLength={50}
+              defaultValue={user.lastName ?? user.name.split(' ').slice(1).join(' ')}
+            />
+          </label>
+          <p className="small">
+            Es el nombre que ve el equipo y que aparece en tus citas activas y en los avisos.
+          </p>
+          <div className="security-form-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => open(null)}>
+              Cancelar
+            </button>
+            <BusyButton
+              type="submit"
+              className="btn btn-primary"
+              disabled={busy}
+              busy={busyAction === 'name'}
+              busyLabel="Guardando…"
+            >
+              Guardar nombre
+            </BusyButton>
+          </div>
+        </form>
+      )}
       <article className="security-item">
         <div>
           <p className="eyebrow">WhatsApp</p>

@@ -49,6 +49,8 @@ export const changeEmailSchema = z
 export const changePhoneSchema = z
   .object({ phone: phoneInput, password: z.string().min(1).max(128) })
   .strict();
+/** Cambiar el nombre de la propia cuenta (clientes, técnicos y administración). */
+export const changeNameSchema = z.object({ firstName: personName, lastName: personName }).strict();
 export const changePasswordSchema = z
   .object({ currentPassword: z.string().min(1).max(128), password: newPassword })
   .strict();
