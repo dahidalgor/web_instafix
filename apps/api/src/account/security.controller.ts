@@ -1,5 +1,6 @@
 import {
   changeEmailSchema,
+  changeNameSchema,
   changePasswordSchema,
   changePhoneSchema,
   verifyPhoneSchema,
@@ -17,6 +18,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { RateLimit } from '../security/rate-limits';
+import type { AppointmentStatus } from '@prisma/client';
 import type { Request } from 'express';
 import { serverPhone } from '../auth/auth.controller';
 import { issueAuthToken } from '../auth/auth-tokens';
@@ -95,6 +97,45 @@ export class SecurityController {
   }
 
   /** Cambiar el correo lo deja sin verificar hasta confirmar el nuevo. */
+  /**
+   * Cambiar el nombre de la cuenta. Sin contraseña: no da acceso ni cambia cómo se recupera la
+   * cuenta. Las citas activas toman el nombre nuevo (técnico asignado o cliente); las
+   * terminadas o canceladas conservan el que tenían, como historial.
+   */
+  @Post('name')
+  @HttpCode(200)
+  @RateLimit('recovery')
+  async changeName(@Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const session = await authenticated(req);
+    const parsed = changeNameSchema.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException(
+        'Escribe tu nombre y apellido con letras (entre 2 y 50 caracteres cada uno).',
+      );
+    const { firstName, lastName } = parsed.data;
+    const name = `${firstName} ${lastName}`;
+    return db.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id: session.id },
+        data: { firstName, lastName, name },
+        select: safeUser,
+      });
+      const active = {
+        in: ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'] as AppointmentStatus[],
+      };
+      await tx.appointment.updateMany({
+        where: { assignedTechnicianId: session.id, status: active, deletedAt: null },
+        data: { technician: name },
+      });
+      await tx.appointment.updateMany({
+        where: { userId: session.id, status: active, deletedAt: null },
+        data: { contactName: name },
+      });
+      return user;
+    });
+  }
+
   @Post('email')
   @HttpCode(200)
   @RateLimit('recovery')
