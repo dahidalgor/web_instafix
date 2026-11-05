@@ -107,9 +107,9 @@ export function DeviceNotifications() {
       )}
       {status?.receivesNotifications && (
         <p className="push-help">
-          Recibes: nuevas solicitudes de cita y, en tus visitas, un recordatorio para marcar el
-          trabajo como completado 2 horas después de la hora de fin (y otro 2 horas más tarde si
-          sigue pendiente).
+          Recibes: nuevas solicitudes de cita; el resumen de tus trabajos de mañana (19H00) y de hoy
+          (08H00); y, en tus visitas, un recordatorio para marcar el trabajo como completado 2 horas
+          después de la hora de fin (y otro 2 horas más tarde si sigue pendiente).
         </p>
       )}
       {status && !status.receivesNotifications && (

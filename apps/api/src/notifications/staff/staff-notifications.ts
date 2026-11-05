@@ -3,12 +3,17 @@ import {
   appointmentRequestedMessage,
   completionReminderDelaysHours,
   completionReminderMessage,
+  DEFAULT_PUSH_URL,
+  dailyAgendaHours,
+  dailyAgendaMessage,
+  type DailyAgendaStage,
   type StaffNotificationType,
   type StaffPushPayload,
 } from '@instafix/contracts';
 import type { Appointment, Notification, Prisma, Role } from '@prisma/client';
 import { logEvent } from '../../common/log-event';
 import { db } from '../../database/client';
+import { dayIn } from '../../integrations/cal-client';
 import type { StaffChannel } from './channels';
 import { WebPushChannel } from './web-push.channel';
 
@@ -38,6 +43,8 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
   APPOINTMENT_ASSIGNED: ['TECHNICIAN'],
   // Solo al técnico asignado a la visita (un administrador también puede tomar visitas).
   COMPLETION_REMINDER: ['ADMIN', 'TECHNICIAN'],
+  // Resumen diario de sus propias visitas (mañana a las 19H00, hoy a las 08H00).
+  DAILY_AGENDA: ['ADMIN', 'TECHNICIAN'],
   // Prueba enviada por el propio usuario a sus dispositivos (POST /staff/push/test).
   TEST: ['ADMIN', 'TECHNICIAN'],
 };
@@ -46,6 +53,7 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
 export const producedStaffNotifications: readonly StaffNotificationType[] = [
   'APPOINTMENT_REQUESTED',
   'COMPLETION_REMINDER',
+  'DAILY_AGENDA',
 ];
 
 /** Roles que pueden registrar dispositivos para recibir avisos del equipo. */
@@ -175,6 +183,85 @@ export async function scheduleCompletionReminders(
   return ids;
 }
 
+const AGENDA_TIME_ZONE = 'America/Guayaquil';
+/** Si la API estuvo detenida a la hora del resumen, aún se envía dentro de este margen. */
+const AGENDA_WINDOW_HOURS = 3;
+
+/**
+ * Resumen diario al técnico de sus visitas confirmadas: a las 19H00 las de mañana y a las 08H00
+ * las de hoy (hora de Ecuador). Se llama desde el worker; la clave única (día, tipo, técnico)
+ * garantiza un solo aviso aunque se llame muchas veces o haya varias instancias. Sin visitas ese
+ * día no se envía nada. Devuelve los ids creados o ya existentes.
+ */
+export async function scheduleDailyAgendas(now = new Date()) {
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: AGENDA_TIME_ZONE,
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).format(now),
+  );
+  const ids: string[] = [];
+  for (const [stage, at] of Object.entries(dailyAgendaHours) as [DailyAgendaStage, number][]) {
+    if (hour < at || hour >= at + AGENDA_WINDOW_HOURS) continue;
+    // Ecuador no tiene horario de verano: el día empieza siempre a las 00H00 -05:00.
+    const day = dayIn(new Date(now.getTime() + (stage === 'TOMORROW' ? 86400000 : 0)));
+    const start = new Date(`${day}T00:00:00-05:00`);
+    const jobs = await db.appointment.findMany({
+      where: {
+        status: { in: ['CONFIRMED', 'IN_PROGRESS'] },
+        deletedAt: null,
+        startsAt: { gte: start, lt: new Date(start.getTime() + 86400000) },
+        assignedTechnician: {
+          role: { in: [...staffRecipientRules.DAILY_AGENDA] },
+          active: true,
+          deletedAt: null,
+          pushSubscriptions: { some: { active: true } },
+        },
+      },
+      select: {
+        id: true,
+        assignedTechnicianId: true,
+        contactName: true,
+        startsAt: true,
+        timeZone: true,
+      },
+    });
+    const byTechnician = new Map<string, typeof jobs>();
+    for (const job of jobs) {
+      const list = byTechnician.get(job.assignedTechnicianId!) ?? [];
+      list.push(job);
+      byTechnician.set(job.assignedTechnicianId!, list);
+    }
+    for (const [technicianId, list] of byTechnician) {
+      const { title, body } = dailyAgendaMessage(list, stage);
+      const dedupeKey = staffNotificationKey('DAILY_AGENDA', `${day}:${stage}`, technicianId);
+      const row = await db.notification.upsert({
+        where: { dedupeKey },
+        update: {},
+        create: {
+          dedupeKey,
+          channel: 'WEB_PUSH',
+          kind: 'DAILY_AGENDA',
+          recipient: technicianId,
+          data: {
+            title,
+            body,
+            url: DEFAULT_PUSH_URL,
+            createdAt: now,
+            scheduledFor: now,
+            day,
+            stage,
+            appointmentIds: list.map((job) => job.id),
+          },
+        },
+      });
+      ids.push(row.id);
+    }
+  }
+  return ids;
+}
+
 type Row = Notification & { appointment: Appointment | null };
 
 /** Entrega una fila WEB_PUSH ya reclamada (status SENDING) por `deliverNotification`. */
@@ -192,17 +279,19 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
     await finish('CANCELLED', 'El destinatario ya no tiene permiso para este aviso');
     return 'CANCELLED' as const;
   }
+  // El resumen diario no pertenece a una cita: el resto sí y se anula si la cita ya no existe.
   if (
-    !row.appointment ||
-    row.appointment.deletedAt ||
-    (type === 'APPOINTMENT_REQUESTED' && row.appointment.status === 'CANCELLED')
+    type !== 'DAILY_AGENDA' &&
+    (!row.appointment ||
+      row.appointment.deletedAt ||
+      (type === 'APPOINTMENT_REQUESTED' && row.appointment.status === 'CANCELLED'))
   ) {
     await finish('CANCELLED', 'La cita fue cancelada o eliminada antes del envío');
     return 'CANCELLED' as const;
   }
   const meta = row.data as { scheduledFor?: string; endsAt?: string };
   if (type === 'COMPLETION_REMINDER') {
-    const a = row.appointment;
+    const a = row.appointment!;
     const reason = !OPEN_WORK.includes(a.status)
       ? a.status === 'COMPLETED'
         ? 'El trabajo ya se marcó como completado'
@@ -219,7 +308,9 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
   }
   // Un aviso programado caduca contando desde su hora prevista, no desde que se creó.
   const since = meta.scheduledFor ? new Date(meta.scheduledFor).getTime() : row.createdAt.getTime();
-  if (now.getTime() - since > STALE_AFTER_MS) {
+  // El resumen del día solo sirve a su hora: pasado el margen ya no se envía.
+  const staleAfter = type === 'DAILY_AGENDA' ? AGENDA_WINDOW_HOURS * 3600 * 1000 : STALE_AFTER_MS;
+  if (now.getTime() - since > staleAfter) {
     await finish('CANCELLED', 'Aviso caducado: no se envió a tiempo');
     return 'CANCELLED' as const;
   }
