@@ -6,6 +6,16 @@ import { AccountSecurity } from '../account/AccountSecurity';
 import { DeviceNotifications } from '../notifications/DeviceNotifications';
 import { browserEnv, isIos } from '../notifications/push-client';
 
+/** «11 nov 2026, 16:40»: si no cambia tras un despliegue, el dispositivo usa una copia vieja. */
+const buildLabel =
+  typeof __BUILD_TIME__ === 'string'
+    ? new Intl.DateTimeFormat('es-EC', {
+        timeZone: 'America/Guayaquil',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(__BUILD_TIME__))
+    : 'desarrollo';
+
 const roles: Record<AccountUser['role'], string> = {
   ADMIN: 'Administrador',
   TECHNICIAN: 'Técnico',
@@ -22,10 +32,13 @@ export function StaffSettings({
   user,
   onUser,
   onLogout,
+  onOpenSchedule,
 }: {
   user: AccountUser;
   onUser: (user: AccountUser) => void;
   onLogout: () => void;
+  /** Abre la sección Horarios (horas ocupadas y calendario semanal). */
+  onOpenSchedule?: () => void;
 }) {
   const [env] = useState(browserEnv);
   const ios = isIos(env);
@@ -55,6 +68,21 @@ export function StaffSettings({
         </div>
         <AccountSecurity user={user} onUser={onUser} />
       </section>
+
+      {onOpenSchedule && (
+        <section className="settings-card settings-session" aria-labelledby="settings-schedule">
+          <div>
+            <h2 id="settings-schedule">Mis horarios</h2>
+            <p>
+              Las horas en que no puedes atender visitas (clases, otro trabajo…) y tu semana en
+              calendario.
+            </p>
+          </div>
+          <button type="button" className="btn btn-secondary" onClick={onOpenSchedule}>
+            Abrir horarios
+          </button>
+        </section>
+      )}
 
       <section className="settings-card" aria-labelledby="settings-theme">
         <div className="settings-card-head">
@@ -106,6 +134,7 @@ export function StaffSettings({
           Cerrar sesión
         </button>
       </section>
+      <p className="small settings-version">Versión de la app: {buildLabel}</p>
     </div>
   );
 }
