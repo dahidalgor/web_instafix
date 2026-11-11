@@ -293,7 +293,14 @@ export default function Admin() {
       }
     >
       {tab === 'correo' && <AdminEmail />}
-      {tab === 'cuenta' && <StaffSettings user={user} onUser={setUser} onLogout={logout} />}
+      {tab === 'cuenta' && (
+        <StaffSettings
+          user={user}
+          onUser={setUser}
+          onLogout={logout}
+          onOpenSchedule={() => setTab('horarios')}
+        />
+      )}
       {tab === 'sorteo' && <AdminGiveaway />}
       {tab === 'horarios' && <AdminSchedule />}
       {tab === 'tecnico' && <TechnicianPanel user={user} embedded />}

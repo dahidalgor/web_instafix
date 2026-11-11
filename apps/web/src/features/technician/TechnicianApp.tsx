@@ -73,7 +73,12 @@ export function TechnicianApp({
       ) : tab === 'horarios' ? (
         <TechnicianSchedule />
       ) : (
-        <StaffSettings user={user} onUser={onUser} onLogout={onLogout} />
+        <StaffSettings
+          user={user}
+          onUser={onUser}
+          onLogout={onLogout}
+          onOpenSchedule={() => setTab('horarios')}
+        />
       )}
     </StaffShell>
   );
