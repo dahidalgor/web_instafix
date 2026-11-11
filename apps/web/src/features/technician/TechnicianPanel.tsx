@@ -242,7 +242,7 @@ export function TechnicianPanel({
                     />
                     {tab === 'pending' && a.confirmBy && (
                       <div className="tech-deadline">
-                        <dt>Confirmar antes de</dt>
+                        <dt>Confirmar hasta</dt>
                         <dd>{confirmByText(a.confirmBy, a.timeZone)} (si no, se cancela sola)</dd>
                       </div>
                     )}

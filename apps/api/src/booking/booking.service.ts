@@ -33,6 +33,7 @@ import { exclusive } from '../security/idempotency';
 import { rateLimited } from '../security/rate-events';
 import { WEB_CONSENT_ISSUE } from '../whatsapp/consent';
 import { holdDeadline, holdDeadlineForExisting, resetHold, usesHold } from './hold';
+import { busyReason, someTechnicianFree, technicianAgenda } from '../staff/availability';
 
 /** Regla de negocio: una cita se reprograma como máximo 2 veces. */
 export const MAX_RESCHEDULES = 2;
@@ -241,17 +242,21 @@ export async function bookableSlots(days: Record<string, string[]>, now = new Da
   if (!all.length) return days;
   const length = (await calEventLengthMinutes()) * 60000;
   const times = all.map((slot) => new Date(slot).getTime());
-  const holds = await heldAppointments(
-    db,
-    new Date(Math.min(...times)),
-    new Date(Math.max(...times) + length),
-  );
+  const from = new Date(Math.min(...times));
+  const to = new Date(Math.max(...times) + length);
+  const [holds, technicians] = await Promise.all([
+    heldAppointments(db, from, to),
+    technicianAgenda(db, from, to),
+  ]);
   const free = (slot: string) => {
     const start = new Date(slot);
     const end = start.getTime() + length;
+    const window = { startsAt: start, endsAt: new Date(end) };
     return (
       holdDeadline(now, start) !== null &&
-      !holds.some((h) => h.startsAt.getTime() < end && h.endsAt > start)
+      !holds.some((h) => h.startsAt.getTime() < end && h.endsAt > start) &&
+      // Al menos un técnico libre (sin técnicos registrados no se restringe).
+      (!technicians.length || technicians.some((tech) => !busyReason(tech, window)))
     );
   };
   return Object.fromEntries(
@@ -265,7 +270,7 @@ export async function bookableSlots(days: Record<string, string[]>, now = new Da
  * El horario está libre de verdad: Cal.com lo ofrece (sin caché) y ninguna reserva provisional
  * de Instafix lo ocupa.
  */
-async function assertSlotFree(start: Date, end: Date, exceptId?: string) {
+async function assertSlotFree(start: Date, end: Date, exceptId?: string, byAdmin = false) {
   const recheck = await isCalSlotAvailable(start).catch(() => null);
   logEvent('booking.revalidated', {
     start: start.toISOString(),
@@ -279,6 +284,10 @@ async function assertSlotFree(start: Date, end: Date, exceptId?: string) {
   if (!recheck) logEvent('booking.slot_unverified', { start: start.toISOString() }, 'warn');
   else if (!recheck.available) throw slotTaken();
   if ((await heldAppointments(db, start, end, exceptId)).length) throw slotTaken();
+  // Todos los técnicos tienen ese horario ocupado: nadie podría confirmarla. Administración sí
+  // puede mover una cita ahí (por ejemplo, para atenderla ella misma).
+  if (!byAdmin && !(await someTechnicianFree(db, { startsAt: start, endsAt: end, id: exceptId })))
+    throw slotTaken();
 }
 
 /**
@@ -549,7 +558,7 @@ async function moveToHold(
 ) {
   const now = new Date();
   const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
-  await assertSlotFree(start, end, appointment.id);
+  await assertSlotFree(start, end, appointment.id, Boolean(options.adminId));
   const previousUid = appointment.calUid;
   const notifications = await db.$transaction(async (tx) => {
     await calLock(tx);

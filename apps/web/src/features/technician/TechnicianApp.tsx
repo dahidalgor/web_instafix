@@ -4,6 +4,7 @@ import { StaffShell } from '../../components/staff/StaffShell';
 import { StaffSettings } from '../staff/StaffSettings';
 import { isTechTab, techGroups, techPrimary, techViews, type TechAppTab } from './technician-nav';
 import { TechnicianPanel, type TechnicianCounts } from './TechnicianPanel';
+import { TechnicianSchedule } from './TechnicianSchedule';
 
 const TAB_KEY = 'instafix:tech-tab';
 function savedTab(): TechAppTab {
@@ -16,8 +17,9 @@ function savedTab(): TechAppTab {
 }
 
 /**
- * Panel de técnicos como app: barra inferior en el móvil (Hoy, Próximas, Pendientes, Historial,
- * Ajustes) y barra lateral en escritorio, con la misma estructura que Administración.
+ * Panel de técnicos como app: barra inferior en el móvil (Hoy, Próximas, Pendientes, Historial y
+ * «Más» con Horarios y Ajustes) y barra lateral en escritorio, con la misma estructura que
+ * Administración.
  */
 export function TechnicianApp({
   user,
@@ -42,15 +44,15 @@ export function TechnicianApp({
       // Sin almacenamiento: la ventana no se recuerda.
     }
   };
-  // Una notificación abre la cita sobre la lista de visitas, nunca sobre Ajustes.
-  const view = tab === 'ajustes' ? (focusId ? 'hoy' : null) : tab;
+  // Una notificación abre la cita sobre la lista de visitas, nunca sobre Ajustes u Horarios.
+  const view = tab === 'ajustes' || tab === 'horarios' ? (focusId ? 'hoy' : null) : tab;
   return (
     <StaffShell
       area="Técnicos"
       user={user}
       groups={techGroups}
       primary={techPrimary}
-      tab={view ?? 'ajustes'}
+      tab={view ?? tab}
       onSelect={setTab}
       onLogout={onLogout}
       accountTab="ajustes"
@@ -64,10 +66,12 @@ export function TechnicianApp({
           onCounts={setCounts}
           focusId={focusId}
           onFocused={() => {
-            if (tab === 'ajustes') setTab('hoy');
+            if (tab === 'ajustes' || tab === 'horarios') setTab('hoy');
             onFocused();
           }}
         />
+      ) : tab === 'horarios' ? (
+        <TechnicianSchedule />
       ) : (
         <StaffSettings user={user} onUser={onUser} onLogout={onLogout} />
       )}

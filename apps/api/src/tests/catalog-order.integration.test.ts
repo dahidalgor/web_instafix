@@ -170,7 +170,11 @@ test(
           ...data,
         },
       });
-    const pending = await visit({});
+    // A otra hora que su visita: un técnico no ve solicitudes que chocan con sus visitas.
+    const pending = await visit({
+      startsAt: new Date(startsAt.getTime() + 86400000),
+      endsAt: new Date(startsAt.getTime() + 86400000 + 3600000),
+    });
     const mine = await visit({
       status: 'CONFIRMED',
       assignedTechnicianId: tech.user.id,

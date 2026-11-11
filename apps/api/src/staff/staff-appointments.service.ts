@@ -24,6 +24,7 @@ import { logEvent } from '../common/log-event';
 import { exclusiveWait } from '../security/idempotency';
 import { createAgendaBooking } from '../booking/booking.service';
 import { confirmDeadline } from '../booking/hold';
+import { busyReason, OTHER_VISIT, technicianAgenda, technicianBusyReason } from './availability';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
 import { cancelPendingJobs, lockAppointment } from '../whatsapp/queue';
@@ -135,7 +136,15 @@ export async function pendingAppointments(user: StaffUser, now = new Date()) {
     orderBy: { startsAt: 'asc' },
     include,
   });
-  return items.map((a) => serializeStaff(user, a));
+  // Un técnico solo ve las solicitudes de los horarios en que está libre.
+  if (user.role !== 'TECHNICIAN' || !items.length) return items.map((a) => serializeStaff(user, a));
+  const [me] = await technicianAgenda(
+    db,
+    items[0].startsAt,
+    new Date(Math.max(...items.map((a) => a.endsAt.getTime()))),
+    user.id,
+  );
+  return items.filter((a) => !me || !busyReason(me, a)).map((a) => serializeStaff(user, a));
 }
 
 export async function staffAppointment(user: StaffUser, id: string) {
@@ -145,8 +154,18 @@ export async function staffAppointment(user: StaffUser, id: string) {
     throw new NotFoundException(
       'Esta cita ya no está disponible: otro técnico la confirmó, se canceló o ya pasó.',
     );
-  return serializeStaff(user, a);
+  const busy =
+    user.role === 'TECHNICIAN' && isClaimable(a)
+      ? await technicianBusyReason(db, user.id, a)
+      : null;
+  return { ...serializeStaff(user, a), busyReason: busy };
 }
+
+/** Mensaje para un técnico que intenta confirmar en un horario en que no está libre. */
+const busyMessage = (reason: string) =>
+  reason === OTHER_VISIT
+    ? 'Ya tienes otra visita confirmada a esa hora.'
+    : `Tienes ese horario marcado como ocupado («${reason}»). Si sí puedes ir, quítalo en Horarios y vuelve a confirmar.`;
 
 /**
  * Refleja la confirmación en Cal.com (reserva «pendiente» → «aceptada»). Si Cal.com falla, la
@@ -286,6 +305,11 @@ export async function confirmAppointment(user: StaffUser, id: string, now = new 
     const before = await db.appointment.findUnique({ where: { id } });
     if (assertClaimable(before, user, now) === 'MINE')
       return { already: true, notifications: [] as string[] };
+    // Un técnico no puede tomar una cita en un horario en que no está libre (administración sí).
+    if (user.role === 'TECHNICIAN') {
+      const reason = await technicianBusyReason(db, user.id, before!);
+      if (reason) throw new ConflictException(busyMessage(reason));
+    }
     // Solo una reserva provisional de la web pasa a Cal.com; las manuales no están en la agenda.
     const created =
       !before!.calUid && before!.source === 'INSTAFIX_API' ? await reserveInCal(before!) : null;
