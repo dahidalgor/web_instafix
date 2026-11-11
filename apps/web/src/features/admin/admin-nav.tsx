@@ -25,6 +25,7 @@ export type AdminTab =
   | 'whatsapp'
   | 'correo'
   | 'estadisticas'
+  | 'horarios'
   | 'cuenta';
 
 export type AdminNavItem = StaffNavItem<AdminTab>;
@@ -46,6 +47,12 @@ export const icons = {
     <>
       <rect x="5" y="4" width="14" height="17" rx="2" />
       <path d="M9 3h6v3H9zM9 13l2 2 4-4" />
+    </>,
+  ),
+  horarios: svg(
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4M9 14l6 5M15 14l-6 5" />
     </>,
   ),
   sorteo: svg(
@@ -221,6 +228,13 @@ export const adminGroups: AdminNavGroup[] = [
     id: 'cuenta',
     label: 'Cuenta',
     items: [
+      {
+        id: 'horarios',
+        label: 'Mis horarios',
+        description:
+          'Las horas en que no puedes atender visitas (clases, otro trabajo…). Cuentan para repartir las citas.',
+        icon: icons.horarios,
+      },
       {
         id: 'cuenta',
         label: 'Mi cuenta',

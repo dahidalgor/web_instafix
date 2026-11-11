@@ -114,9 +114,9 @@ test(
     const staff = new StaffController();
     const people: string[] = [];
     const contacts: string[] = [];
-    // Solo los técnicos de esta prueba: los demás técnicos activos se pausan mientras dura.
+    // Solo el equipo de esta prueba: los demás técnicos y administradores se pausan mientras dura.
     const others = await db.user.findMany({
-      where: { role: 'TECHNICIAN', active: true },
+      where: { role: { in: ['TECHNICIAN', 'ADMIN'] }, active: true },
       select: { id: true },
     });
     await db.user.updateMany({
@@ -220,6 +220,13 @@ test(
     );
     await staff.confirm(appointmentId, free.req);
 
+    // Administración también registra sus horarios (atiende visitas): los lunes en la mañana no.
+    const meetings = await staff.addBusy(
+      { label: 'Reuniones', repeat: 'WEEKLY', weekdays: [1], start: '08:00', end: '12:00' },
+      admin.req,
+    );
+    assert.equal(meetings.blocks[0].label, 'Reuniones');
+
     // Ana ya tiene esa visita: no puede tomar otra que se cruce.
     const second = phone();
     contacts.push(second);
@@ -234,11 +241,11 @@ test(
         },
         { headers: { origin: 'http://localhost:5173' } } as unknown as Request,
       ),
-      // Carlos en clase y Ana en otra visita: nadie podría atenderla.
+      // Carlos en clase, Ana en otra visita y administración en reuniones: nadie podría.
       (e: any) => e.getStatus() === 409,
     );
 
-    // La web no ofrece horarios en que ningún técnico está libre.
+    // La web no ofrece horarios en que nadie del equipo está libre.
     const slots = await bookableSlots({
       [day]: [ec(day, '09:00'), ec(day, '13:00'), ec(day, '15:00')].map((d) => d.toISOString()),
     });

@@ -801,7 +801,7 @@ export function AdminAppointments({
                           )}
                           {item.availableTechnicians && (
                             <div>
-                              <dt>Técnicos libres</dt>
+                              <dt>Equipo libre</dt>
                               <dd>
                                 {item.availableTechnicians.length
                                   ? item.availableTechnicians.join(', ')
