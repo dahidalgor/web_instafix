@@ -10,9 +10,10 @@ import { db } from '../database/client';
 import { dayIn } from '../integrations/cal-client';
 
 /**
- * Disponibilidad de los técnicos: sus horarios ocupados (clases, otro trabajo…) y sus visitas
- * confirmadas. Decide qué horarios ofrece la web, a quién avisar de una solicitud y quién puede
- * confirmarla. Solo cuenta el rol TECHNICIAN; administración ve y puede confirmar todo.
+ * Disponibilidad de quienes atienden visitas (técnicos y administradores): sus horarios ocupados
+ * (clases, otro trabajo…) y sus visitas confirmadas. Decide qué horarios ofrece la web, a quién
+ * avisar de una solicitud y quién puede confirmarla. Administración recibe siempre los avisos y
+ * puede confirmar cualquier cita; sus horarios cuentan para saber si alguien puede atenderla.
  */
 type Client = Prisma.TransactionClient | typeof db;
 type Window = { startsAt: Date; endsAt: Date; id?: string };
@@ -20,11 +21,11 @@ type Window = { startsAt: Date; endsAt: Date; id?: string };
 const MAX_BLOCKS = 60;
 export const OTHER_VISIT = 'otra visita confirmada';
 
-/** Técnicos activos con sus horarios ocupados y sus visitas activas que tocan [from, to). */
+/** Equipo activo con sus horarios ocupados y sus visitas activas que tocan [from, to). */
 export function technicianAgenda(client: Client, from: Date, to: Date, userId?: string) {
   return client.user.findMany({
     where: {
-      role: 'TECHNICIAN',
+      role: { in: ['TECHNICIAN', 'ADMIN'] },
       active: true,
       deletedAt: null,
       ...(userId ? { id: userId } : {}),
@@ -57,22 +58,19 @@ export function busyReason(tech: TechnicianAgenda, window: Window) {
   return visit ? OTHER_VISIT : null;
 }
 
-/** Técnicos libres para esa cita. */
+/** Miembros del equipo libres para esa cita (técnicos y administradores). */
 export async function availableTechnicianIds(client: Client, window: Window) {
   const agenda = await technicianAgenda(client, window.startsAt, window.endsAt);
   return agenda.filter((tech) => !busyReason(tech, window)).map((tech) => tech.id);
 }
 
-/**
- * Hay al menos un técnico libre. Sin ningún técnico registrado no se restringe nada (las
- * visitas las atiende administración y la agenda la marca Cal.com).
- */
+/** Hay al menos alguien del equipo libre (sin equipo registrado no se restringe nada). */
 export async function someTechnicianFree(client: Client, window: Window) {
   const agenda = await technicianAgenda(client, window.startsAt, window.endsAt);
   return !agenda.length || agenda.some((tech) => !busyReason(tech, window));
 }
 
-/** Motivo por el que ESTE técnico no puede atender la cita (null si puede o no es técnico). */
+/** Motivo por el que esta persona del equipo no puede atender la cita (null si puede). */
 export async function technicianBusyReason(client: Client, userId: string, window: Window) {
   const [tech] = await technicianAgenda(client, window.startsAt, window.endsAt, userId);
   return tech ? busyReason(tech, window) : null;

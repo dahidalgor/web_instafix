@@ -540,7 +540,17 @@ body.sheet-open {
   font-weight: 600;
 }
 
-/* Horarios ocupados del técnico. */
+/* Horarios ocupados (técnicos y administración). Pensado primero para el móvil. */
+.busy-form,
+.busy-list {
+  --busy-on: #a00d68;
+  --busy-on-text: #fff;
+}
+:root[data-theme='dark'] .busy-form,
+:root[data-theme='dark'] .busy-list {
+  --busy-on: #f398d0;
+  --busy-on-text: #2a0f22;
+}
 .busy-heading {
   margin: 14px 0 6px;
   font-size: 0.85rem;
@@ -577,62 +587,135 @@ body.sheet-open {
 }
 .busy-form {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  min-width: 0;
+}
+.busy-form label {
+  margin-bottom: 0;
+  min-width: 0;
 }
 .busy-form fieldset {
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 .busy-form legend {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  padding: 0;
   font-weight: 600;
+}
+/* Fecha y hora: iOS les da un ancho mínimo propio que se sale de la tarjeta. */
+.busy-form input[type='date'],
+.busy-form input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+  text-align: left;
+}
+.busy-form input::-webkit-date-and-time-value {
+  text-align: left;
+}
+.busy-hours {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 .busy-repeat {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
+  gap: 10px 22px;
 }
-.busy-days {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.busy-days button {
-  width: 42px;
-  height: 42px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 700;
-  cursor: pointer;
-}
-.busy-days button.is-on {
-  border-color: #a00d68;
-  background: linear-gradient(110deg, #762257, #a00d68);
-  color: #fff;
-}
-.busy-hours {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.busy-form label {
-  margin-bottom: 0;
-}
+/* Casillas y opciones propias: se ven igual en claro, oscuro e iOS. */
 .busy-form .checkbox-label {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 0.95rem;
+  font-weight: 500;
   cursor: pointer;
 }
 .busy-form .checkbox-label input {
-  width: 20px;
-  height: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  display: grid;
+  place-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
   margin: 0;
   padding: 0;
+  border: 2px solid var(--muted);
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+.busy-form .checkbox-label input[type='radio'] {
+  border-radius: 50%;
+}
+.busy-form .checkbox-label input:checked {
+  border-color: var(--busy-on);
+}
+.busy-form .checkbox-label input[type='radio']:checked::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--busy-on);
+}
+.busy-form .checkbox-label input[type='checkbox']:checked {
+  background: var(--busy-on);
+}
+.busy-form .checkbox-label input[type='checkbox']:checked::before {
+  content: '';
+  width: 5px;
+  height: 10px;
+  margin-top: -2px;
+  border: solid var(--busy-on-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.busy-form .checkbox-label input:focus-visible {
+  outline: 2px solid var(--busy-on);
+  outline-offset: 2px;
+}
+/* Los 7 días siempre en una fila, también en teléfonos angostos. */
+.busy-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 380px;
+}
+.busy-days button {
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 48px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.busy-days button.is-on {
+  border-color: var(--busy-on);
+  background: var(--busy-on);
+  color: var(--busy-on-text);
+}
+.busy-days button:focus-visible {
+  outline: 2px solid var(--busy-on);
+  outline-offset: 2px;
+}
+.busy-row > button {
   flex: none;
-  accent-color: var(--brand-magenta);
+  width: auto;
+  min-width: 0;
+  padding-inline: 14px;
 }

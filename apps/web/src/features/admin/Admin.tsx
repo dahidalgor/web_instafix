@@ -25,6 +25,7 @@ import { TechnicianPanel } from '../technician/TechnicianPanel';
 import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton';
 import { appointmentIdFromHash } from '@instafix/contracts/src/push';
 import { AdminGiveaway } from './AdminGiveaway';
+import { TechnicianSchedule } from '../technician/TechnicianSchedule';
 import { StaffShell } from '../../components/staff/StaffShell';
 import { StaffSettings } from '../staff/StaffSettings';
 import { TechnicianApp } from '../technician/TechnicianApp';
@@ -294,6 +295,7 @@ export default function Admin() {
       {tab === 'correo' && <AdminEmail />}
       {tab === 'cuenta' && <StaffSettings user={user} onUser={setUser} onLogout={logout} />}
       {tab === 'sorteo' && <AdminGiveaway />}
+      {tab === 'horarios' && <TechnicianSchedule />}
       {tab === 'tecnico' && <TechnicianPanel user={user} embedded />}
       {tab === 'equipo' && <AdminTeam />}
       {tab === 'usuarios' && <AdminUsers currentUserId={user.id} />}
