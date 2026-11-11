@@ -14,6 +14,12 @@ export const staffNotificationTypes = [
   'COMPLETION_REMINDER',
   /** A los técnicos: una cita sigue sin confirmar y se cancelará si nadie la confirma. */
   'CONFIRMATION_REMINDER',
+  /** A quienes están libres: un técnico pide que otro tome su visita confirmada. */
+  'HANDOVER_REQUESTED',
+  /** Al técnico que pidió reemplazo: alguien tomó su visita. */
+  'HANDOVER_TAKEN',
+  /** A administración: 24 h antes de la visita nadie tomó el reemplazo. */
+  'HANDOVER_UNCLAIMED',
   /** Al técnico: sus trabajos de mañana (19H00) y de hoy (08H00). */
   'DAILY_AGENDA',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */
@@ -255,3 +261,43 @@ export function confirmationReminderMessage(
         body: `${who ?? 'Un cliente'} solicitó una cita para ${visit}. Confírmala ${before} o se cancelará.`,
       };
 }
+
+type VisitInput = { contactName: string | null | undefined; startsAt: Date; timeZone: string };
+const visitText = (input: VisitInput) => {
+  const { day, time } = formatAppointmentMoment(input.startsAt, input.timeZone);
+  const who = customerFirstName(input.contactName);
+  return `${who ? `la visita de ${who}` : 'una visita'} del ${lowerFirst(day)} a las ${time}`;
+};
+
+/** Reemplazo: un técnico necesita que otro tome su visita confirmada. */
+export function handoverRequestedMessage(
+  input: VisitInput,
+  requester: string,
+  reason: string | null | undefined,
+) {
+  return {
+    title: '¿Puedes tomar esta visita?',
+    body: `${requester} necesita un reemplazo para ${visitText(input)}.${reason ? ` Motivo: ${reason}.` : ''}`.slice(
+      0,
+      300,
+    ),
+  };
+}
+
+/** Reemplazo: alguien tomó la visita (al técnico que lo pidió). */
+export function handoverTakenMessage(input: VisitInput, taker: string) {
+  return {
+    title: `${taker} tomó tu visita`,
+    body: `${capitalizeFirst(visitText(input))} ya no está a tu cargo.`,
+  };
+}
+
+/** Reemplazo: 24 h antes nadie lo tomó (a administración). */
+export function handoverUnclaimedMessage(input: VisitInput, requester: string) {
+  return {
+    title: 'Nadie tomó un reemplazo',
+    body: `${requester} pidió reemplazo para ${visitText(input)}. Reasígnala desde Citas o confirma con ${requester}.`,
+  };
+}
+
+const capitalizeFirst = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;

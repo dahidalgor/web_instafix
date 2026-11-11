@@ -88,6 +88,10 @@ export const unassignedForReschedule = {
   confirmedById: null,
   // La reserva provisional empieza de nuevo (la fija quien mueve la cita o el barrido).
   ...resetHold,
+  // Sin técnico ya no hay reemplazo que buscar.
+  handoverRequestedAt: null,
+  handoverRequestedById: null,
+  handoverReason: null,
 };
 
 type Customer = { id: string; name: string; phone: string; email: string | null } | null;

@@ -33,6 +33,9 @@ type AdminAppointment = Appointment & {
   autoCancelReason?: string | null;
   /** Pendiente: técnicos libres en su horario (sin horario ocupado ni otra visita). */
   availableTechnicians?: string[] | null;
+  /** Pedido de reemplazo abierto del técnico asignado. */
+  handoverRequestedAt?: string | null;
+  handoverReason?: string | null;
   whatsappConsentAt?: string;
   automationIssue?: string;
   assignedTechnician?: { id: string; name: string; active?: boolean } | null;
@@ -74,6 +77,13 @@ const shortMoment = (date: Date, timeZone: string) =>
     minute: '2-digit',
     hourCycle: 'h23',
   }).format(date);
+type TeamOption = {
+  id: string;
+  name: string;
+  role: 'ADMIN' | 'TECHNICIAN';
+  current: boolean;
+  busyReason: string | null;
+};
 const localDate = (value: string) => {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -112,6 +122,9 @@ export function AdminAppointments({
   const [message, setMessage] = useState('');
   // Acción en curso: solo su botón muestra la espera; el resto queda desactivado.
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  // Cambiar técnico de una visita confirmada: equipo con su disponibilidad en ese horario.
+  const [team, setTeam] = useState<TeamOption[] | null>(null);
+  const [reassignTo, setReassignTo] = useState('');
   const busy = busyAction !== null;
   async function load(order = sort) {
     const [next, customers] = await Promise.all([
@@ -150,6 +163,12 @@ export function AdminAppointments({
     );
     setId(item.id);
     setMove({ startsAt: localDate(item.startsAt), keepTechnician: true });
+    setTeam(null);
+    setReassignTo('');
+    if (item.status === 'CONFIRMED' && item.assignedTechnician)
+      api<TeamOption[]>(`admin/appointments/${item.id}/team`)
+        .then(setTeam)
+        .catch(() => setTeam([]));
     setConfirmDelete(false);
     setLinkUserId('');
     setIdentityVerified(false);
@@ -194,6 +213,34 @@ export function AdminAppointments({
       setBusyAction(null);
     }
   }
+  async function reassign(item: AdminAppointment) {
+    const to = team?.find((t) => t.id === reassignTo);
+    if (!to) return;
+    if (
+      !window.confirm(
+        `¿Pasar la visita de ${item.contactName || 'este cliente'} a ${to.name}?${to.busyReason ? ` Ojo: tiene ese horario ocupado («${to.busyReason}»).` : ''} El cliente recibe un correo con el técnico nuevo.`,
+      )
+    )
+      return;
+    setBusyAction('reassign');
+    setMessage('');
+    try {
+      await api(`admin/appointments/${item.id}/reassign`, {
+        method: 'POST',
+        body: JSON.stringify({ technicianId: to.id }),
+      });
+      await load();
+      setId(null);
+      setDraft({ ...empty });
+      setFormOpen(false);
+      setMessage(`La visita ahora es de ${to.name}. El cliente recibe un correo con el cambio.`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo cambiar el técnico.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function reschedule(item: AdminAppointment) {
     if (!move.startsAt) return;
     const when = new Date(move.startsAt);
@@ -534,6 +581,46 @@ export function AdminAppointments({
                 </BusyButton>
               </fieldset>
             ))}
+          {list
+            .filter(
+              (item) => item.id === id && item.status === 'CONFIRMED' && item.assignedTechnician,
+            )
+            .map((item) => (
+              <fieldset key={`reassign-${item.id}`} className="appt-move">
+                <legend>Cambiar técnico</legend>
+                <p className="small">
+                  {item.handoverRequestedAt
+                    ? `${item.assignedTechnician!.name} pidió un reemplazo${item.handoverReason ? ` («${item.handoverReason}»)` : ''}. `
+                    : ''}
+                  Mismo horario; el cliente recibe un correo con el técnico nuevo.
+                </p>
+                <label>
+                  Pasar la visita a
+                  <select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)}>
+                    <option value="">{team ? 'Elige a quién' : 'Cargando equipo…'}</option>
+                    {(team ?? [])
+                      .filter((t) => !t.current)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                          {t.role === 'ADMIN' ? ' (administración)' : ''} ·{' '}
+                          {t.busyReason ? `ocupado: ${t.busyReason}` : 'libre'}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <BusyButton
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !reassignTo}
+                  busy={busyAction === 'reassign'}
+                  busyLabel="Cambiando…"
+                  onClick={() => reassign(item)}
+                >
+                  Cambiar técnico
+                </BusyButton>
+              </fieldset>
+            ))}
           <label>
             Zona horaria para el cliente
             <select
@@ -797,6 +884,16 @@ export function AdminAppointments({
                             <div>
                               <dt>Incidencia</dt>
                               <dd>{item.automationIssue}</dd>
+                            </div>
+                          )}
+                          {item.handoverRequestedAt && item.status === 'CONFIRMED' && (
+                            <div>
+                              <dt>Busca reemplazo</dt>
+                              <dd>
+                                {item.assignedTechnician?.name ?? 'El técnico'} no puede ir
+                                {item.handoverReason ? ` («${item.handoverReason}»)` : ''}. Pásala a
+                                otra persona en «Ver y editar».
+                              </dd>
                             </div>
                           )}
                           {item.availableTechnicians && (

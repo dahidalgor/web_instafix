@@ -25,6 +25,10 @@ import { exclusiveWait } from '../security/idempotency';
 import { createAgendaBooking } from '../booking/booking.service';
 import { confirmDeadline } from '../booking/hold';
 import { openGiveaway } from '../giveaways/giveaways';
+import {
+  enqueueHandoverRequested,
+  enqueueHandoverTaken,
+} from '../notifications/staff/staff-notifications';
 import { busyReason, OTHER_VISIT, technicianAgenda, technicianBusyReason } from './availability';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
@@ -88,6 +92,14 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     giveawayEntries: a.giveawayEntries,
     giveawayPrize: a.giveawayEntries > 0 ? (a.giveaway?.prize ?? null) : null,
     confirmBy: confirmDeadline(a)?.toISOString() ?? null,
+    handover:
+      a.handoverRequestedAt && a.status === 'CONFIRMED'
+        ? {
+            requestedBy: a.assignedTechnician?.name ?? 'Un técnico',
+            reason: a.handoverReason,
+            requestedAt: a.handoverRequestedAt.toISOString(),
+          }
+        : null,
     services: a.services.map((s) => ({
       id: s.id,
       offeringId: s.offeringId,
@@ -132,10 +144,17 @@ export async function myAppointments(user: StaffUser) {
 export async function pendingAppointments(user: StaffUser, now = new Date()) {
   const items = await db.appointment.findMany({
     where: {
-      status: 'PENDING_LOCATION',
-      assignedTechnicianId: null,
       deletedAt: null,
-      endsAt: { gt: now },
+      OR: [
+        { status: 'PENDING_LOCATION', assignedTechnicianId: null, endsAt: { gt: now } },
+        // Reemplazos que otro técnico pidió: también se pueden tomar.
+        {
+          status: 'CONFIRMED',
+          handoverRequestedAt: { not: null },
+          assignedTechnicianId: { not: user.id },
+          startsAt: { gt: now },
+        },
+      ],
     },
     orderBy: { startsAt: 'asc' },
     include,
@@ -154,12 +173,12 @@ export async function pendingAppointments(user: StaffUser, now = new Date()) {
 export async function staffAppointment(user: StaffUser, id: string) {
   const a = await db.appointment.findUnique({ where: { id }, include });
   // Un técnico solo ve sus visitas y las pendientes que puede confirmar.
-  if (!a || a.deletedAt || !(canManage(user, a) || isClaimable(a)))
+  if (!a || a.deletedAt || !(canManage(user, a) || isClaimable(a) || isOffered(a, user)))
     throw new NotFoundException(
       'Esta cita ya no está disponible: otro técnico la confirmó, se canceló o ya pasó.',
     );
   const busy =
-    user.role === 'TECHNICIAN' && isClaimable(a)
+    user.role === 'TECHNICIAN' && (isClaimable(a) || isOffered(a, user))
       ? await technicianBusyReason(db, user.id, a)
       : null;
   return { ...serializeStaff(user, a), busyReason: busy };
@@ -569,4 +588,178 @@ export async function completeAppointment(
     return false;
   });
   return { appointment: await staffAppointment(user, id), alreadyCompleted: already };
+}
+
+/** Reemplazo abierto que otra persona del equipo puede tomar (visita confirmada y futura). */
+const isOffered = (a: Appointment, user: StaffUser, now = new Date()) =>
+  a.status === 'CONFIRMED' &&
+  Boolean(a.handoverRequestedAt) &&
+  a.assignedTechnicianId !== user.id &&
+  a.startsAt > now;
+
+const clearHandover = {
+  handoverRequestedAt: null,
+  handoverRequestedById: null,
+  handoverReason: null,
+};
+
+/**
+ * El técnico asignado no puede ir (error al aceptar o imprevisto): pide que otra persona libre
+ * tome la visita. Sigue a cargo hasta que alguien la tome o administración la reasigne.
+ */
+export async function requestHandover(
+  user: StaffUser,
+  id: string,
+  reason: string | undefined,
+  now = new Date(),
+) {
+  const notifications = await db.$transaction(async (tx) => {
+    await lockAppointment(tx, id);
+    const a = await tx.appointment.findUnique({ where: { id } });
+    if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
+    if (a.assignedTechnicianId !== user.id)
+      throw new ForbiddenException('Solo el técnico asignado puede pedir un reemplazo.');
+    if (a.status !== 'CONFIRMED' || a.startsAt <= now)
+      throw new BadRequestException(
+        'Solo se pide reemplazo de una visita confirmada que no empezó.',
+      );
+    if (a.handoverRequestedAt) return [] as string[];
+    const updated = await tx.appointment.update({
+      where: { id },
+      data: {
+        handoverRequestedAt: now,
+        handoverRequestedById: user.id,
+        handoverReason: reason?.trim() || null,
+      },
+    });
+    await activity(tx, id, user.id, 'HANDOVER_REQUESTED', reason ? { reason } : {});
+    return enqueueHandoverRequested(tx, updated, user.name, now);
+  });
+  await deliverNow(notifications);
+  return staffAppointment(user, id);
+}
+
+/** El técnico sí puede ir: retira su pedido de reemplazo. */
+export async function cancelHandover(user: StaffUser, id: string) {
+  await db.$transaction(async (tx) => {
+    await lockAppointment(tx, id);
+    const a = await tx.appointment.findUnique({ where: { id } });
+    if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
+    if (a.assignedTechnicianId !== user.id && !isAdmin(user))
+      throw new ForbiddenException('Solo el técnico asignado puede retirar el pedido.');
+    if (!a.handoverRequestedAt) return;
+    await tx.appointment.update({ where: { id }, data: clearHandover });
+    await activity(tx, id, user.id, 'HANDOVER_CANCELLED');
+  });
+  return staffAppointment(user, id);
+}
+
+/**
+ * Pasa una visita confirmada a otra persona del equipo (la toma del reemplazo o la reasignación
+ * de administración). La reserva de Cal.com no cambia: mismo horario. El cliente recibe un
+ * correo con el técnico nuevo y el anterior un aviso.
+ */
+async function transfer(
+  tx: Prisma.TransactionClient,
+  a: Appointment,
+  to: { id: string; name: string },
+  actorId: string,
+  now: Date,
+) {
+  const previousId = a.assignedTechnicianId!;
+  const moved = await tx.appointment.updateMany({
+    where: { id: a.id, status: 'CONFIRMED', assignedTechnicianId: previousId },
+    data: { assignedTechnicianId: to.id, technician: to.name, ...clearHandover },
+  });
+  if (!moved.count)
+    throw new ConflictException('La visita cambió mientras tanto. Vuelve a abrirla.');
+  const updated = await tx.appointment.findUniqueOrThrow({ where: { id: a.id } });
+  await activity(tx, a.id, actorId, 'REASSIGNED', {
+    from: previousId,
+    to: to.id,
+    ...(a.handoverRequestedAt ? { handover: true } : {}),
+  });
+  const notifications = await publishAppointmentEvent(
+    tx,
+    updated,
+    { type: 'appointment.reassigned', technicianName: to.name },
+    now,
+  );
+  if (previousId !== actorId) await enqueueHandoverTaken(tx, updated, previousId, to.name, now);
+  return notifications;
+}
+
+/** Otra persona libre toma la visita de un reemplazo abierto (el primero que la toma). */
+export async function takeHandover(user: StaffUser, id: string, now = new Date()) {
+  const notifications = await exclusiveWait(`appointment:${id}`, () =>
+    db.$transaction(async (tx) => {
+      await lockAppointment(tx, id);
+      const a = await tx.appointment.findUnique({ where: { id } });
+      if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
+      if (a.assignedTechnicianId === user.id) return [] as string[];
+      if (!isOffered(a, user, now))
+        throw new ConflictException(
+          'Este reemplazo ya no está disponible: alguien la tomó o se retiró.',
+        );
+      if (user.role === 'TECHNICIAN') {
+        const reason = await technicianBusyReason(tx, user.id, a);
+        if (reason) throw new ConflictException(busyMessage(reason));
+      }
+      return transfer(tx, a, user, user.id, now);
+    }),
+  );
+  await deliverNow(notifications);
+  return staffAppointment(user, id);
+}
+
+/** Personas del equipo para reasignar una visita, con su disponibilidad en ese horario. */
+export async function teamForAppointment(id: string) {
+  const a = await db.appointment.findUnique({ where: { id } });
+  if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
+  const agenda = await technicianAgenda(db, a.startsAt, a.endsAt);
+  const roles = await db.user.findMany({
+    where: { id: { in: agenda.map((t) => t.id) } },
+    select: { id: true, role: true },
+  });
+  return agenda
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      role: roles.find((r) => r.id === t.id)?.role ?? 'TECHNICIAN',
+      current: t.id === a.assignedTechnicianId,
+      busyReason: t.id === a.assignedTechnicianId ? null : busyReason(t, a),
+    }))
+    .sort((x, y) => Number(Boolean(x.busyReason)) - Number(Boolean(y.busyReason)));
+}
+
+/** Administración asigna directamente la visita confirmada a otra persona del equipo. */
+export async function reassignAppointment(
+  admin: { id: string },
+  id: string,
+  technicianId: string,
+  now = new Date(),
+) {
+  const notifications = await exclusiveWait(`appointment:${id}`, () =>
+    db.$transaction(async (tx) => {
+      await lockAppointment(tx, id);
+      const a = await tx.appointment.findUnique({ where: { id } });
+      if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
+      if (a.status !== 'CONFIRMED' || !a.assignedTechnicianId)
+        throw new BadRequestException('Solo se reasigna una visita confirmada que no empezó.');
+      if (a.assignedTechnicianId === technicianId) return [] as string[];
+      const to = await tx.user.findFirst({
+        where: {
+          id: technicianId,
+          role: { in: ['TECHNICIAN', 'ADMIN'] },
+          active: true,
+          deletedAt: null,
+        },
+        select: { id: true, name: true },
+      });
+      if (!to) throw new BadRequestException('Elige a un técnico o administrador activo.');
+      return transfer(tx, a, to, admin.id, now);
+    }),
+  );
+  await deliverNow(notifications);
+  return { ok: true };
 }

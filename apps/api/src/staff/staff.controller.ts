@@ -1,4 +1,5 @@
 import {
+  handoverRequestSchema,
   addPerformedServiceSchema,
   completeAppointmentSchema,
   technicianNotesSchema,
@@ -23,7 +24,10 @@ import type { Request } from 'express';
 import { authenticatedStaff, checkOrigin } from '../auth/session';
 import {
   addService,
+  cancelHandover,
   completeAppointment,
+  requestHandover,
+  takeHandover,
   confirmAppointment,
   myAppointments,
   pendingAppointments,
@@ -185,5 +189,35 @@ export class StaffController {
     await authenticatedStaff(req);
     const open = await openGiveaway();
     return { giveaway: open ? giveawayView(open) : null };
+  }
+
+  /** El técnico asignado pide que otra persona libre tome su visita (error o imprevisto). */
+  @Post('appointments/:id/handover')
+  @HttpCode(200)
+  @RateLimit('staff')
+  async handover(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    const parsed = handoverRequestSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new BadRequestException('El motivo es demasiado largo.');
+    return requestHandover(await authenticatedStaff(req), id, parsed.data.reason);
+  }
+
+  @Delete('appointments/:id/handover')
+  @RateLimit('staff')
+  async cancelHandover(@Param('id') id: string, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    return cancelHandover(await authenticatedStaff(req), id);
+  }
+
+  /** Tomar la visita de un reemplazo abierto (el primero que la toma se la queda). */
+  @Post('appointments/:id/take')
+  @HttpCode(200)
+  @RateLimit('staff')
+  async take(@Param('id') id: string, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    return takeHandover(await authenticatedStaff(req), id);
   }
 }

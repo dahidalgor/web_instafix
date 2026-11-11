@@ -23,11 +23,14 @@ const waLink = (phone: string) => `https://wa.me/${phone.replace(/\D/g, '')}`;
 /** Detalle de la visita: pantalla completa en el teléfono, panel lateral en escritorio. */
 export function AppointmentSheet({
   id,
+  userId,
   catalog,
   onClose,
   onChanged,
 }: {
   id: string;
+  /** Quién mira la ficha: decide si puede pedir reemplazo (su visita) o tomarla (de otro). */
+  userId?: string;
   catalog: Offering[];
   onClose: () => void;
   onChanged: (message?: string) => void;
@@ -42,6 +45,8 @@ export function AppointmentSheet({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [confirmComplete, setConfirmComplete] = useState(false);
+  const [askingHandover, setAskingHandover] = useState(false);
+  const [handoverReason, setHandoverReason] = useState('');
   // Sorteo abierto (si hay): se marca solo al registrar un servicio que cuenta en él (una
   // participación por unidad). Si el técnico cambia la casilla o el número, se respeta.
   const [giveaway, setGiveaway] = useState<Giveaway | null>(null);
@@ -86,7 +91,7 @@ export function AppointmentSheet({
       setItem(next);
       if (path === '/notes') setNotes(next.technicianNotes ?? '');
       if (done) setMessage(done);
-      onChanged(done && ['/confirm', '/complete'].includes(path) ? done : undefined);
+      onChanged(done && ['/confirm', '/complete', '/take'].includes(path) ? done : undefined);
       return true;
     } catch (e) {
       setMessage(e instanceof ApiError ? e.message : 'No se pudo completar la acción.');
@@ -135,6 +140,10 @@ export function AppointmentSheet({
     },
   };
   const beforeVisitDay = item ? ecDay(new Date()) < ecDay(new Date(item.startsAt)) : false;
+  // Reemplazo: el técnico asignado lo pide; otra persona libre lo toma.
+  const mine = Boolean(item && userId && item.assignedTechnician?.id === userId);
+  const upcoming = item ? new Date(item.startsAt).getTime() > Date.now() : false;
+  const offered = Boolean(item?.handover && !mine && item.status === 'CONFIRMED' && upcoming);
 
   return (
     <div className="tech-sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -502,6 +511,118 @@ export function AppointmentSheet({
                     <p className="small">Podrás completarla a partir del día de la visita.</p>
                   )}
                 </>
+              )}
+              {mine && item.status === 'CONFIRMED' && upcoming && (
+                <div className="tech-handover">
+                  {item.handover ? (
+                    <>
+                      <p>
+                        <strong>Pediste un reemplazo</strong>
+                        {item.handover.reason ? ` (${item.handover.reason})` : ''}. Sigues a cargo
+                        hasta que alguien libre la tome; te avisaremos.
+                      </p>
+                      <BusyButton
+                        type="button"
+                        className="btn btn-ghost btn-block"
+                        disabled={busy}
+                        busyLabel="Retirando…"
+                        onClick={() =>
+                          act(
+                            '/handover',
+                            { method: 'DELETE' },
+                            'Retiraste el pedido: la visita sigue a tu cargo.',
+                          )
+                        }
+                      >
+                        Sí puedo ir: retirar pedido
+                      </BusyButton>
+                    </>
+                  ) : askingHandover ? (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const ok = await act(
+                          '/handover',
+                          {
+                            method: 'POST',
+                            body: JSON.stringify(
+                              handoverReason.trim() ? { reason: handoverReason.trim() } : {},
+                            ),
+                          },
+                          'Pedido enviado: avisamos a quienes están libres a esa hora.',
+                        );
+                        if (ok) setAskingHandover(false);
+                      }}
+                    >
+                      <label>
+                        Motivo (opcional)
+                        <input
+                          maxLength={160}
+                          placeholder="Imprevisto, la acepté por error…"
+                          value={handoverReason}
+                          onChange={(e) => setHandoverReason(e.target.value)}
+                        />
+                      </label>
+                      <p className="small">
+                        Sigues a cargo hasta que otra persona libre la tome. El cliente recibe un
+                        correo con el técnico nuevo.
+                      </p>
+                      <div className="tech-actions-row">
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setAskingHandover(false)}
+                        >
+                          Cancelar
+                        </button>
+                        <BusyButton
+                          type="submit"
+                          className="btn btn-primary"
+                          disabled={busy}
+                          busyLabel="Enviando…"
+                        >
+                          Pedir reemplazo
+                        </BusyButton>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-block"
+                      disabled={busy}
+                      onClick={() => setAskingHandover(true)}
+                    >
+                      No puedo ir: pedir reemplazo
+                    </button>
+                  )}
+                </div>
+              )}
+              {offered && (
+                <div className="tech-handover">
+                  <p>
+                    <strong>{item.handover!.requestedBy} necesita un reemplazo</strong>
+                    {item.handover!.reason ? ` (${item.handover!.reason})` : ''}. Si la tomas, pasa
+                    a tus visitas y el cliente recibe un correo con tu nombre.
+                  </p>
+                  {item.busyReason && (
+                    <p className="tech-deadline-note" role="note">
+                      {item.busyReason === 'otra visita confirmada'
+                        ? 'Ya tienes otra visita confirmada a esa hora: no puedes tomar esta.'
+                        : `Tienes ese horario marcado como ocupado («${item.busyReason}»). Si sí puedes ir, quítalo en Horarios.`}
+                    </p>
+                  )}
+                  <BusyButton
+                    type="button"
+                    className="btn btn-primary btn-block"
+                    disabled={busy || !!item.busyReason}
+                    busyLabel="Tomando…"
+                    onClick={() =>
+                      act('/take', { method: 'POST' }, '✓ Tomaste la visita. Ya está en tus citas.')
+                    }
+                  >
+                    Tomar visita
+                  </BusyButton>
+                </div>
               )}
               {item.status === 'COMPLETED' && <p className="tech-done">✓ Visita completada</p>}
               {item.status === 'COMPLETED' && item.giveawayEntries > 0 && (

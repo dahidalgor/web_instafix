@@ -59,6 +59,9 @@ Service worker /sw.js                                        apps/web/src/sw/
 | `COMPLETION_REMINDER`     | El técnico asignado a la visita            | Implementado                   |
 | `DAILY_AGENDA`            | Cada técnico con visitas ese día           | Implementado                   |
 | `CONFIRMATION_REMINDER`   | Técnicos; el último también administración | Implementado                   |
+| `HANDOVER_REQUESTED`      | Equipo libre en el horario de la visita    | Implementado                   |
+| `HANDOVER_TAKEN`          | El técnico que pidió el reemplazo          | Implementado                   |
+| `HANDOVER_UNCLAIMED`      | Administración (24 h antes, sin tomar)     | Implementado                   |
 
 Solo cuenta como solicitud nueva el hecho `appointment.created` de una reserva hecha por el
 cliente (estado `PENDING_LOCATION`). Una edición, una reprogramación, una consulta de

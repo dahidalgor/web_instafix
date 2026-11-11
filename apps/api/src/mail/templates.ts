@@ -180,6 +180,26 @@ export function appointmentConfirmedEmail(data: AppointmentEmailData) {
   });
 }
 
+export function appointmentReassignedEmail(data: AppointmentEmailData) {
+  return brandedEmail({
+    subject: 'Cambió el técnico de tu visita · Instafix',
+    badge: '✓ Tu visita sigue confirmada',
+    intro: `Hola ${firstName(data.name)},`,
+    paragraphs: [
+      data.technicianName
+        ? `Tu visita sigue confirmada en el mismo horario. Ahora te atenderá ${data.technicianName}.`
+        : 'Tu visita sigue confirmada en el mismo horario, con otro técnico de Instafix.',
+    ],
+    details: [
+      ...requestDetails(data).slice(0, 2),
+      ...(data.technicianName ? [{ label: 'Técnico asignado', value: data.technicianName }] : []),
+      ...requestDetails(data).slice(2),
+    ],
+    note: `Tu técnico se pondrá en contacto contigo antes de llegar. ${visitNote}`,
+    ...appointmentAccess(data.guest),
+  });
+}
+
 export function appointmentRescheduledEmail(data: AppointmentEmailData) {
   return brandedEmail({
     subject: 'Tu cita con Instafix fue reprogramada',

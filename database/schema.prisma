@@ -238,6 +238,11 @@ model Appointment {
   responseDueAt DateTime?
   // Motivo de una cancelación automática (sin respuesta del cliente o sin técnico a tiempo).
   autoCancelReason String?
+  // Pedido de reemplazo: el técnico asignado no puede ir (error o imprevisto) y sigue a cargo
+  // hasta que otra persona libre la tome o administración la reasigne.
+  handoverRequestedAt DateTime?
+  handoverRequestedById String?
+  handoverReason String?
   automationRevision Int @default(0)
   // INSTAFIX_API: creada por Instafix mediante la API de Cal.com. CAL_EMBED: histórico del iframe.
   source String @default("CAL_EMBED")

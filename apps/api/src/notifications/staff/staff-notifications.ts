@@ -3,6 +3,9 @@ import {
   appointmentRequestedMessage,
   completionReminderDelaysHours,
   completionReminderMessage,
+  handoverRequestedMessage,
+  handoverTakenMessage,
+  handoverUnclaimedMessage,
   confirmationReminderMessage,
   confirmationReminderMinutes,
   DEFAULT_PUSH_URL,
@@ -49,6 +52,11 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
   COMPLETION_REMINDER: ['ADMIN', 'TECHNICIAN'],
   // Cita pendiente sin confirmar: técnicos (y administración en el último aviso).
   CONFIRMATION_REMINDER: ['ADMIN', 'TECHNICIAN'],
+  // Reemplazo de técnico: oferta a quienes están libres, aviso al que lo pidió y alerta a
+  // administración si nadie lo toma.
+  HANDOVER_REQUESTED: ['ADMIN', 'TECHNICIAN'],
+  HANDOVER_TAKEN: ['ADMIN', 'TECHNICIAN'],
+  HANDOVER_UNCLAIMED: ['ADMIN'],
   // Resumen diario de sus propias visitas (mañana a las 19H00, hoy a las 08H00).
   DAILY_AGENDA: ['ADMIN', 'TECHNICIAN'],
   // Prueba enviada por el propio usuario a sus dispositivos (POST /staff/push/test).
@@ -60,6 +68,9 @@ export const producedStaffNotifications: readonly StaffNotificationType[] = [
   'APPOINTMENT_REQUESTED',
   'COMPLETION_REMINDER',
   'CONFIRMATION_REMINDER',
+  'HANDOVER_REQUESTED',
+  'HANDOVER_TAKEN',
+  'HANDOVER_UNCLAIMED',
   'DAILY_AGENDA',
 ];
 
@@ -280,6 +291,146 @@ export async function scheduleConfirmationReminders(now = new Date()) {
   return ids;
 }
 
+/**
+ * Reemplazo pedido: aviso a quienes están libres en el horario de la visita (técnicos y
+ * administradores, sin horario ocupado ni otra visita), nunca al que lo pidió.
+ */
+export async function enqueueHandoverRequested(
+  tx: Prisma.TransactionClient,
+  appointment: Appointment,
+  requesterName: string,
+  now = new Date(),
+) {
+  if (!appointment.handoverRequestedAt || appointment.status !== 'CONFIRMED') return [];
+  const type: StaffNotificationType = 'HANDOVER_REQUESTED';
+  const free = new Set(await availableTechnicianIds(tx, appointment));
+  const users = (await recipients(tx, type)).filter(
+    (user) => user.id !== appointment.assignedTechnicianId && free.has(user.id),
+  );
+  const requestedAt = appointment.handoverRequestedAt.toISOString();
+  const { title, body } = handoverRequestedMessage(
+    appointment,
+    requesterName,
+    appointment.handoverReason,
+  );
+  const ids: string[] = [];
+  for (const user of users) {
+    const dedupeKey = staffNotificationKey(type, `${appointment.id}:${requestedAt}`, user.id);
+    const row = await tx.notification.upsert({
+      where: { dedupeKey },
+      update: {},
+      create: {
+        dedupeKey,
+        channel: 'WEB_PUSH',
+        kind: type,
+        appointmentId: appointment.id,
+        recipient: user.id,
+        data: {
+          title,
+          body,
+          url: appointmentPanelPath(appointment.id),
+          createdAt: now,
+          requestedAt,
+        },
+      },
+    });
+    ids.push(row.id);
+  }
+  return ids;
+}
+
+/** Reemplazo tomado: aviso al técnico que lo pidió. */
+export async function enqueueHandoverTaken(
+  tx: Prisma.TransactionClient,
+  appointment: Appointment,
+  previousId: string,
+  takerName: string,
+  now = new Date(),
+) {
+  const type: StaffNotificationType = 'HANDOVER_TAKEN';
+  const { title, body } = handoverTakenMessage(appointment, takerName);
+  const dedupeKey = staffNotificationKey(
+    type,
+    `${appointment.id}:${appointment.assignedTechnicianId}:${now.toISOString()}`,
+    previousId,
+  );
+  await tx.notification.create({
+    data: {
+      dedupeKey,
+      channel: 'WEB_PUSH',
+      kind: type,
+      appointmentId: appointment.id,
+      recipient: previousId,
+      data: { title, body, url: DEFAULT_PUSH_URL, createdAt: now },
+    },
+  });
+}
+
+/** Si nadie toma el reemplazo, administración se entera con tiempo para resolverlo. */
+const HANDOVER_ALERT_BEFORE_MS = 24 * 3600000;
+const HANDOVER_GRACE_MS = 3600000;
+
+/**
+ * Cada minuto (worker): reemplazos abiertos a 24 h o menos de la visita, pedidos hace al menos
+ * 1 h, avisan una vez a administración. De noche (22H00–07H00) espera a la mañana.
+ */
+export async function scheduleHandoverAlerts(now = new Date()) {
+  if (isQuietTime(now)) return [];
+  const open = await db.appointment.findMany({
+    where: {
+      status: 'CONFIRMED',
+      deletedAt: null,
+      handoverRequestedAt: { not: null, lte: new Date(now.getTime() - HANDOVER_GRACE_MS) },
+      startsAt: { gt: now, lte: new Date(now.getTime() + HANDOVER_ALERT_BEFORE_MS) },
+    },
+  });
+  if (!open.length) return [];
+  const type: StaffNotificationType = 'HANDOVER_UNCLAIMED';
+  const admins = await db.user.findMany({
+    where: {
+      role: 'ADMIN',
+      active: true,
+      deletedAt: null,
+      pushSubscriptions: { some: { active: true } },
+    },
+    select: { id: true },
+  });
+  const ids: string[] = [];
+  for (const appointment of open) {
+    const requester = appointment.handoverRequestedById
+      ? await db.user.findUnique({
+          where: { id: appointment.handoverRequestedById },
+          select: { name: true },
+        })
+      : null;
+    const requestedAt = appointment.handoverRequestedAt!.toISOString();
+    const { title, body } = handoverUnclaimedMessage(appointment, requester?.name ?? 'Un técnico');
+    for (const admin of admins) {
+      const dedupeKey = staffNotificationKey(type, `${appointment.id}:${requestedAt}`, admin.id);
+      const row = await db.notification.upsert({
+        where: { dedupeKey },
+        update: {},
+        create: {
+          dedupeKey,
+          channel: 'WEB_PUSH',
+          kind: type,
+          appointmentId: appointment.id,
+          recipient: admin.id,
+          data: {
+            title,
+            body,
+            url: appointmentPanelPath(appointment.id),
+            createdAt: now,
+            requestedAt,
+          },
+        },
+      });
+      ids.push(row.id);
+    }
+  }
+  return ids;
+}
+
 const AGENDA_TIME_ZONE = 'America/Guayaquil';
 /** Si la API estuvo detenida a la hora del resumen, aún se envía dentro de este margen. */
 const AGENDA_WINDOW_HOURS = 3;
@@ -400,6 +551,24 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
     endsAt?: string;
     holdStartedAt?: string;
   };
+  // Reemplazo: la oferta y la alerta solo valen mientras el pedido siga abierto y sea el mismo.
+  if (type === 'HANDOVER_REQUESTED' || type === 'HANDOVER_UNCLAIMED') {
+    const a = row.appointment!;
+    const open =
+      a.status === 'CONFIRMED' &&
+      a.handoverRequestedAt?.toISOString() === (meta as { requestedAt?: string }).requestedAt;
+    const reason = !open
+      ? 'El reemplazo ya se resolvió o se retiró'
+      : type === 'HANDOVER_REQUESTED' &&
+          (a.assignedTechnicianId === row.recipient ||
+            (await technicianBusyReason(db, row.recipient, a)))
+        ? 'La persona ya no está libre en ese horario'
+        : null;
+    if (reason) {
+      await finish('CANCELLED', reason);
+      return 'CANCELLED' as const;
+    }
+  }
   if (type === 'CONFIRMATION_REMINDER') {
     const a = row.appointment!;
     const since = (a.holdStartedAt ?? a.createdAt).toISOString();

@@ -118,12 +118,17 @@ export function TechnicianPanel({
   }, [focusId]);
   const nextVisit = groups.today.find((a) => active(a) && new Date(a.endsAt).getTime() > now);
 
-  async function confirm(id: string) {
+  /** Confirmar una solicitud o tomar la visita de un reemplazo. */
+  async function confirm(id: string, take = false) {
     setBusyId(id);
     setNotice('');
     try {
-      await api(`staff/appointments/${id}/confirm`, { method: 'POST' });
-      setNotice('✓ Cita confirmada. Ya está en tus citas.');
+      await api(`staff/appointments/${id}/${take ? 'take' : 'confirm'}`, { method: 'POST' });
+      setNotice(
+        take
+          ? '✓ Tomaste la visita. Ya está en tus citas.'
+          : '✓ Cita confirmada. Ya está en tus citas.',
+      );
       await load();
     } catch (e) {
       setNotice(e instanceof ApiError ? e.message : 'No se pudo confirmar la cita.');
@@ -227,11 +232,15 @@ export function TechnicianPanel({
                 request={a.request}
                 technician={tab === 'pending' ? undefined : a.assignedTechnician?.name}
                 highlight={
-                  a === nextVisit
-                    ? 'Próxima visita'
-                    : active(a) && new Date(a.endsAt).getTime() < now
-                      ? 'Sin completar'
-                      : undefined
+                  a.handover
+                    ? tab === 'pending'
+                      ? 'Busca reemplazo'
+                      : 'Buscando reemplazo'
+                    : a === nextVisit
+                      ? 'Próxima visita'
+                      : active(a) && new Date(a.endsAt).getTime() < now
+                        ? 'Sin completar'
+                        : undefined
                 }
                 details={
                   <>
@@ -254,10 +263,10 @@ export function TechnicianPanel({
                     type="button"
                     className="btn btn-primary"
                     busy={busyId === a.id}
-                    busyLabel="Confirmando…"
-                    onClick={() => void confirm(a.id)}
+                    busyLabel={a.handover ? 'Tomando…' : 'Confirmando…'}
+                    onClick={() => void confirm(a.id, Boolean(a.handover))}
                   >
-                    Confirmar cita
+                    {a.handover ? 'Tomar visita' : 'Confirmar cita'}
                   </BusyButton>
                 )}
                 <button type="button" className="btn btn-secondary" onClick={() => setOpenId(a.id)}>
@@ -272,6 +281,7 @@ export function TechnicianPanel({
       {openId && (
         <AppointmentSheet
           id={openId}
+          userId={user.id}
           catalog={catalog}
           onClose={() => setOpenId(null)}
           onChanged={(message) => {
