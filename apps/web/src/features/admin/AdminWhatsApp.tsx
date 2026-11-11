@@ -2,6 +2,7 @@ import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import { LoadMore } from '../../components/ui/LoadMore';
 
 type Configuration = { configured: boolean; missing: string[]; enabled?: boolean };
 type Account = {
@@ -42,6 +43,9 @@ type Overview = {
     occurredAt: string;
     outcome: string | null;
   }[];
+  /** Totales del historial: se muestran los 20 últimos y «Cargar más» trae los anteriores. */
+  messagesTotal: number;
+  jobsTotal: number;
   webhookIssues: number;
   whatsapp: Configuration & { businessPhone: string };
   account: Account | null;
@@ -144,6 +148,31 @@ export function AdminWhatsApp() {
       .then(setAgenda)
       .catch(() => setAgenda(null));
     setData(await api<Overview>('admin/whatsapp'));
+    setMore({ jobs: [], messages: [], jobsPage: 1, messagesPage: 1 });
+  }
+  // Páginas anteriores del historial (solo si se piden): nunca se carga todo de golpe.
+  const [more, setMore] = useState<{
+    jobs: Job[];
+    messages: Overview['messages'];
+    jobsPage: number;
+    messagesPage: number;
+  }>({ jobs: [], messages: [], jobsPage: 1, messagesPage: 1 });
+  const [loadingMore, setLoadingMore] = useState<'jobs' | 'messages' | null>(null);
+  async function loadMore(kind: 'jobs' | 'messages') {
+    setLoadingMore(kind);
+    try {
+      const page = (kind === 'jobs' ? more.jobsPage : more.messagesPage) + 1;
+      const res = await api<{ items: never[] }>(`admin/whatsapp/${kind}?page=${page}`);
+      setMore((current) =>
+        kind === 'jobs'
+          ? { ...current, jobs: [...current.jobs, ...res.items], jobsPage: page }
+          : { ...current, messages: [...current.messages, ...res.items], messagesPage: page },
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No se pudo cargar más.');
+    } finally {
+      setLoadingMore(null);
+    }
   }
   useEffect(() => {
     load().catch((error) => setMessage(error.message));
@@ -351,7 +380,7 @@ export function AdminWhatsApp() {
           <h3>Últimos mensajes y confirmaciones</h3>
           {!data.jobs.length && <p>Todavía no hay mensajes programados.</p>}
           <div className="whatsapp-jobs">
-            {data.jobs.map((job) => (
+            {[...data.jobs, ...more.jobs].map((job) => (
               <article key={job.id}>
                 <h4>{kinds[job.kind] || job.kind}</h4>
                 <p>
@@ -392,6 +421,13 @@ export function AdminWhatsApp() {
               </article>
             ))}
           </div>
+          <LoadMore
+            shown={data.jobs.length + more.jobs.length}
+            total={data.jobsTotal}
+            loading={loadingMore === 'jobs'}
+            onMore={() => void loadMore('jobs')}
+            noun="envíos"
+          />
           {data.webhookIssues > 0 && (
             <p role="status">Hay {data.webhookIssues} eventos de Bird que requieren revisión.</p>
           )}
@@ -404,7 +440,7 @@ export function AdminWhatsApp() {
             <p>Los mensajes aparecerán cuando el webhook de Bird esté registrado.</p>
           )}
           <div className="whatsapp-jobs">
-            {data.messages.map((item) => (
+            {[...data.messages, ...more.messages].map((item) => (
               <article key={`${item.provider}:${item.providerMessageId}`}>
                 <strong>{item.phone || item.bsuid || 'Contacto sin teléfono'}</strong>
                 <p className="small">
@@ -419,6 +455,13 @@ export function AdminWhatsApp() {
               </article>
             ))}
           </div>
+          <LoadMore
+            shown={data.messages.length + more.messages.length}
+            total={data.messagesTotal}
+            loading={loadingMore === 'messages'}
+            onMore={() => void loadMore('messages')}
+            noun="mensajes"
+          />
         </>
       )}
     </section>

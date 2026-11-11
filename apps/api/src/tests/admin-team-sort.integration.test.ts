@@ -74,7 +74,14 @@ test(
     });
     const controller = new AppointmentsController();
     const ids = async (sort?: string) =>
-      (await controller.adminAppointments(req, sort))
+      (
+        await controller.adminAppointments(req, {
+          status: 'all',
+          q: tag,
+          pageSize: '100',
+          ...(sort ? { sort } : {}),
+        })
+      ).items
         .filter((x) => x.title === tag)
         .map((x) => x.id);
     try {
@@ -82,10 +89,11 @@ test(
       assert.deepEqual(await ids('created_asc'), [a.id, b.id]);
       assert.deepEqual(await ids('starts_asc'), [b.id, a.id]);
       assert.deepEqual(await ids('starts_desc'), [a.id, b.id]);
-      assert.deepEqual(await ids(), [a.id, b.id]); // por defecto: como antes, por fecha de la cita
+      // Por defecto (todas las citas): de la más reciente a la más antigua por fecha de la cita.
+      assert.deepEqual(await ids(), [a.id, b.id]);
       await assert.rejects(
-        controller.adminAppointments(req, 'title; DROP TABLE'),
-        /Orden no válido/,
+        controller.adminAppointments(req, { sort: 'title; DROP TABLE' }),
+        /Filtros de citas no válidos/,
       );
     } finally {
       await db.appointment.deleteMany({ where: { title: tag } });

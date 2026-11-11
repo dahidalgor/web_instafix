@@ -7,6 +7,8 @@ import { AppointmentCard, visitDayKey } from '../../components/appointments/Appo
 import { api, ApiError } from '../../lib/api';
 import { confirmByText } from '../../lib/format';
 import { AppointmentSheet } from './AppointmentSheet';
+import { LoadMore } from '../../components/ui/LoadMore';
+import { usePaged } from '../../lib/paged';
 
 export type TechnicianTab = 'today' | 'upcoming' | 'pending' | 'history';
 type Tab = TechnicianTab;
@@ -98,6 +100,10 @@ export function TechnicianPanel({
   }, [load]);
 
   const groups = useMemo(() => groupMine(mine, now), [mine, now]);
+  // Historial: solo al abrir esa pestaña y de 20 en 20 (nunca todas las visitas de golpe).
+  const history = usePaged<StaffAppointment>(
+    tab === 'history' ? 'staff/appointments/history?pageSize=20' : null,
+  );
   const todayCount = groups.today.filter(active).length;
   useEffect(() => {
     if (loading) return;
@@ -144,7 +150,14 @@ export function TechnicianPanel({
     { id: 'pending', label: 'Pendientes', count: pending.length },
     { id: 'history', label: 'Historial' },
   ];
-  const list = tab === 'pending' ? pending : tab === 'today' ? groups.today : groups[tab];
+  const list =
+    tab === 'pending'
+      ? pending
+      : tab === 'today'
+        ? groups.today
+        : tab === 'history'
+          ? (history.items ?? [])
+          : groups[tab];
   const empty: Record<Tab, string> = {
     today: 'No tienes visitas para hoy.',
     upcoming: 'No tienes visitas próximas confirmadas.',
@@ -207,14 +220,18 @@ export function TechnicianPanel({
             {notice}
           </p>
         )}
-        {loading ? (
+        {loading || (tab === 'history' && history.items === null && !history.error) ? (
           <div className="appt-list">
             <ListSkeleton label="Cargando tus citas…" count={3} variant="appointment" />
           </div>
-        ) : error ? (
+        ) : error || (tab === 'history' && history.error) ? (
           <p role="alert">
-            {error}{' '}
-            <BusyButton type="button" className="btn btn-ghost btn-small" onClick={() => load()}>
+            {error || history.error}{' '}
+            <BusyButton
+              type="button"
+              className="btn btn-ghost btn-small"
+              onClick={() => (error ? load() : history.reload())}
+            >
               Reintentar
             </BusyButton>
           </p>
@@ -276,6 +293,15 @@ export function TechnicianPanel({
             ))}
           </div>
         )}
+        {tab === 'history' && history.items && (
+          <LoadMore
+            shown={history.items.length}
+            total={history.total}
+            loading={history.loading}
+            onMore={() => void history.loadMore()}
+            noun="visitas"
+          />
+        )}
       </div>
 
       {openId && (
@@ -287,6 +313,7 @@ export function TechnicianPanel({
           onChanged={(message) => {
             if (message) setNotice(message);
             void load();
+            if (tab === 'history') void history.reload();
           }}
         />
       )}

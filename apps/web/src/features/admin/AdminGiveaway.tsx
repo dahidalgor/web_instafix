@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { api } from '../../lib/api';
+import { LoadMore } from '../../components/ui/LoadMore';
 
 type Visit = {
   id: string;
@@ -305,6 +306,9 @@ function GiveawayDetail({
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Visit[] | null>(null);
+  // Participantes de 30 en 30 (un sorteo grande no pinta cientos de tarjetas de golpe).
+  const [limit, setLimit] = useState(30);
+  useEffect(() => setLimit(30), [detail.id]);
   // Búsqueda de visitas completadas para corregir (también las que no participan).
   useEffect(() => {
     const text = query.trim();
@@ -389,7 +393,7 @@ function GiveawayDetail({
         <p className="tech-empty">Todavía no hay participaciones registradas.</p>
       )}
       <ol className="giveaway-list">
-        {detail.people.map((p) => (
+        {detail.people.slice(0, limit).map((p) => (
           <li key={p.key} className="giveaway-person">
             <div className="giveaway-person-head">
               <div>
@@ -412,6 +416,13 @@ function GiveawayDetail({
           </li>
         ))}
       </ol>
+      <LoadMore
+        shown={Math.min(limit, detail.people.length)}
+        total={detail.people.length}
+        loading={false}
+        onMore={() => setLimit((n) => n + 30)}
+        noun="participantes"
+      />
 
       {detail.open && (
         <>

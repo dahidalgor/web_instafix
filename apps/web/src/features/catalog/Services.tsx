@@ -7,6 +7,10 @@ import { SlidingIndicator } from '../../components/ui/SlidingIndicator';
 import { MediaCarousel } from '../media/MediaCarousel';
 import { ServiceFacts } from './ServiceFacts';
 import { availabilityLabels } from './catalog.constants';
+import { LoadMore } from '../../components/ui/LoadMore';
+
+/** Servicios que se muestran de una vez en la web («Cargar más» añade otros tantos). */
+const SERVICES_STEP = 12;
 
 const ALL = 'Todos';
 /** Comparación sin mayúsculas ni tildes: «bateria» encuentra «Batería». */
@@ -23,6 +27,8 @@ export function Services() {
   const [category, setCategory] = useState(ALL);
   const [device, setDevice] = useState(ALL);
   const [search, setSearch] = useState('');
+  const [limit, setLimit] = useState(SERVICES_STEP);
+  useEffect(() => setLimit(SERVICES_STEP), [category, device, search]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Offering | null>(null);
@@ -72,6 +78,9 @@ export function Services() {
   const visible = inCategory
     .filter((item) => device === ALL || item.device === device)
     .filter((item) => !words || fold(item.title).includes(words));
+  // Se muestran de 12 en 12 (menos tarjetas e imágenes a la vez); un filtro nuevo vuelve a 12.
+  const ordered = groups.flatMap((name) => visible.filter((item) => item.category === name));
+  const shownList = ordered.slice(0, limit);
   const chooseCategory = (name: string) => {
     setCategory(name);
     setDevice(ALL);
@@ -167,12 +176,12 @@ export function Services() {
         // escalonadas.
         <div className="service-results" key={`${category}/${device}`}>
           {groups
-            .filter((name) => visible.some((item) => item.category === name))
+            .filter((name) => shownList.some((item) => item.category === name))
             .map((name) => (
               <div className="service-group" key={name}>
                 <h3 className="service-group-title">{name}</h3>
                 <div className="cards">
-                  {visible
+                  {shownList
                     .filter((item) => item.category === name)
                     .map((item, index) => (
                       <ServiceCard
@@ -185,6 +194,15 @@ export function Services() {
                 </div>
               </div>
             ))}
+          {ordered.length > limit && (
+            <LoadMore
+              shown={shownList.length}
+              total={ordered.length}
+              loading={false}
+              onMore={() => setLimit((n) => n + SERVICES_STEP)}
+              noun="servicios"
+            />
+          )}
         </div>
       )}
       <dialog

@@ -15,6 +15,15 @@ import { CAL_SYNC_ISSUE } from '../staff/staff-appointments.service';
 import { StaffController } from '../staff/staff.controller';
 import { TeamController } from '../staff/team.controller';
 
+/** Todas las citas de la cuenta (próximas + historial), como las ve Mi cuenta por partes. */
+async function allMine(controller: AccountController, request: Request) {
+  const [upcoming, past] = await Promise.all([
+    controller.appointments(request, 'upcoming'),
+    controller.appointments(request, 'past', '1', '50'),
+  ]);
+  return [...upcoming.items, ...past.items];
+}
+
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 Object.assign(process.env, {
   CAL_API_KEY: 'test-key',
@@ -282,7 +291,7 @@ test(
         1,
       );
       // El cliente ve a su técnico, nunca las notas internas.
-      const mine = (await account.appointments(req(customer.token))).find(
+      const mine = (await allMine(account, req(customer.token))).find(
         (a) => a.id === appointment.id,
       )!;
       assert.equal(mine.assignedTechnician?.name, 'Anthony');
@@ -501,7 +510,7 @@ test(
         30,
       );
       // Historial del cliente: solicitud original + servicios + técnico, sin notas internas.
-      const history = (await account.appointments(req(customer.token))).find(
+      const history = (await allMine(account, req(customer.token))).find(
         (a) => a.id === appointment.id,
       )!;
       assert.equal(history.title, 'Mi PS5 se apaga después de jugar 20 minutos.');
@@ -509,7 +518,7 @@ test(
       assert.equal(history.assignedTechnician?.name, 'Anthony Servicios');
       assert.equal(JSON.stringify(history).includes('Polvo severo'), false);
       // Mi cuenta → Servicios realizados: el trabajo aparece con importe y garantía del catálogo.
-      const jobs = (await account.jobs(req(customer.token))).filter(
+      const jobs = (await account.jobs(req(customer.token))).items.filter(
         (j) => j.appointmentId === appointment.id,
       );
       assert.equal(jobs.length, 1);
@@ -526,8 +535,9 @@ test(
       assert.equal(stored.giveawayId, giveaway.id);
       // Repetir la consulta no duplica el trabajo.
       assert.equal(
-        (await account.jobs(req(customer.token))).filter((j) => j.appointmentId === appointment.id)
-          .length,
+        (await account.jobs(req(customer.token))).items.filter(
+          (j) => j.appointmentId === appointment.id,
+        ).length,
         1,
       );
       assert.ok(

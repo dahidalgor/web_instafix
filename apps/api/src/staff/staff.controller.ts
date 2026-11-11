@@ -17,9 +17,11 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
 } from '@nestjs/common';
 import { RateLimit } from '../security/rate-limits';
+import { pageParams } from '../common/pagination';
 import type { Request } from 'express';
 import { authenticatedStaff, checkOrigin } from '../auth/session';
 import {
@@ -30,6 +32,7 @@ import {
   takeHandover,
   confirmAppointment,
   myAppointments,
+  myHistory,
   pendingAppointments,
   removeService,
   saveNotes,
@@ -56,10 +59,18 @@ export class StaffController {
     return authenticatedStaff(req);
   }
 
+  /** Visitas actuales (abiertas y completadas hoy). El historial va aparte, por páginas. */
   @Get('appointments/me')
   @Header('Cache-Control', 'no-store')
   async mine(@Req() req: Request) {
     return myAppointments(await authenticatedStaff(req));
+  }
+
+  @Get('appointments/history')
+  @Header('Cache-Control', 'no-store')
+  async history(@Req() req: Request, @Query('page') page = '1', @Query('pageSize') size = '20') {
+    const { page: p, pageSize } = pageParams(page, size, 20);
+    return myHistory(await authenticatedStaff(req), p, pageSize);
   }
 
   @Get('appointments/pending')

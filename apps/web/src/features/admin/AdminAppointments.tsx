@@ -12,13 +12,12 @@ import { AppointmentCard } from '../../components/appointments/AppointmentCard';
 import { money } from '../../lib/format';
 import {
   dateFilters,
-  filterAppointments,
-  matchesStatus,
   statusFilters,
   type DateFilter,
   type StatusFilter,
 } from './appointment-filters';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { LoadMore } from '../../components/ui/LoadMore';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { ListSkeleton } from '../../components/ui/Skeleton';
@@ -77,6 +76,15 @@ const shortMoment = (date: Date, timeZone: string) =>
     minute: '2-digit',
     hourCycle: 'h23',
   }).format(date);
+/** Citas por página en el organizador («Cargar más» trae las siguientes). */
+const PAGE_SIZE = 30;
+type AppointmentPage = {
+  items: AdminAppointment[];
+  total: number;
+  page: number;
+  pageSize: number;
+  counts: Record<StatusFilter, number>;
+};
 type TeamOption = {
   id: string;
   name: string;
@@ -102,6 +110,11 @@ export function AdminAppointments({
   const [recoverable, setRecoverable] = useState(0);
   // null mientras carga: una lista vacía es un resultado real, no una carga en curso.
   const [items, setItems] = useState<AdminAppointment[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<Record<StatusFilter, number> | null>(null);
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [loadError, setLoadError] = useState('');
   // «auto» conserva el orden por estado de siempre; el resto lo resuelve el backend.
   const [sort, setSort] = useState<'auto' | AppointmentSort>('auto');
@@ -126,32 +139,88 @@ export function AdminAppointments({
   const [team, setTeam] = useState<TeamOption[] | null>(null);
   const [reassignTo, setReassignTo] = useState('');
   const busy = busyAction !== null;
-  async function load(order = sort) {
-    const [next, customers] = await Promise.all([
-      api<AdminAppointment[]>(
-        order === 'auto' ? 'admin/appointments' : `admin/appointments?sort=${order}`,
-      ),
-      api('admin/users'),
-    ]);
-    setItems(next);
+  // Filtros, búsqueda y orden se aplican en el servidor: la lista llega de 30 en 30.
+  const listPath = useMemo(() => {
+    const params = new URLSearchParams({
+      status: statusFilter,
+      date: dateFilter,
+      sort,
+      pageSize: String(PAGE_SIZE),
+    });
+    if (dateFilter === 'custom' && from) params.set('from', from);
+    if (dateFilter === 'custom' && to) params.set('to', to);
+    if (searchText) params.set('q', searchText);
+    return `admin/appointments?${params}`;
+  }, [statusFilter, dateFilter, from, to, searchText, sort]);
+  const request = useRef(0);
+  /** Pide una página de citas; `append` la añade a las ya cargadas («Cargar más»). */
+  async function fetchPage(nextPage: number, append: boolean) {
+    const ticket = ++request.current;
+    const res = await api<AppointmentPage>(`${listPath}&page=${nextPage}`);
+    if (ticket !== request.current) return;
+    setItems((current) => (append && current ? [...current, ...res.items] : res.items));
+    setTotal(res.total);
+    setCounts(res.counts);
+    setPage(nextPage);
     setLoadError('');
+  }
+  async function load() {
+    const [, customers] = await Promise.all([fetchPage(1, false), api('admin/users')]);
     const links = await api<{ recoverable: number }>('admin/booking-links');
     setRecoverable(links.recoverable);
     setUsers(customers.filter((u: { role: string }) => u.role === 'CUSTOMER'));
   }
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      await fetchPage(page + 1, true);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'No se pudieron cargar más citas.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
   useEffect(() => {
-    load(sort).catch((e) => setLoadError(e.message));
+    load().catch((e) => setLoadError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
-  // Abre la cita enlazada en cuanto el listado está cargado (una sola vez por enlace).
+  }, []);
+  // Cambiar un filtro vuelve a la primera página (la búsqueda espera a que dejes de escribir).
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    fetchPage(1, false).catch((e) => setLoadError(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listPath]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchText(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  // Abre la cita enlazada (una sola vez por enlace). Si no está en la página cargada, se pide
+  // sola y se añade arriba de la lista.
   useEffect(() => {
     if (!focusId || !items) return;
-    const target = items.find((item) => item.id === focusId);
-    if (target) edit(target);
-    else setMessage('La cita del aviso ya no está disponible (pudo eliminarse).');
+    const loaded = items.find((item) => item.id === focusId);
     onFocused?.();
+    if (loaded) {
+      edit(loaded);
+      return;
+    }
+    api<AppointmentPage>(`admin/appointments?id=${focusId}&status=all`)
+      .then((res) => {
+        const target = res.items[0];
+        if (!target) {
+          setMessage('La cita del aviso ya no está disponible (pudo eliminarse).');
+          return;
+        }
+        setItems((current) => [target, ...(current ?? []).filter((i) => i.id !== target.id)]);
+        edit(target);
+      })
+      .catch(() => setMessage('No se pudo abrir la cita del aviso.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, items]);
+  }, [focusId, items === null]);
   function edit(item: AdminAppointment) {
     setFormOpen(true);
     // El formulario está arriba del listado: se lleva a la vista al abrirlo para editar.
@@ -722,10 +791,7 @@ export function AdminAppointments({
                 className={statusFilter === option.id ? 'active' : ''}
                 onClick={() => setStatusFilter(option.id)}
               >
-                {option.label}{' '}
-                <span className="filter-count">
-                  {list.filter((item) => matchesStatus(item, option.id)).length}
-                </span>
+                {option.label} <span className="filter-count">{counts?.[option.id] ?? '…'}</span>
               </button>
             ))}
           </div>
@@ -810,24 +876,17 @@ export function AdminAppointments({
         )}
         {items !== null &&
           (() => {
-            const shown = filterAppointments(list, {
-              status: statusFilter,
-              date: dateFilter,
-              from,
-              to,
-              query,
-              // Con un orden elegido se respeta el del backend; si no, el automático por estado.
-              keepOrder: sort !== 'auto',
-            });
+            const shown = list;
             return (
               <>
                 <p className="small" role="status">
-                  {shown.length === 1 ? '1 cita' : `${shown.length} citas`}
+                  {total === 1 ? '1 cita' : `${total} citas`}
                   {(statusFilter !== 'all' || dateFilter !== 'all' || query) &&
-                    shown.length !== list.length && (
+                    counts &&
+                    total !== counts.all && (
                       <>
                         {' '}
-                        de {list.length} ·{' '}
+                        de {counts.all} ·{' '}
                         <button
                           type="button"
                           className="btn btn-ghost btn-small"
@@ -938,6 +997,13 @@ export function AdminAppointments({
                     </AppointmentCard>
                   ))}
                 </div>
+                <LoadMore
+                  shown={shown.length}
+                  total={total}
+                  loading={loadingMore}
+                  onMore={() => void loadMore()}
+                  noun="citas"
+                />
               </>
             );
           })()}

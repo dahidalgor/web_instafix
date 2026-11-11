@@ -12,6 +12,15 @@ import { receiveCalWebhook } from '../integrations/cal-webhook';
 import { receiveCustomerMessage } from '../whatsapp/inbound';
 import { processJob } from '../whatsapp/worker';
 
+/** Todas las citas de la cuenta (próximas + historial), como las ve Mi cuenta por partes. */
+async function allMine(controller: AccountController, request: Request) {
+  const [upcoming, past] = await Promise.all([
+    controller.appointments(request, 'upcoming'),
+    controller.appointments(request, 'past', '1', '50'),
+  ]);
+  return [...upcoming.items, ...past.items];
+}
+
 test(
   'new/existing bookings retain ownership; mismatches cannot send or confirm; old links recover safely',
   { skip: process.env.INSTAFIX_INTEGRATION !== '1' },
@@ -79,10 +88,10 @@ test(
       };
       const original = event(context.token!);
       await receiveCalWebhook(original);
-      let mine = await account.appointments(customer);
+      let mine = await allMine(account, customer);
       assert.equal(mine.length, 1);
       assert.equal(mine[0].userId, userIds[0]);
-      assert.equal((await account.appointments(other)).length, 0);
+      assert.equal((await allMine(account, other)).length, 0);
       const id = mine[0].id;
       // Simula el bug antiguo: misma reserva sin usuario. Un evento sin cambios de campos debe repararla.
       await db.appointment.update({ where: { id }, data: { userId: null } });
@@ -91,7 +100,7 @@ test(
         triggerEvent: 'BOOKING_CREATED',
         createdAt: new Date(Date.now() + 1000).toISOString(),
       });
-      assert.equal((await account.appointments(customer))[0].id, id);
+      assert.equal((await allMine(account, customer))[0].id, id);
       // Un evento posterior sin metadata tampoco desvincula la reserva.
       await receiveCalWebhook({
         ...original,
@@ -99,13 +108,13 @@ test(
         createdAt: new Date(Date.now() + 2000).toISOString(),
         payload: { ...original.payload, metadata: {} },
       });
-      assert.equal((await account.appointments(customer))[0].id, id);
+      assert.equal((await allMine(account, customer))[0].id, id);
       const rescheduled = event();
       await receiveCalWebhook({
         ...rescheduled,
         payload: { ...rescheduled.payload, rescheduleUid: original.payload.uid },
       });
-      mine = await account.appointments(customer);
+      mine = await allMine(account, customer);
       assert.equal(mine.length, 2);
       assert.equal(mine.find((a) => a.id === id)?.status, 'CANCELLED');
       assert.equal(mine.find((a) => a.calUid === rescheduled.payload.uid)?.userId, userIds[0]);
@@ -186,8 +195,8 @@ test(
       await assert.rejects(
         adminLinks.link(guest.id, { userId: userIds[1], identityVerified: true }, admin),
       );
-      assert.ok((await account.appointments(customer)).some((a) => a.id === guest.id));
-      assert.equal((await account.appointments(other)).length, 0);
+      assert.ok((await allMine(account, customer)).some((a) => a.id === guest.id));
+      assert.equal((await allMine(account, other)).length, 0);
     } finally {
       if (originalEventType === undefined) delete process.env.CAL_EVENT_TYPE_ID;
       else process.env.CAL_EVENT_TYPE_ID = originalEventType;

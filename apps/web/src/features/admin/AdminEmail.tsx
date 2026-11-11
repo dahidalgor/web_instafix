@@ -2,6 +2,7 @@ import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import { LoadMore } from '../../components/ui/LoadMore';
 
 type LogRow = {
   channel: string;
@@ -21,6 +22,7 @@ type MailStatus = {
   replyTo: boolean;
   appointmentEmails: boolean;
   recent: LogRow[];
+  recentTotal: number;
 };
 export function AdminEmail() {
   const [status, setStatus] = useState<MailStatus | null>(null);
@@ -29,10 +31,30 @@ export function AdminEmail() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const busy = busyAction !== null;
   const [to, setTo] = useState('');
+  // Registro de envíos: los 20 últimos y «Cargar más» trae los anteriores.
+  const [older, setOlder] = useState<LogRow[]>([]);
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const load = () =>
     api<MailStatus>('admin/email/status')
-      .then(setStatus)
+      .then((next) => {
+        setStatus(next);
+        setOlder([]);
+        setPage(1);
+      })
       .catch((e) => setMessage(e.message));
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const res = await api<{ items: LogRow[] }>(`admin/email/logs?page=${page + 1}`);
+      setOlder((rows) => [...rows, ...res.items]);
+      setPage(page + 1);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo cargar más.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
   useEffect(() => {
     void load();
   }, []);
@@ -115,7 +137,7 @@ export function AdminEmail() {
           <h3>Últimos envíos</h3>
           {!status.recent.length && <p className="small">Todavía no hay envíos registrados.</p>}
           <ul className="comm-log">
-            {status.recent.map((row, i) => (
+            {[...status.recent, ...older].map((row, i) => (
               <li key={i}>
                 <strong>
                   {row.status === 'ACCEPTED'
@@ -130,6 +152,13 @@ export function AdminEmail() {
               </li>
             ))}
           </ul>
+          <LoadMore
+            shown={status.recent.length + older.length}
+            total={status.recentTotal}
+            loading={loadingMore}
+            onMore={() => void loadMore()}
+            noun="envíos"
+          />
         </>
       )}
       <p className="small">

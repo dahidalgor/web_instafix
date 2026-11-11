@@ -63,8 +63,9 @@ test(
       const created = await call('admin/appointments', tokens[2], 'POST', body);
       assert.equal(created.status, 201);
       const item = await created.json();
-      const mine = await (await call('my/appointments', tokens[0])).json();
-      const others = await (await call('my/appointments', tokens[1])).json();
+      // La cita ya pasó: está en el historial de su dueño (por páginas), nunca en el de otro.
+      const mine = (await (await call('my/appointments?scope=past', tokens[0])).json()).items;
+      const others = (await (await call('my/appointments?scope=past', tokens[1])).json()).items;
       assert.equal(mine.length, 1);
       assert.equal(mine[0].id, item.id);
       assert.equal(others.length, 0);

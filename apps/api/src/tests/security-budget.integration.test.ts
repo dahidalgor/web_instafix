@@ -516,7 +516,9 @@ test(
     assert.ok(row.deletedAt);
     assert.notEqual(row.status, 'CANCELLED');
     assert.ok(
-      !(await appointments.adminAppointments(req(admin.cookie))).some((a) => a.id === row.id),
+      !(await appointments.adminAppointments(req(admin.cookie), { status: 'all' })).items.some(
+        (a) => a.id === row.id,
+      ),
     );
     assert.equal(
       await db.automationJob.count({ where: { appointmentId: row.id, status: 'PENDING' } }),

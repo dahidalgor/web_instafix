@@ -210,3 +210,45 @@ export const handoverRequestSchema = z
 
 /** Administración asigna la visita confirmada a otra persona del equipo. */
 export const reassignSchema = z.object({ technicianId: z.string().uuid() }).strict();
+
+/** Filtros de la lista de citas de Administración (se aplican en el servidor, por páginas). */
+export const appointmentStatusFilters = [
+  'active',
+  'PENDING_LOCATION',
+  'CONFIRMED',
+  'COMPLETED',
+  'CANCELLED',
+  'all',
+] as const;
+export type AppointmentStatusFilter = (typeof appointmentStatusFilters)[number];
+export const appointmentDateFilters = [
+  'all',
+  'today',
+  'upcoming',
+  'week',
+  'past',
+  'custom',
+] as const;
+export type AppointmentDateFilter = (typeof appointmentDateFilters)[number];
+
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const adminAppointmentQuerySchema = z.object({
+  status: z.enum(appointmentStatusFilters).default('active'),
+  date: z.enum(appointmentDateFilters).default('all'),
+  from: day.optional(),
+  to: day.optional(),
+  q: z.string().trim().max(100).optional(),
+  sort: z
+    .enum(['auto', ...appointmentSorts.map((s) => s.id)] as [string, ...string[]])
+    .default('auto'),
+  /** Citas de una cuenta (p. ej. para registrar un trabajo). */
+  userId: z.string().uuid().optional(),
+  /** Una cita concreta (enlace desde una notificación). */
+  id: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  pageSize: z.coerce.number().int().min(5).max(100).default(30),
+});
+export type AdminAppointmentQuery = z.infer<typeof adminAppointmentQuerySchema>;
+
+/** Una página de una lista larga: «Cargar más» pide la siguiente. */
+export type Page<T> = { items: T[]; total: number; page: number; pageSize: number };

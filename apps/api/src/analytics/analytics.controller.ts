@@ -39,7 +39,8 @@ export class AnalyticsController {
 
   @Get('admin/analytics') async summary(@Req() req: Request): Promise<AnalyticsSummary> {
     await authenticated(req, true);
-    const where = { createdAt: { gte: new Date(Date.now() - 30 * 86400000) } };
+    const since = new Date(Date.now() - 30 * 86400000);
+    const where = { createdAt: { gte: since } };
     const [pages, sessions] = await Promise.all([
       db.pageVisit.groupBy({
         by: ['page'],
@@ -47,12 +48,14 @@ export class AnalyticsController {
         _count: { id: true },
         _avg: { activeSeconds: true },
       }),
-      db.pageVisit.groupBy({ by: ['sessionId'], where }),
+      // Sesiones únicas contadas en PostgreSQL (no se traen todas las sesiones a memoria).
+      db.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(DISTINCT "sessionId") AS count FROM "PageVisit" WHERE "createdAt" >= ${since}`,
     ]);
     return {
       days: 30,
       visits: pages.reduce((sum, p) => sum + p._count.id, 0),
-      sessions: sessions.length,
+      sessions: Number(sessions[0]?.count ?? 0),
       // De más a menos visitada.
       pages: pages
         .map((p) => ({

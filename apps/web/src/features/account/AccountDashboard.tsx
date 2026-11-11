@@ -14,6 +14,22 @@ import {
 } from '@instafix/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
+import { usePaged } from '../../lib/paged';
+import { LoadMore } from '../../components/ui/LoadMore';
+
+/** Encabezado de Mi cuenta (lo calcula el servidor). */
+type AccountSummary = {
+  upcoming: number;
+  servicesDone: number;
+  activeWarranties: number;
+  giveaway: {
+    id: string;
+    prize: string;
+    drawDate: string;
+    entryRule: string;
+    entries: number;
+  } | null;
+};
 import { money } from '../../lib/format';
 import { LOGOUT_EVENT } from '../../components/layout/AccountMenu';
 import { linkToken } from './account-links';
@@ -30,12 +46,22 @@ export function AccountDashboard() {
   // true desde el inicio: antes de la primera respuesta no se muestra el estado vacío.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Citas próximas (pocas, todas) y el resumen del encabezado. El historial y los servicios
+  // realizados se cargan aparte, de 10 en 10, solo al abrir esa sección.
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [jobs, setJobs] = useState<CompletedJob[]>([]);
+  const [summary, setSummary] = useState<AccountSummary | null>(null);
   const [section, setSection] = useState<'appointments' | 'jobs'>('appointments');
   const [resetToken] = useState(() => linkToken('restablecer'));
   const [appointmentFilter, setAppointmentFilter] = useState('upcoming');
   const [now, setNow] = useState(Date.now());
+  const past = usePaged<Appointment>(
+    user && section === 'appointments' && appointmentFilter === 'past'
+      ? 'my/appointments?scope=past&pageSize=10'
+      : null,
+  );
+  const jobsPage = usePaged<CompletedJob>(
+    user && section === 'jobs' ? 'my/jobs?pageSize=10' : null,
+  );
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(timer);
@@ -64,20 +90,20 @@ export function AccountDashboard() {
       setLoading(true);
       setError('');
       try {
-        const [nextAppointments, nextJobs] = await Promise.all([
-          api<Appointment[]>('my/appointments', { signal }),
-          api<CompletedJob[]>('my/jobs', { signal }),
+        const [nextAppointments, nextSummary] = await Promise.all([
+          api<{ items: Appointment[] }>('my/appointments?scope=upcoming', { signal }),
+          api<AccountSummary>('my/summary', { signal }),
         ]);
         if (!signal?.aborted && revision === loadRevision.current) {
-          setAppointments(nextAppointments);
-          setJobs(nextJobs);
+          setAppointments(nextAppointments.items);
+          setSummary(nextSummary);
         }
       } catch (e) {
         if (signal?.aborted || revision !== loadRevision.current) return;
         if (e instanceof ApiError && e.status === 401) {
           setUser(null);
           setAppointments([]);
-          setJobs([]);
+          setSummary(null);
         } else setError('No pudimos cargar tus citas y servicios. Puedes volver a intentarlo.');
       } finally {
         if (!signal?.aborted && revision === loadRevision.current) setLoading(false);
@@ -111,7 +137,7 @@ export function AccountDashboard() {
       loadRevision.current++;
       setUser(null);
       setAppointments([]);
-      setJobs([]);
+      setSummary(null);
     };
     window.addEventListener(LOGOUT_EVENT, signedOut);
     return () => window.removeEventListener(LOGOUT_EVENT, signedOut);
@@ -156,33 +182,19 @@ export function AccountDashboard() {
     (item) =>
       !['CANCELLED', 'COMPLETED'].includes(item.status) && new Date(item.endsAt).getTime() >= now,
   );
-  const shown =
-    appointmentFilter === 'upcoming'
-      ? upcoming
-      : appointments.filter((item) => !upcoming.includes(item)).reverse();
-  // Visitas completadas con servicios registrados por el técnico, sin contar dos veces las
-  // que además tienen un trabajo con garantía registrado en administración.
-  const servicesDone =
-    jobs.length +
-    appointments.filter(
-      (item) =>
-        item.status === 'COMPLETED' &&
-        item.services?.length &&
-        !jobs.some((job) => job.appointmentId === item.id),
-    ).length;
-  const activeWarranties = jobs.filter(
-    (job) => job.warrantyEndsAt && new Date(job.warrantyEndsAt).getTime() > now,
-  ).length;
-  // Sorteo abierto: participaciones registradas por el técnico; se ocultan al cerrarse.
+  const pastItems = past.items ?? [];
+  const jobs = jobsPage.items ?? [];
+  const shown = appointmentFilter === 'upcoming' ? upcoming : pastItems;
+  // Números del encabezado y sorteo abierto: los calcula el servidor (sin traer el historial).
+  const servicesDone = summary?.servicesDone ?? 0;
+  const activeWarranties = summary?.activeWarranties ?? 0;
+  const openGiveaway = summary?.giveaway ?? null;
+  const giveawayTotal = openGiveaway?.entries ?? 0;
+  // Etiqueta en cada servicio que participa en un sorteo abierto (se oculta al cerrarse).
   const inOpenGiveaway = (job: CompletedJob) =>
     Boolean(
       job.giveaway && (job.giveawayEntries ?? 0) > 0 && giveawayIsOpen(job.giveaway, new Date(now)),
     );
-  const giveawayJobs = jobs.filter(inOpenGiveaway);
-  const openGiveaway = giveawayJobs[0]?.giveaway ?? null;
-  const giveawayTotal = giveawayJobs
-    .filter((job) => job.giveaway?.id === openGiveaway?.id)
-    .reduce((total, job) => total + (job.giveawayEntries ?? 0), 0);
   const format = (date: string, timeZone = 'America/Guayaquil') =>
     new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(
       new Date(date),
@@ -205,7 +217,7 @@ export function AccountDashboard() {
         ) : (
           <>
             <div>
-              <strong>{error ? '—' : upcoming.length}</strong>
+              <strong>{error ? '—' : (summary?.upcoming ?? upcoming.length)}</strong>
               <span>Citas próximas</span>
             </div>
             <div>
@@ -242,7 +254,9 @@ export function AccountDashboard() {
       </div>
       {/* Cambiar de sección o de filtro anima el contenido, como la navegación de la página. */}
       <div className="account-section" key={`${section}-${appointmentFilter}`}>
-        {loading ? (
+        {loading ||
+        (section === 'appointments' && appointmentFilter === 'past' && past.items === null) ||
+        (section === 'jobs' && jobsPage.items === null) ? (
           section === 'appointments' ? (
             <div className="appt-list">
               <ListSkeleton label="Cargando tus citas…" count={2} variant="appointment" />
@@ -350,6 +364,15 @@ export function AccountDashboard() {
                 </AppointmentCard>
               ))}
             </div>
+            {appointmentFilter === 'past' && (
+              <LoadMore
+                shown={pastItems.length}
+                total={past.total}
+                loading={past.loading}
+                onMore={() => void past.loadMore()}
+                noun="citas"
+              />
+            )}
           </>
         ) : (
           <>
@@ -428,6 +451,13 @@ export function AccountDashboard() {
                 </article>
               );
             })}
+            <LoadMore
+              shown={jobs.length}
+              total={jobsPage.total}
+              loading={jobsPage.loading}
+              onMore={() => void jobsPage.loadMore()}
+              noun="servicios"
+            />
           </>
         )}
       </div>

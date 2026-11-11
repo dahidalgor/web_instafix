@@ -1,7 +1,17 @@
-import { BadRequestException, Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { authenticated, checkOrigin } from '../auth/session';
 import { db } from '../database/client';
+import { pageParams } from '../common/pagination';
 import { calConfiguration, whatsappConfiguration } from './config';
 import { otpConfiguration } from './otp.provider';
 import { restoreBookingFlow } from '../appointments/whatsapp-consent';
@@ -17,6 +27,70 @@ import { WHATSAPP_BUDGET, eventTypeOf } from './budget';
  * El número se conecta una sola vez en el panel de Bird (Coexistence); Instafix solo muestra su
  * estado. No hay botón de conexión en Administración.
  */
+/** Tamaño de página del historial de WhatsApp en Sistema. */
+const PAGE = 20;
+
+/** Auditoría de envíos: cita, evento, canal, proveedor, estado (SENT, FAILED, PENDING, SUPPRESSED_*). */
+async function jobsPage(page: number, pageSize: number) {
+  const [total, rows] = await Promise.all([
+    db.automationJob.count(),
+    db.automationJob.findMany({
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        appointment: {
+          select: { contactName: true, contactPhone: true, title: true, startsAt: true },
+        },
+      },
+    }),
+  ]);
+  return {
+    total,
+    page,
+    pageSize,
+    items: rows.map((job) => ({ ...job, channel: 'WHATSAPP', eventType: eventTypeOf(job.kind) })),
+  };
+}
+
+/** Mensajes (también el historial de WasapFlow), con el resultado de cada mensaje del cliente. */
+async function messagesPage(page: number, pageSize: number) {
+  const [total, rows] = await Promise.all([
+    db.whatsAppMessage.count(),
+    db.whatsAppMessage.findMany({
+      orderBy: [{ occurredAt: 'desc' }, { providerMessageId: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        provider: true,
+        providerMessageId: true,
+        phone: true,
+        bsuid: true,
+        source: true,
+        direction: true,
+        type: true,
+        text: true,
+        occurredAt: true,
+      },
+    }),
+  ]);
+  // Resultado de cada mensaje del cliente (p. ej. si su ubicación se asignó a una cita).
+  const outcomes = new Map(
+    (
+      await db.integrationEvent.findMany({
+        where: { id: { in: rows.map((m) => `wa:${m.providerMessageId}`) } },
+        select: { id: true, outcome: true },
+      })
+    ).map((e) => [e.id.slice(3), e.outcome]),
+  );
+  return {
+    total,
+    page,
+    pageSize,
+    items: rows.map((m) => ({ ...m, outcome: outcomes.get(m.providerMessageId) ?? null })),
+  };
+}
+
 @Controller('api/v1/admin/whatsapp')
 export class WhatsAppAdminController {
   constructor(@Inject(WhatsAppService) private readonly whatsapp: WhatsAppService) {}
@@ -24,15 +98,7 @@ export class WhatsAppAdminController {
     await authenticated(req, true);
     const config = whatsappConfiguration();
     const [jobs, issues, events, messages, webhookIssues, account] = await Promise.all([
-      db.automationJob.findMany({
-        take: 100,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          appointment: {
-            select: { contactName: true, contactPhone: true, title: true, startsAt: true },
-          },
-        },
-      }),
+      jobsPage(1, PAGE),
       db.appointment.findMany({
         where: { automationIssue: { not: null }, status: { not: 'CANCELLED' }, deletedAt: null },
         take: 50,
@@ -43,50 +109,39 @@ export class WhatsAppAdminController {
         orderBy: { createdAt: 'desc' },
         select: { provider: true, occurredAt: true, outcome: true },
       }),
-      // Historial completo (también el de WasapFlow): no se pierde con la migración.
-      db.whatsAppMessage.findMany({
-        orderBy: { occurredAt: 'desc' },
-        take: 50,
-        select: {
-          provider: true,
-          providerMessageId: true,
-          phone: true,
-          bsuid: true,
-          source: true,
-          direction: true,
-          type: true,
-          text: true,
-          occurredAt: true,
-        },
-      }),
+      // Solo los últimos mensajes; el historial completo se pide por páginas («Ver más»).
+      messagesPage(1, PAGE),
       db.whatsAppWebhook.count({ where: { provider: config.provider, status: 'REVIEW' } }),
       config.configured || process.env.BIRD_API_KEY ? this.whatsapp.accountStatus() : null,
     ]);
-    // Resultado de cada mensaje del cliente (p. ej. si su ubicación se asignó a una cita).
-    const outcomes = new Map(
-      (
-        await db.integrationEvent.findMany({
-          where: { id: { in: messages.map((m) => `wa:${m.providerMessageId}`) } },
-          select: { id: true, outcome: true },
-        })
-      ).map((e) => [e.id.slice(3), e.outcome]),
-    );
     return {
       whatsapp: config,
       account,
       otp: otpConfiguration(),
       cal: calConfiguration(),
       // Auditoría: cita, evento, canal, proveedor, estado (SENT, FAILED, PENDING o SUPPRESSED_*).
-      jobs: jobs.map((job) => ({ ...job, channel: 'WHATSAPP', eventType: eventTypeOf(job.kind) })),
+      jobs: jobs.items,
+      jobsTotal: jobs.total,
       budget: WHATSAPP_BUDGET,
       issues: issues.map((issue) => ({
         ...issue,
         needsConsent: isConsentIssue(issue.automationIssue),
       })),
       events,
-      messages: messages.map((m) => ({ ...m, outcome: outcomes.get(m.providerMessageId) ?? null })),
+      messages: messages.items,
+      messagesTotal: messages.total,
       webhookIssues,
     };
+  }
+  /** Envíos de WhatsApp, del más reciente, por páginas. */
+  @Get('jobs') async jobs(@Req() req: Request, @Query('page') page = '1') {
+    await authenticated(req, true);
+    return jobsPage(pageParams(page, PAGE).page, PAGE);
+  }
+  /** Mensajes de WhatsApp (entrantes y salientes), del más reciente, por páginas. */
+  @Get('messages') async messages(@Req() req: Request, @Query('page') page = '1') {
+    await authenticated(req, true);
+    return messagesPage(pageParams(page, PAGE).page, PAGE);
   }
   /** Revisión de la agenda: horarios de los próximos 30 días y campos del evento en Cal.com. */
   @Get('cal-health') async calHealth(@Req() req: Request) {
