@@ -192,6 +192,13 @@ export const adminGroups: AdminNavGroup[] = [
         icon: icons.equipo,
       },
       {
+        id: 'horarios',
+        label: 'Horarios',
+        description:
+          'La semana del equipo y tus horas ocupadas (clases, otro trabajo…). Cuentan para repartir las citas.',
+        icon: icons.horarios,
+      },
+      {
         id: 'numeros',
         label: 'Números bloqueados',
         short: 'Números',
@@ -228,13 +235,6 @@ export const adminGroups: AdminNavGroup[] = [
     id: 'cuenta',
     label: 'Cuenta',
     items: [
-      {
-        id: 'horarios',
-        label: 'Mis horarios',
-        description:
-          'Las horas en que no puedes atender visitas (clases, otro trabajo…). Cuentan para repartir las citas.',
-        icon: icons.horarios,
-      },
       {
         id: 'cuenta',
         label: 'Mi cuenta',

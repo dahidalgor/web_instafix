@@ -1,10 +1,21 @@
 import {
+  addDays,
+  blocksOn,
   busyBlockHours,
+  customerFirstName,
+  localSpans,
   weekdayNames,
+  weekStartOf,
   type BusyBlock,
   type BusyBlockInput,
+  type StaffAppointment,
 } from '@instafix/contracts';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  todayInEcuador,
+  WeekCalendar,
+  type CalendarItem,
+} from '../../components/schedule/WeekCalendar';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { api, ApiError } from '../../lib/api';
@@ -32,6 +43,8 @@ export function TechnicianSchedule() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [week, setWeek] = useState(() => weekStartOf(todayInEcuador()));
+  const [visits, setVisits] = useState<StaffAppointment[]>([]);
   const [form, setForm] = useState({
     label: '',
     repeat: 'WEEKLY' as 'WEEKLY' | 'ONCE',
@@ -49,7 +62,38 @@ export function TechnicianSchedule() {
       .catch((e) =>
         setError(e instanceof ApiError ? e.message : 'No pudimos cargar tus horarios.'),
       );
+    // Visitas confirmadas para verlas en el calendario junto a los horarios ocupados.
+    api<StaffAppointment[]>('staff/appointments/me')
+      .then(setVisits)
+      .catch(() => setVisits([]));
   }, []);
+
+  const calendar = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
+    const items: CalendarItem[] = days.flatMap((day) =>
+      blocksOn(blocks ?? [], day).map((block) => ({
+        id: `${block.id}:${day}`,
+        day,
+        startMinute: block.startMinute,
+        endMinute: block.endMinute,
+        title: block.label,
+        kind: 'busy' as const,
+      })),
+    );
+    for (const visit of visits) {
+      if (!['CONFIRMED', 'IN_PROGRESS'].includes(visit.status)) continue;
+      for (const span of localSpans(new Date(visit.startsAt), new Date(visit.endsAt)))
+        if (days.includes(span.day))
+          items.push({
+            ...span,
+            id: `${visit.id}:${span.day}`,
+            title: `Visita · ${customerFirstName(visit.contactName) ?? 'cliente'}`,
+            detail: visit.request,
+            kind: 'visit',
+          });
+    }
+    return items;
+  }, [blocks, visits, week]);
 
   async function add(event: FormEvent) {
     event.preventDefault();
@@ -139,6 +183,29 @@ export function TechnicianSchedule() {
 
   return (
     <div className="settings-stack">
+      <section className="settings-card" aria-labelledby="busy-week">
+        <div className="settings-card-head">
+          <h2 id="busy-week">Tu semana</h2>
+          <p>Tus horarios ocupados y tus visitas confirmadas.</p>
+        </div>
+        <WeekCalendar
+          weekStart={week}
+          items={calendar}
+          onWeekChange={(day) => setWeek(weekStartOf(day))}
+          loading={!blocks && !error}
+          legend={
+            <>
+              <span className="week-legend-item">
+                <i className="week-swatch is-busy" /> Ocupado
+              </span>
+              <span className="week-legend-item">
+                <i className="week-swatch is-visit" /> Visita confirmada
+              </span>
+            </>
+          }
+        />
+      </section>
+
       <section className="settings-card" aria-labelledby="busy-title">
         <div className="settings-card-head">
           <h2 id="busy-title">Mis horarios ocupados</h2>

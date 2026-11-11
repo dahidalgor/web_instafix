@@ -94,7 +94,14 @@ un día concreto, por horas o todo el día (`TechnicianBusyBlock`, hora de Ecuad
 - **Administración**: cada cita pendiente muestra «Equipo libre» (o «Ninguno»).
 - Las visitas ya confirmadas no cambian; al guardar un horario que choca con una, se avisa al
   técnico para que hable con administración.
-- API: `GET/POST /api/v1/staff/busy`, `DELETE /api/v1/staff/busy/:id` (solo los propios).
+- **Calendario semanal** (`WeekCalendar`): en Horarios cada persona ve su semana (lunes a
+  domingo) con sus horas ocupadas (rayado) y sus visitas confirmadas (sólido), y navega entre
+  semanas. Administración → **Horarios → Equipo** muestra la semana de todo el equipo, un color
+  por persona, con filtro por persona. Lo que coincide a la misma hora se ve lado a lado; los
+  bloques de todo el día van en la fila superior; al tocar un bloque se ve su detalle. En el
+  teléfono la grilla se desliza de lado con la columna de horas fija.
+- API: `GET/POST /api/v1/staff/busy`, `DELETE /api/v1/staff/busy/:id` (solo los propios);
+  `GET /api/v1/admin/staff/schedule?week=YYYY-MM-DD` (semana del equipo, solo ADMIN).
 
 **Avisos para confirmar** (`CONFIRMATION_REMINDER`, push): a los 10 min, a los 30 min y luego cada
 30 min de tiempo activo, a los técnicos libres en ese horario con dispositivo. A 30 min del vencimiento,

@@ -16,6 +16,7 @@
 @import '../features/admin/admin.css';
 @import '../features/admin/admin-shell.css';
 @import '../features/technician/technician.css';
+@import '../components/schedule/week-calendar.css';
 @import '../features/media/media-editor.css';
 @import '../features/contact/contact.css';
 @import './typography.css';

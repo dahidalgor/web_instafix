@@ -1,0 +1,265 @@
+/* Calendario semanal de horarios ocupados y visitas (técnicos y Administración). */
+.week-calendar {
+  --week-hour: 40px;
+  --week-busy: #8a6a9e;
+  --week-visit: #0f8a5f;
+  --week-line: var(--border);
+  --week-today: rgba(160, 13, 104, 0.06);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+:root[data-theme='dark'] .week-calendar {
+  --week-busy: #c9a6e0;
+  --week-visit: #4fd1a1;
+  --week-today: rgba(243, 152, 208, 0.08);
+}
+@media (min-width: 760px) {
+  .week-calendar {
+    --week-hour: 46px;
+  }
+}
+
+.week-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.week-nav strong {
+  min-width: 9.5em;
+  text-align: center;
+  font-size: 1rem;
+}
+.week-nav-arrow {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.week-nav-today {
+  margin-left: auto;
+}
+.week-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.week-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.week-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--item-color, var(--week-busy));
+}
+.week-swatch.is-busy {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--item-color, var(--week-busy)) 0 3px,
+    transparent 3px 6px
+  );
+  border: 1px solid var(--item-color, var(--week-busy));
+}
+
+/* La grilla se desliza de lado en pantallas angostas; la columna de horas queda fija. */
+.week-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.week-scroll.is-loading {
+  opacity: 0.55;
+}
+.week-grid {
+  display: grid;
+  grid-template-columns: 34px repeat(7, minmax(48px, 1fr));
+  min-width: 370px;
+}
+.week-corner,
+.week-hours,
+.week-allday-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-right: 1px solid var(--week-line);
+}
+.week-day-head {
+  display: grid;
+  justify-items: center;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--week-line);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.week-day-head strong {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.week-day-head.is-today strong {
+  background: #a00d68;
+  color: #fff;
+}
+:root[data-theme='dark'] .week-day-head.is-today strong {
+  background: #f398d0;
+  color: #2a0f22;
+}
+.week-allday-label {
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--week-line);
+}
+.week-allday {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-height: 28px;
+  padding: 3px 2px;
+  border-bottom: 1px solid var(--week-line);
+  border-left: 1px solid var(--week-line);
+  min-width: 0;
+}
+.week-hours {
+  position: sticky;
+  height: calc(var(--week-hours) * var(--week-hour));
+}
+.week-hours span {
+  display: block;
+  height: var(--week-hour);
+  padding: 2px 4px 0 0;
+  text-align: right;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.week-col {
+  position: relative;
+  height: calc(var(--week-hours) * var(--week-hour));
+  border-left: 1px solid var(--week-line);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--week-hour) - 1px),
+    var(--week-line) calc(var(--week-hour) - 1px) var(--week-hour)
+  );
+  min-width: 0;
+}
+.week-col.is-today {
+  background-color: var(--week-today);
+}
+
+/* Bloques: ocupado = rayado suave; visita = sólido. */
+.week-item,
+.week-chip {
+  --c: var(--item-color, var(--week-busy));
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  min-width: 0;
+}
+.week-item {
+  position: absolute;
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  padding: 3px 4px;
+  border: 0;
+  border-left: 3px solid var(--c);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--c) 22%, transparent) 0 6px,
+      color-mix(in srgb, var(--c) 12%, transparent) 6px 12px
+    ),
+    var(--surface);
+  line-height: 1.15;
+}
+.week-item strong,
+.week-item span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.68rem;
+}
+.week-item span {
+  color: var(--muted);
+}
+.week-item.is-visit,
+.week-chip.is-visit {
+  --c: var(--item-color, var(--week-visit));
+  background: var(--c);
+  color: #fff;
+}
+:root[data-theme='dark'] .week-item.is-visit,
+:root[data-theme='dark'] .week-chip.is-visit {
+  color: #0d1b16;
+}
+.week-item.is-visit span {
+  color: inherit;
+  opacity: 0.85;
+}
+.week-item.is-selected,
+.week-chip.is-selected {
+  outline: 2px solid var(--c);
+  outline-offset: 1px;
+  z-index: 1;
+}
+.week-item:focus-visible,
+.week-chip:focus-visible {
+  outline: 2px solid var(--c);
+  outline-offset: 1px;
+}
+.week-chip {
+  padding: 2px 4px;
+  border: 1px solid var(--c);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--c) 18%, var(--surface));
+  font-size: 0.66rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.week-detail {
+  display: grid;
+  gap: 2px;
+  min-height: 2.6em;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.week-detail strong {
+  color: var(--text);
+}
+.week-swatch.is-visit {
+  background: var(--item-color, var(--week-visit));
+}
+/* Colores por persona (vista del equipo): texto blanco sobre las visitas en ambos temas. */
+.week-item.is-visit.has-color,
+.week-chip.is-visit.has-color,
+:root[data-theme='dark'] .week-item.is-visit.has-color,
+:root[data-theme='dark'] .week-chip.is-visit.has-color {
+  color: #fff;
+}
