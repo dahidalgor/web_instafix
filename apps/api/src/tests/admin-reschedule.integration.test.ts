@@ -203,7 +203,14 @@ test(
     const freedAfter = await db.appointment.findUniqueOrThrow({ where: { id: freed.id } });
     assert.equal(freedAfter.status, 'PENDING_LOCATION');
     assert.equal(freedAfter.assignedTechnicianId, null);
-    assert.ok(!confirmed.has(`${freed.calUid}-r`), 'sin técnico, la reserva queda pendiente');
+    // Sin técnico vuelve a ser reserva provisional: sale de Cal.com hasta que alguien confirme.
+    assert.equal(freedAfter.calUid, null);
+    assert.equal(freedAfter.startsAt.getTime(), other.getTime());
+    assert.ok(freedAfter.holdExpiresAt);
+    assert.ok(
+      calls.some((c) => c.url.includes(`/bookings/${freed.calUid}/cancel`)),
+      'la reserva vieja se cancela en Cal.com',
+    );
 
     // 3) Cal.com rechaza el horario: la cita no cambia.
     const before = calls.length;

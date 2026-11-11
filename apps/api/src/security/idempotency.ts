@@ -75,3 +75,23 @@ export async function exclusive<T>(name: string, fn: () => Promise<T>, ttlMs = 1
     await db.idempotencyRecord.deleteMany({ where: { key } });
   }
 }
+
+/**
+ * Como `exclusive`, pero si otra operación sobre el mismo recurso está en curso espera a que
+ * termine (hasta `waitMs`) en lugar de fallar: la segunda ve el resultado de la primera (p. ej.
+ * «la confirmó otro técnico») y no un «procesando» genérico.
+ */
+export async function exclusiveWait<T>(name: string, fn: () => Promise<T>, waitMs = 25000) {
+  const until = Date.now() + waitMs;
+  for (;;) {
+    try {
+      return await exclusive(name, fn);
+    } catch (error) {
+      const busy =
+        error instanceof ConflictException &&
+        (error.getResponse() as { code?: string })?.code === 'REQUEST_IN_PROGRESS';
+      if (!busy || Date.now() > until) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}

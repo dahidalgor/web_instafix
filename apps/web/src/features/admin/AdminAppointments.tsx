@@ -27,6 +27,10 @@ type AdminAppointment = Appointment & {
   offeringId?: string | null;
   user: { name: string; phone: string } | null;
   calUid?: string;
+  source?: string;
+  holdExpiresAt?: string | null;
+  responseDueAt?: string | null;
+  autoCancelReason?: string | null;
   whatsappConsentAt?: string;
   automationIssue?: string;
   assignedTechnician?: { id: string; name: string; active?: boolean } | null;
@@ -47,6 +51,27 @@ const empty = {
   status: 'PENDING_LOCATION',
   timeZone: 'America/Guayaquil',
 };
+/** Cita de la agenda (en Cal.com o reserva provisional de la web): la fecha se cambia aparte. */
+const inAgenda = (item?: AdminAppointment) =>
+  Boolean(item && (item.calUid || item.source === 'INSTAFIX_API'));
+/** Cuándo se cancela sola una cita que espera técnico (el primero de los dos plazos). */
+function autoCancelAt(item: AdminAppointment) {
+  if (item.status !== 'PENDING_LOCATION' || item.assignedTechnician) return null;
+  const options = [item.holdExpiresAt, item.locationReceivedAt ? null : item.responseDueAt]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime());
+  return options.length ? new Date(Math.min(...options)) : null;
+}
+const shortMoment = (date: Date, timeZone: string) =>
+  new Intl.DateTimeFormat('es-EC', {
+    timeZone,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
 const localDate = (value: string) => {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -445,7 +470,7 @@ export function AdminAppointments({
           <label>
             Inicio
             <input
-              disabled={!!list.find((item) => item.id === id)?.calUid}
+              disabled={inAgenda(list.find((item) => item.id === id))}
               required
               type="datetime-local"
               value={draft.startsAt}
@@ -455,7 +480,7 @@ export function AdminAppointments({
           <label>
             Fin estimado
             <input
-              disabled={!!list.find((item) => item.id === id)?.calUid}
+              disabled={inAgenda(list.find((item) => item.id === id))}
               required
               type="datetime-local"
               value={draft.endsAt}
@@ -466,15 +491,16 @@ export function AdminAppointments({
             .filter(
               (item) =>
                 item.id === id &&
-                item.calUid &&
+                inAgenda(item) &&
                 ['PENDING_LOCATION', 'CONFIRMED'].includes(item.status),
             )
             .map((item) => (
               <fieldset key={`move-${item.id}`} className="appt-move">
                 <legend>Cambiar fecha y hora</legend>
                 <p className="small">
-                  Reserva de Cal.com: el cambio se hace en Cal.com y el cliente recibe el aviso. La
-                  duración la pone el evento de Cal.com.
+                  El cliente recibe el aviso. Si no se mantiene al técnico, la cita vuelve a esperar
+                  confirmación y sale de Cal.com hasta que un técnico la confirme. La duración la
+                  pone el evento de Cal.com.
                 </p>
                 <label>
                   Nueva fecha y hora
@@ -520,7 +546,7 @@ export function AdminAppointments({
           <label>
             Estado
             <select
-              disabled={!!list.find((item) => item.id === id)?.calUid}
+              disabled={inAgenda(list.find((item) => item.id === id))}
               value={draft.status}
               onChange={(e) => setDraft({ ...draft, status: e.target.value })}
             >
@@ -769,6 +795,25 @@ export function AdminAppointments({
                             <div>
                               <dt>Incidencia</dt>
                               <dd>{item.automationIssue}</dd>
+                            </div>
+                          )}
+                          {autoCancelAt(item) && (
+                            <div>
+                              <dt>Se cancela sola</dt>
+                              <dd>
+                                {shortMoment(autoCancelAt(item)!, item.timeZone)} si ningún técnico
+                                la confirma
+                                {!item.locationReceivedAt && item.responseDueAt
+                                  ? ' o si el cliente no responde por WhatsApp'
+                                  : ''}
+                                .
+                              </dd>
+                            </div>
+                          )}
+                          {item.status === 'CANCELLED' && item.autoCancelReason && (
+                            <div>
+                              <dt>Motivo</dt>
+                              <dd>{item.autoCancelReason}</dd>
                             </div>
                           )}
                         </>

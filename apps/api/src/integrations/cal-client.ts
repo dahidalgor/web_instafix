@@ -126,7 +126,8 @@ export async function createCalBooking(input: {
   phone: string;
   request: string;
   whatsappConsent: boolean;
-  reference: string;
+  /** Cita de Instafix: el webhook la usa para enlazar la reserva aunque se pierda la respuesta. */
+  appointmentId: string;
 }) {
   const body = await call(
     '/bookings',
@@ -153,7 +154,7 @@ export async function createCalBooking(input: {
         },
         // Sin datos personales: referencia opaca, origen y autorización para el webhook.
         metadata: {
-          instafixReference: input.reference,
+          instafixAppointmentId: input.appointmentId,
           instafixSource: 'api',
           instafixWhatsappConsent: String(input.whatsappConsent),
         },
@@ -203,6 +204,36 @@ export async function confirmCalBooking(uid: string): Promise<void> {
     throw error;
   }
 }
+
+const eventTypesVersion = () => process.env.CAL_EVENT_TYPES_API_VERSION || '2024-06-14';
+let lengthCache: { at: number; minutes: number } | null = null;
+/** Duración por defecto si Cal.com no responde y aún no se conoce la del evento. */
+const DEFAULT_LENGTH_MINUTES = 120;
+
+/**
+ * Duración de la visita según el tipo de evento de Cal.com (en caché 10 min). La reserva
+ * provisional se guarda solo en Instafix, así que la hora de fin se calcula aquí; al confirmar,
+ * Cal.com devuelve la real y se corrige si cambió.
+ */
+export async function calEventLengthMinutes() {
+  if (lengthCache && lengthCache.at > Date.now() - 600000) return lengthCache.minutes;
+  try {
+    const body = await call(`/event-types/${calEventTypeId()}`, eventTypesVersion());
+    const data = body?.data as { lengthInMinutes?: unknown; length?: unknown } | undefined;
+    const minutes = Number(data?.lengthInMinutes ?? data?.length);
+    if (Number.isInteger(minutes) && minutes > 0 && minutes <= 1440) {
+      lengthCache = { at: Date.now(), minutes };
+      return minutes;
+    }
+  } catch {
+    // Sin respuesta: se usa la última conocida o la predeterminada.
+  }
+  return lengthCache?.minutes ?? DEFAULT_LENGTH_MINUTES;
+}
+/** Solo para pruebas. */
+export const resetCalEventLength = () => {
+  lengthCache = null;
+};
 
 export const dayIn = (instant: Date, timeZone = 'America/Guayaquil') =>
   new Intl.DateTimeFormat('en-CA', { timeZone }).format(instant);

@@ -27,3 +27,30 @@ export function mapsLink(address?: string | null) {
     return null;
   }
 }
+
+/** «hoy a las 14H00», «mañana a las 10H30» o «jue 13 nov a las 10H30» (hora de la cita). */
+export function confirmByText(value: string, timeZone: string, now = new Date()) {
+  const date = new Date(value);
+  const day = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone }).format(d);
+  const parts = new Intl.DateTimeFormat('es-EC', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const time = `${parts.find((p) => p.type === 'hour')?.value}H${parts.find((p) => p.type === 'minute')?.value}`;
+  const when =
+    day(date) === day(now)
+      ? 'hoy'
+      : day(date) === day(new Date(now.getTime() + 86400000))
+        ? 'mañana'
+        : new Intl.DateTimeFormat('es-EC', {
+            timeZone,
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+          })
+            .format(date)
+            .replace(/\./g, '');
+  return `${when} a las ${time}`;
+}

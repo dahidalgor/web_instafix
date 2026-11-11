@@ -9,9 +9,9 @@ import type { Appointment, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { maskEmail, normalizePhone } from '@instafix/contracts/src/phone';
 import type { BookingResult } from '@instafix/contracts';
-import { newToken, tokenHash } from '../auth/security';
 import { db } from '../database/client';
 import {
+  calEventLengthMinutes,
   cancelCalBooking,
   createCalBooking,
   dayIn,
@@ -32,6 +32,7 @@ import type { RequestOrigin } from '../security/client-identity';
 import { exclusive } from '../security/idempotency';
 import { rateLimited } from '../security/rate-events';
 import { WEB_CONSENT_ISSUE } from '../whatsapp/consent';
+import { holdDeadline, holdDeadlineForExisting, resetHold, usesHold } from './hold';
 
 /** Regla de negocio: una cita se reprograma como máximo 2 veces. */
 export const MAX_RESCHEDULES = 2;
@@ -84,6 +85,8 @@ export const unassignedForReschedule = {
   technician: '',
   confirmedAt: null,
   confirmedById: null,
+  // La reserva provisional empieza de nuevo (la fija quien mueve la cita o el barrido).
+  ...resetHold,
 };
 
 type Customer = { id: string; name: string; phone: string; email: string | null } | null;
@@ -171,7 +174,7 @@ const calLock = (tx: Prisma.TransactionClient) =>
   // Mismo bloqueo que el webhook de Cal.com: ordena la API y el webhook del mismo hecho.
   tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('cal-webhooks'))`;
 
-async function markCalEvent(
+export async function markCalEvent(
   tx: Prisma.TransactionClient,
   uid: string,
   outcome: string,
@@ -197,7 +200,110 @@ async function deliverNow(ids: string[]) {
   return sent;
 }
 
-/** Cliente → Instafix → Cal.com API → PostgreSQL → avisos de Instafix. */
+/** Ese horario no deja tiempo para que un técnico lo confirme antes de que venza. */
+const slotTooSoon = () =>
+  coded(
+    ConflictException,
+    'SLOT_UNAVAILABLE',
+    'Ese horario ya no alcanza a confirmarse a tiempo. Elige uno más adelante.',
+  );
+
+/**
+ * Citas pendientes cuyo horario está guardado solo en Instafix (reserva provisional) y que se
+ * cruzan con [start, end). Cal.com no las conoce: Instafix las descuenta de su disponibilidad.
+ */
+export function heldAppointments(
+  client: Prisma.TransactionClient,
+  start: Date,
+  end: Date,
+  exceptId?: string,
+) {
+  return client.appointment.findMany({
+    where: {
+      status: 'PENDING_LOCATION',
+      calUid: null,
+      source: 'INSTAFIX_API',
+      deletedAt: null,
+      startsAt: { lt: end },
+      endsAt: { gt: start },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    select: { id: true, startsAt: true, endsAt: true },
+  });
+}
+
+/**
+ * Horarios que la web ofrece: los de Cal.com menos los ocupados por reservas provisionales de
+ * Instafix y los que ya no dejan tiempo para que un técnico confirme antes de que venzan.
+ */
+export async function bookableSlots(days: Record<string, string[]>, now = new Date()) {
+  const all = Object.values(days).flat();
+  if (!all.length) return days;
+  const length = (await calEventLengthMinutes()) * 60000;
+  const times = all.map((slot) => new Date(slot).getTime());
+  const holds = await heldAppointments(
+    db,
+    new Date(Math.min(...times)),
+    new Date(Math.max(...times) + length),
+  );
+  const free = (slot: string) => {
+    const start = new Date(slot);
+    const end = start.getTime() + length;
+    return (
+      holdDeadline(now, start) !== null &&
+      !holds.some((h) => h.startsAt.getTime() < end && h.endsAt > start)
+    );
+  };
+  return Object.fromEntries(
+    Object.entries(days)
+      .map(([day, slots]): [string, string[]] => [day, slots.filter(free)])
+      .filter(([, slots]) => slots.length),
+  );
+}
+
+/**
+ * El horario está libre de verdad: Cal.com lo ofrece (sin caché) y ninguna reserva provisional
+ * de Instafix lo ocupa.
+ */
+async function assertSlotFree(start: Date, end: Date, exceptId?: string) {
+  const recheck = await isCalSlotAvailable(start).catch(() => null);
+  logEvent('booking.revalidated', {
+    start: start.toISOString(),
+    local: localTime(start),
+    day: recheck?.day ?? null,
+    available: recheck?.available ?? null,
+    offered: recheck?.offered ?? null,
+  });
+  // Cal.com no respondió: se acepta igual (una caída momentánea no bloquea las reservas). Si el
+  // horario ya no estuviera libre, el técnico lo verá al confirmar y administración lo moverá.
+  if (!recheck) logEvent('booking.slot_unverified', { start: start.toISOString() }, 'warn');
+  else if (!recheck.available) throw slotTaken();
+  if ((await heldAppointments(db, start, end, exceptId)).length) throw slotTaken();
+}
+
+/**
+ * Crea la reserva real en Cal.com (solo al confirmar un técnico). Sin correo del cliente: si
+ * el tipo de evento volviera a exigir uno, se reintenta una vez con el buzón de Instafix.
+ */
+export async function createAgendaBooking(input: Parameters<typeof createCalBooking>[0]) {
+  try {
+    return await createCalBooking(input);
+  } catch (error) {
+    const fallback = relayEmail() || fallbackAttendeeEmail();
+    if (!emailRequired(error) || !fallback) throw error;
+    logEvent(
+      'booking.cal_email_required',
+      { hint: 'Cal.com pidió un correo de asistente: revisar las preguntas del tipo de evento' },
+      'warn',
+    );
+    return createCalBooking({ ...input, email: fallback });
+  }
+}
+
+/**
+ * Cliente → Instafix (reserva provisional) → avisos. A Cal.com no se envía nada hasta que un
+ * técnico confirma: así un cliente que no responde nunca ocupa la agenda real.
+ */
 export async function createBooking(
   input: {
     start: string;
@@ -234,69 +340,19 @@ export async function createBooking(
     return bookingResult(duplicate, customer, email, false, false, phone);
   }
   await assertBookingQuota(phone, origin);
-  // El correo del cliente es opcional (sin él se coordina por WhatsApp) y nunca va a Cal.com:
-  // la reserva se crea solo con el teléfono y los avisos los envía Instafix por Brevo.
-
-  // Referencia opaca para conciliar el webhook si la respuesta de Cal.com se pierde.
-  const reference = newToken();
-  await db.bookingIntent.create({
-    data: {
-      tokenHash: tokenHash(reference),
-      userId: customer?.id ?? null,
-      expiresAt: new Date(Date.now() + 86400000),
-    },
-  });
-
-  // Revalidación: el horario debe seguir en la disponibilidad actual de Cal.com (sin caché).
-  const recheck = await isCalSlotAvailable(start).catch(() => null);
-  logEvent('booking.revalidated', {
-    start: start.toISOString(),
-    local: localTime(start),
-    day: recheck?.day ?? null,
-    available: recheck?.available ?? null,
-    offered: recheck?.offered ?? null,
-  });
-  if (recheck && !recheck.available) throw slotTaken();
-
-  let booking: CalBooking;
-  const calInput = {
-    start,
-    name,
-    phone,
-    request: input.request,
-    whatsappConsent: input.whatsappConsent,
-    reference,
-  };
-  try {
-    booking = await createCalBooking(calInput);
-  } catch (error) {
-    // Respaldo: si el tipo de evento de Cal.com volviera a exigir correo, se reintenta una vez
-    // con el buzón propio de Instafix (nunca el del cliente) para no dejar de recibir citas.
-    const fallback = relayEmail() || fallbackAttendeeEmail();
-    if (!emailRequired(error) || !fallback) return calFailure(error, start);
-    logEvent(
-      'booking.cal_email_required',
-      { hint: 'Cal.com pidió un correo de asistente: revisar las preguntas del tipo de evento' },
-      'warn',
-    );
-    try {
-      booking = await createCalBooking({ ...calInput, email: fallback });
-    } catch (retry) {
-      return calFailure(retry, start);
-    }
-  }
-  logEvent('booking.cal_created', {
-    start: booking.start.toISOString(),
-    calStatus: booking.status,
-  });
-
+  // El correo del cliente es opcional (sin él se coordina por WhatsApp) y nunca va a Cal.com.
   const now = new Date();
-  let appointment: Appointment;
-  let notifications: string[] = [];
-  try {
-    ({ appointment, notifications } = await db.$transaction(async (tx) => {
-      await calLock(tx);
-      const fields = {
+  const deadline = holdDeadline(now, start);
+  if (!deadline) throw slotTooSoon();
+  const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
+  await assertSlotFree(start, end);
+
+  const { appointment, notifications } = await db.$transaction(async (tx) => {
+    // Ordena reservas simultáneas: dos clientes no pueden quedarse el mismo horario.
+    await calLock(tx);
+    if ((await heldAppointments(tx, start, end)).length) throw slotTaken();
+    const saved = await tx.appointment.create({
+      data: {
         source: 'INSTAFIX_API',
         userId: customer?.id ?? null,
         originSessionKey: origin?.sessionKey ?? null,
@@ -305,57 +361,38 @@ export async function createBooking(
         contactPhone: phone,
         contactEmail: email,
         title: input.request.slice(0, 500),
-        startsAt: booking.start,
-        endsAt: booking.end,
-        calStatus: booking.status,
+        startsAt: start,
+        endsAt: end,
         whatsappConsentAt: input.whatsappConsent ? now : null,
-        bookingIdentityIssue: null,
         automationIssue: input.whatsappConsent ? null : WEB_CONSENT_ISSUE,
-      };
-      // El webhook pudo llegar antes que esta respuesta: se completa esa misma fila.
-      const existing = await tx.appointment.findUnique({ where: { calUid: booking.uid } });
-      const saved = existing
-        ? await tx.appointment.update({ where: { id: existing.id }, data: fields })
-        : await tx.appointment.create({
-            data: {
-              ...fields,
-              calUid: booking.uid,
-              device: 'Por especificar',
-              address: '',
-              technician: '',
-              // Agendada ≠ confirmada: la confirma un técnico desde su panel.
-              status: 'PENDING_LOCATION',
-              timeZone: 'America/Guayaquil',
-              locationRequestedAt: now,
-            },
-          });
-      await tx.bookingIntent.update({
-        where: { tokenHash: tokenHash(reference) },
-        data: { calUid: booking.uid },
-      });
-      if (saved.whatsappConsentAt && saved.status === 'PENDING_LOCATION')
-        await queueJob(tx, saved, 'INITIAL', now, saved.startsAt, origin);
-      await markCalEvent(tx, booking.uid, 'CREATED_BY_API', now);
-      return {
-        appointment: saved,
-        notifications: await publishAppointmentEvent(
-          tx,
-          saved,
-          { type: 'appointment.created' },
-          now,
-          origin,
-        ),
-      };
-    }));
-  } catch (error) {
-    // La reserva existe en Cal.com pero no en Instafix: se libera para no dejar un hueco.
-    await cancelCalBooking(booking.uid, 'No se pudo registrar la reserva en Instafix').catch(() =>
-      console.error('Reserva Cal.com sin registrar: revisar manualmente'),
-    );
-    if (error instanceof HttpException) throw error;
-    throw new ServiceUnavailableException('No pudimos registrar tu cita. Inténtalo de nuevo.');
-  }
-
+        device: 'Por especificar',
+        address: '',
+        technician: '',
+        // Agendada ≠ confirmada: la confirma un técnico desde su panel.
+        status: 'PENDING_LOCATION',
+        timeZone: 'America/Guayaquil',
+        locationRequestedAt: now,
+        holdStartedAt: now,
+        holdExpiresAt: deadline,
+      },
+    });
+    if (saved.whatsappConsentAt) await queueJob(tx, saved, 'INITIAL', now, saved.startsAt, origin);
+    return {
+      appointment: saved,
+      notifications: await publishAppointmentEvent(
+        tx,
+        saved,
+        { type: 'appointment.created' },
+        now,
+        origin,
+      ),
+    };
+  });
+  logEvent('booking.held', {
+    appointmentId: appointment.id,
+    start: start.toISOString(),
+    holdExpiresAt: deadline.toISOString(),
+  });
   const sent = await deliverNow(notifications);
   return bookingResult(appointment, customer, email, sent, notifications.length > 0, phone);
 }
@@ -419,19 +456,38 @@ async function ownedChangeable(userId: string, id: string) {
   const appointment = await db.appointment.findFirst({ where: { id, userId, deletedAt: null } });
   if (
     !appointment ||
-    !appointment.calUid ||
+    !usesHold(appointment) ||
     !['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status) ||
     appointment.startsAt <= new Date()
   )
     throw new BadRequestException(
       'Esta cita ya no puede modificarse desde aquí. Escríbenos por WhatsApp.',
     );
-  return appointment as Appointment & { calUid: string };
+  return appointment;
 }
 
 /**
- * Solo se registra y notifica la cancelación después de que Cal.com la confirme. Repetirla
- * (doble clic, reintento) devuelve el mismo resultado sin otro aviso. La cancelación nunca
+ * Libera en Cal.com una reserva que Instafix ya dejó de usar. Si Cal.com no responde, la cita
+ * queda marcada para que administración la cancele allí (el horario seguiría ocupado).
+ */
+async function releaseCalBooking(appointmentId: string, uid: string, reason: string) {
+  try {
+    await cancelCalBooking(uid, reason);
+  } catch {
+    logEvent('booking.cal_release_failed', { appointmentId }, 'warn');
+    await db.appointment.updateMany({
+      where: { id: appointmentId, automationIssue: null },
+      data: {
+        automationIssue:
+          'No se pudo liberar la reserva anterior en Cal.com: cancélala allí para no ocupar ese horario.',
+      },
+    });
+  }
+}
+
+/**
+ * Solo se registra y notifica la cancelación después de que Cal.com la confirme (si la cita ya
+ * estaba en Cal.com). Repetirla devuelve el mismo resultado sin otro aviso. La cancelación nunca
  * depende de que haya presupuesto de WhatsApp: el aviso se evalúa después, en el worker.
  */
 export async function cancelBooking(
@@ -445,11 +501,13 @@ export async function cancelBooking(
   if (already) return { ok: true, alreadyCancelled: true, emailSent: false };
   return exclusive(`appointment:${id}`, async () => {
     const appointment = await ownedChangeable(userId, id);
-    try {
-      await cancelCalBooking(appointment.calUid, 'Cancelada por el cliente desde Instafix');
-    } catch (error) {
-      return calFailure(error);
-    }
+    // Una reserva provisional no está en Cal.com: basta con liberarla en Instafix.
+    if (appointment.calUid)
+      try {
+        await cancelCalBooking(appointment.calUid, 'Cancelada por el cliente desde Instafix');
+      } catch (error) {
+        return calFailure(error);
+      }
     const now = new Date();
     const notifications = await db.$transaction(async (tx) => {
       await calLock(tx);
@@ -457,12 +515,16 @@ export async function cancelBooking(
       // Transición real: solo desde un estado activo (CANCELLED → CANCELLED no avisa).
       const moved = await tx.appointment.updateMany({
         where: { id: appointment.id, status: { in: ['PENDING_LOCATION', 'CONFIRMED'] } },
-        data: { status: 'CANCELLED', calStatus: 'cancelled', automationRevision: { increment: 1 } },
+        data: {
+          status: 'CANCELLED',
+          calStatus: appointment.calUid ? 'cancelled' : null,
+          automationRevision: { increment: 1 },
+        },
       });
       if (!moved.count) return [] as string[];
       const updated = await tx.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
       await cancelPendingJobs(tx, appointment.id);
-      await markCalEvent(tx, appointment.calUid, 'CANCELLED', now);
+      if (appointment.calUid) await markCalEvent(tx, appointment.calUid, 'CANCELLED', now);
       return publishAppointmentEvent(tx, updated, { type: 'appointment.cancelled' }, now, origin);
     });
     return { ok: true, alreadyCancelled: false, emailSent: await deliverNow(notifications) };
@@ -470,10 +532,99 @@ export async function cancelBooking(
 }
 
 /**
- * Reprograma en Cal.com y mantiene la misma cita de Instafix con el nuevo uid. Máximo
- * MAX_RESCHEDULES por cita (regla de negocio, independiente del presupuesto de WhatsApp).
- * Orden: validar cita → límite → horario → Cal.com → DB (contador en la misma transacción) →
- * aviso encolado, que el worker envía u omite según el presupuesto.
+ * Mueve una cita a un horario nuevo como reserva provisional: vuelve a «pendiente», sin técnico
+ * y sin reserva en Cal.com hasta que un técnico la confirme. Si estaba en Cal.com, esa reserva
+ * se cancela allí (después de guardar, y marcada para que su webhook no cancele la cita).
+ */
+async function moveToHold(
+  appointment: Appointment,
+  start: Date,
+  options: {
+    deadline: Date;
+    origin?: RequestOrigin | null;
+    adminId?: string;
+    /** Clientes: máximo MAX_RESCHEDULES (comprobado en la misma actualización). */
+    limited: boolean;
+  },
+) {
+  const now = new Date();
+  const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
+  await assertSlotFree(start, end, appointment.id);
+  const previousUid = appointment.calUid;
+  const notifications = await db.$transaction(async (tx) => {
+    await calLock(tx);
+    await lockAppointment(tx, appointment.id);
+    if ((await heldAppointments(tx, start, end, appointment.id)).length) throw slotTaken();
+    await cancelPendingJobs(tx, appointment.id);
+    // Contador y horario en una sola actualización condicionada: sin carreras.
+    const moved = await tx.appointment.updateMany({
+      where: {
+        id: appointment.id,
+        status: { in: ['PENDING_LOCATION', 'CONFIRMED'] },
+        ...(options.limited ? { rescheduleCount: { lt: MAX_RESCHEDULES } } : {}),
+      },
+      data: {
+        source: 'INSTAFIX_API',
+        calUid: null,
+        calStatus: null,
+        startsAt: start,
+        endsAt: end,
+        rescheduleCount: { increment: 1 },
+        automationRevision: { increment: 1 },
+        ...unassignedForReschedule,
+        holdStartedAt: now,
+        holdExpiresAt: options.deadline,
+        locationRequestedAt: now,
+      },
+    });
+    if (!moved.count) {
+      const current = await tx.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+      if (options.limited && current.rescheduleCount >= MAX_RESCHEDULES)
+        throw coded(BadRequestException, 'RESCHEDULE_LIMIT', rescheduleLimitMessage);
+      throw new BadRequestException('Esta cita ya no puede modificarse.');
+    }
+    const updated = await tx.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    // El webhook de la cancelación de la reserva vieja no debe cancelar esta cita.
+    if (previousUid) await markCalEvent(tx, previousUid, 'CANCELLED', now);
+    if (options.adminId)
+      await tx.adminAction.create({
+        data: {
+          actorId: options.adminId,
+          action: 'APPOINTMENT_RESCHEDULED',
+          target: appointment.id,
+          detail: {
+            from: appointment.startsAt.toISOString(),
+            to: start.toISOString(),
+            keptTechnician: false,
+          },
+        },
+      });
+    if (appointment.assignedTechnicianId)
+      await tx.appointmentActivity.create({
+        data: {
+          appointmentId: appointment.id,
+          actorId: options.adminId ?? null,
+          action: 'UNASSIGNED_BY_RESCHEDULE',
+          detail: { previousTechnicianId: appointment.assignedTechnicianId },
+        },
+      });
+    if (!updated.locationReceivedAt && updated.whatsappConsentAt)
+      await queueJob(tx, updated, 'INITIAL', now, updated.startsAt, options.origin);
+    return publishAppointmentEvent(
+      tx,
+      updated,
+      { type: 'appointment.rescheduled', previousStartsAt: appointment.startsAt },
+      now,
+      options.origin,
+    );
+  });
+  if (previousUid) await releaseCalBooking(appointment.id, previousUid, 'Reprogramada en Instafix');
+  return notifications;
+}
+
+/**
+ * Reprogramación del cliente: la cita vuelve a reserva provisional en el horario nuevo (un
+ * técnico debe confirmarla otra vez). Máximo MAX_RESCHEDULES por cita.
  */
 export async function rescheduleBooking(
   userId: string,
@@ -499,70 +650,16 @@ export async function rescheduleBooking(
     if (start.getTime() < Date.now() + 15 * 60000)
       throw new BadRequestException('Elige un horario futuro.');
     assertBookableDay(start);
-    const recheck = await isCalSlotAvailable(start).catch(() => null);
-    if (recheck && !recheck.available) throw slotTaken();
-    let booking: CalBooking;
-    try {
-      booking = await rescheduleCalBooking(
-        appointment.calUid,
-        start,
-        'Reprogramada por el cliente desde Instafix',
-      );
-    } catch (error) {
-      return calFailure(error, start);
-    }
-    const now = new Date();
-    const notifications = await db.$transaction(async (tx) => {
-      await calLock(tx);
-      await lockAppointment(tx, appointment.id);
-      await cancelPendingJobs(tx, appointment.id);
-      // El webhook pudo crear ya una fila para el nuevo uid: se descarta en favor de esta.
-      const duplicate = await tx.appointment.findUnique({ where: { calUid: booking.uid } });
-      if (duplicate && duplicate.id !== appointment.id) {
-        await cancelPendingJobs(tx, duplicate.id);
-        await tx.appointment.delete({ where: { id: duplicate.id } });
-      }
-      const hasLocation = Boolean(appointment.locationReceivedAt);
-      // Contador y horario en una sola actualización condicionada: sin carreras.
-      const moved = await tx.appointment.updateMany({
-        where: { id: appointment.id, rescheduleCount: { lt: MAX_RESCHEDULES } },
-        data: {
-          calUid: booking.uid,
-          calStatus: booking.status,
-          startsAt: booking.start,
-          endsAt: booking.end,
-          rescheduleCount: { increment: 1 },
-          automationRevision: { increment: 1 },
-          ...unassignedForReschedule,
-          locationRequestedAt: now,
-        },
-      });
-      if (!moved.count)
-        throw coded(BadRequestException, 'RESCHEDULE_LIMIT', rescheduleLimitMessage);
-      const updated = await tx.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
-      await markCalEvent(tx, appointment.calUid, 'CANCELLED', now);
-      await markCalEvent(tx, booking.uid, 'RESCHEDULED_BY_API', now);
-      if (appointment.assignedTechnicianId)
-        await tx.appointmentActivity.create({
-          data: {
-            appointmentId: appointment.id,
-            action: 'UNASSIGNED_BY_RESCHEDULE',
-            detail: { previousTechnicianId: appointment.assignedTechnicianId },
-          },
-        });
-      if (!hasLocation && updated.whatsappConsentAt)
-        await queueJob(tx, updated, 'INITIAL', now, updated.startsAt, origin);
-      return publishAppointmentEvent(
-        tx,
-        updated,
-        { type: 'appointment.rescheduled', previousStartsAt: appointment.startsAt },
-        now,
-        origin,
-      );
+    const deadline = holdDeadline(new Date(), start);
+    if (!deadline) throw slotTooSoon();
+    const notifications = await moveToHold(appointment, start, {
+      deadline,
+      origin,
+      limited: true,
     });
     return {
       ok: true,
-      startsAt: booking.start.toISOString(),
+      startsAt: start.toISOString(),
       emailSent: await deliverNow(notifications),
       unchanged: false,
     };
@@ -570,10 +667,9 @@ export async function rescheduleBooking(
 }
 
 /**
- * Reprogramación hecha por administración: mueve la reserva en Cal.com (la agenda sigue siendo
- * la real) y avisa al cliente igual que cuando reprograma él (correo y WhatsApp «reprogramada»).
- * A diferencia del cliente, no tiene límite de cambios, admite el mismo día y puede conservar al
- * técnico asignado; si no, la cita vuelve a «pendiente de confirmación» para que otro la tome.
+ * Reprogramación hecha por administración. Conservando al técnico de una cita confirmada, se
+ * mueve la reserva en Cal.com y sigue confirmada. Si no, la cita vuelve a reserva provisional
+ * (sale de Cal.com) para que un técnico la tome. Sin límite de cambios; admite el mismo día.
  */
 export async function adminRescheduleBooking(
   adminId: string,
@@ -588,9 +684,9 @@ export async function adminRescheduleBooking(
       throw new BadRequestException(
         'Solo se puede cambiar la fecha de una cita pendiente o confirmada.',
       );
-    if (!appointment.calUid)
+    if (!usesHold(appointment))
       throw new BadRequestException(
-        'Esta cita no está en Cal.com: cambia la fecha en el formulario y guarda.',
+        'Esta cita no está en la agenda: cambia la fecha en el formulario y guarda.',
       );
     if (appointment.startsAt.getTime() === start.getTime())
       return {
@@ -601,7 +697,26 @@ export async function adminRescheduleBooking(
       };
     if (start.getTime() < Date.now() + 5 * 60000)
       throw new BadRequestException('Elige una fecha y hora futuras.');
-    const calUid = appointment.calUid;
+    // Se conserva al técnico solo si la cita ya estaba confirmada con uno (y en Cal.com).
+    const kept =
+      keepTechnician &&
+      appointment.status === 'CONFIRMED' &&
+      !!appointment.assignedTechnicianId &&
+      !!appointment.calUid;
+    if (!kept) {
+      const notifications = await moveToHold(appointment, start, {
+        deadline: holdDeadlineForExisting(new Date(), start),
+        adminId,
+        limited: false,
+      });
+      await deliverNow(notifications);
+      logEvent('booking.admin_rescheduled', {
+        appointmentId: appointment.id,
+        keptTechnician: false,
+      });
+      return { ok: true, startsAt: start.toISOString(), unchanged: false, kept: false };
+    }
+    const calUid = appointment.calUid!;
     let booking: CalBooking;
     try {
       booking = await rescheduleCalBooking(calUid, start, 'Reprogramada por Instafix');
@@ -609,9 +724,6 @@ export async function adminRescheduleBooking(
       return calFailure(error, start);
     }
     const now = new Date();
-    // Se conserva al técnico solo si la cita ya estaba confirmada con uno.
-    const kept =
-      keepTechnician && appointment.status === 'CONFIRMED' && !!appointment.assignedTechnicianId;
     const notifications = await db.$transaction(async (tx) => {
       await calLock(tx);
       await lockAppointment(tx, appointment.id);
@@ -631,7 +743,6 @@ export async function adminRescheduleBooking(
           endsAt: booking.end,
           rescheduleCount: { increment: 1 },
           automationRevision: { increment: 1 },
-          ...(kept ? {} : { ...unassignedForReschedule, locationRequestedAt: now }),
         },
       });
       await markCalEvent(tx, calUid, 'CANCELLED', now);
@@ -644,27 +755,13 @@ export async function adminRescheduleBooking(
           detail: {
             from: appointment.startsAt.toISOString(),
             to: booking.start.toISOString(),
-            keptTechnician: kept,
+            keptTechnician: true,
           },
         },
       });
-      if (appointment.assignedTechnicianId && !kept)
-        await tx.appointmentActivity.create({
-          data: {
-            appointmentId: appointment.id,
-            actorId: adminId,
-            action: 'UNASSIGNED_BY_RESCHEDULE',
-            detail: { previousTechnicianId: appointment.assignedTechnicianId },
-          },
-        });
-      if (!kept && !updated.locationReceivedAt && updated.whatsappConsentAt)
-        await queueJob(tx, updated, 'INITIAL', now, updated.startsAt);
-      // Con el técnico conservado, el recordatorio del día anterior se programa para la fecha nueva.
-      if (kept) {
-        await queueReminders(tx, updated, now);
-        // Recordatorios de «completar trabajo» para el nuevo horario (los viejos se anulan solos).
-        await scheduleCompletionReminders(tx, updated, now);
-      }
+      // El recordatorio del día anterior y los de «completar trabajo» van a la fecha nueva.
+      await queueReminders(tx, updated, now);
+      await scheduleCompletionReminders(tx, updated, now);
       return publishAppointmentEvent(
         tx,
         updated,
@@ -673,7 +770,7 @@ export async function adminRescheduleBooking(
       );
     });
     await deliverNow(notifications);
-    logEvent('booking.admin_rescheduled', { appointmentId: appointment.id, keptTechnician: kept });
-    return { ok: true, startsAt: booking.start.toISOString(), unchanged: false, kept };
+    logEvent('booking.admin_rescheduled', { appointmentId: appointment.id, keptTechnician: true });
+    return { ok: true, startsAt: booking.start.toISOString(), unchanged: false, kept: true };
   });
 }

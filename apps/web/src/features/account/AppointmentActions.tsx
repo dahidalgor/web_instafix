@@ -10,7 +10,7 @@ export function AppointmentActions({
   appointment,
   onChanged,
 }: {
-  appointment: Appointment & { calUid?: string | null };
+  appointment: Appointment & { calUid?: string | null; source?: string };
   onChanged: () => void;
 }) {
   const [mode, setMode] = useState<null | 'reschedule' | 'cancel'>(null);
@@ -29,8 +29,9 @@ export function AppointmentActions({
   // Una clave por intento: un reintento (doble clic, red caída) no repite la acción.
   const attempt = useRef<{ action: string; key: string } | null>(null);
   const limitReached = (appointment.rescheduleCount ?? 0) >= MAX_RESCHEDULES;
+  // Citas de la agenda: en Cal.com o como reserva provisional de Instafix (aún sin técnico).
   const changeable =
-    appointment.calUid &&
+    (appointment.calUid || appointment.source === 'INSTAFIX_API') &&
     ['PENDING_LOCATION', 'CONFIRMED'].includes(appointment.status) &&
     new Date(appointment.startsAt).getTime() > Date.now();
   if (!changeable) return null;

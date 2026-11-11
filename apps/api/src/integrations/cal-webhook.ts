@@ -118,6 +118,26 @@ export async function receiveCalWebhook(body: unknown) {
     const data = details.safeParse(event.payload);
     if (!data.success) throw new BadRequestException('Faltan datos de la reserva');
     const fromApi = data.data.metadata.instafixSource === 'api';
+    // Reserva creada por Instafix al confirmar un técnico: pertenece a esa cita aunque el webhook
+    // llegue antes de que Instafix guarde el uid (o si la respuesta de Cal.com se perdió).
+    const ownerId = data.data.metadata.instafixAppointmentId;
+    if (!existing && fromApi && typeof ownerId === 'string' && ownerId.length <= 100) {
+      const owner = await tx.appointment.findUnique({ where: { id: ownerId } });
+      if (
+        owner?.source === 'INSTAFIX_API' &&
+        !owner.calUid &&
+        ['PENDING_LOCATION', 'CONFIRMED'].includes(owner.status) &&
+        !event.payload.rescheduleUid
+      ) {
+        await lockAppointment(tx, owner.id);
+        await tx.appointment.update({
+          where: { id: owner.id },
+          data: { calUid: uid, calStatus: (data.data.status || 'pending').toLowerCase() },
+        });
+        await saveEvent('LINKED');
+        return { ok: true };
+      }
+    }
     // Reserva creada por Instafix: su fila ya es la fuente de verdad. El webhook solo
     // actualiza el estado de Cal.com y nunca genera un segundo aviso del mismo hecho.
     if (existing && existing.source === 'INSTAFIX_API' && !event.payload.rescheduleUid) {

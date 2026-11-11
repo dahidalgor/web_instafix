@@ -2,10 +2,12 @@ import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/com
 import type { Appointment, Prisma } from '@prisma/client';
 import { maskRecipient } from '../communications/log';
 import { retryCalConfirmations } from '../staff/staff-appointments.service';
+import { sweepBookingHolds } from '../booking/hold-sweeper';
 import { db } from '../database/client';
 import {
   configuredStaffChannels,
   deliverStaffNotification,
+  scheduleConfirmationReminders,
   scheduleDailyAgendas,
 } from './staff/staff-notifications';
 import {
@@ -173,6 +175,7 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
   private agendaCheckedAt = 0;
+  private holdsCheckedAt = 0;
   onModuleInit() {
     this.timer = setInterval(() => void this.tick(), 15000);
     this.timer.unref();
@@ -182,6 +185,13 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
   }
   async tick() {
     if (this.running) return;
+    // Reservas provisionales: plazos y cancelaciones automáticas (no dependen de ningún canal).
+    if (Date.now() - this.holdsCheckedAt >= 60000) {
+      this.holdsCheckedAt = Date.now();
+      await sweepBookingHolds().catch(() =>
+        console.error('No se pudieron revisar las reservas provisionales'),
+      );
+    }
     // Confirmaciones de técnicos que Cal.com aún no reflejó: independiente del correo.
     await retryCalConfirmations().catch(() => console.error('No se pudo sincronizar con Cal.com'));
     // Cada canal se procesa solo si está configurado; los demás avisos esperan en la bandeja.
@@ -203,18 +213,26 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
         await scheduleDailyAgendas().catch(() =>
           console.error('No se pudo preparar el resumen diario de trabajos'),
         );
+        await scheduleConfirmationReminders().catch(() =>
+          console.error('No se pudieron preparar los recordatorios de confirmación'),
+        );
       }
-      const due = await db.notification.findMany({
-        where: {
-          status: { in: ['PENDING', 'RETRY'] },
-          dueAt: { lte: new Date() },
-          channel: { in: channels },
-        },
-        orderBy: { dueAt: 'asc' },
-        take: 20,
-        select: { id: true },
-      });
-      for (const { id } of due) await deliverNotification(id);
+      // Hasta 5 tandas por vuelta: una ráfaga de avisos (p. ej. recordatorios a todo el equipo)
+      // no deja esperando a los siguientes.
+      for (let batch = 0; batch < 5; batch++) {
+        const due = await db.notification.findMany({
+          where: {
+            status: { in: ['PENDING', 'RETRY'] },
+            dueAt: { lte: new Date() },
+            channel: { in: channels },
+          },
+          orderBy: { dueAt: 'asc' },
+          take: 20,
+          select: { id: true },
+        });
+        for (const { id } of due) await deliverNotification(id);
+        if (due.length < 20) break;
+      }
     } catch (error) {
       console.error(
         'No se pudo procesar la bandeja de notificaciones:',

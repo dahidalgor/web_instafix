@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
-import { test } from 'node:test';
+import { beforeEach, test } from 'node:test';
 import type { Request } from 'express';
 import { parseStaffPushPayload } from '@instafix/contracts';
 import webpush, { WebPushError } from 'web-push';
@@ -117,8 +117,13 @@ const status = async (promise: Promise<unknown>) => {
   }
 };
 /** Fecha futura a las `hourUtc` UTC (Ecuador es UTC−5 todo el año). */
+// Cada prueba usa fechas propias: las reservas provisionales ocupan su horario de verdad.
+let shift = 0;
+beforeEach(() => {
+  shift = randomInt(30, 900);
+});
 const future = (days: number, hourUtc: number) => {
-  const d = new Date(Date.now() + days * 86400000);
+  const d = new Date(Date.now() + (days + shift) * 86400000);
   d.setUTCHours(hourUtc, 0, 0, 0);
   return d;
 };

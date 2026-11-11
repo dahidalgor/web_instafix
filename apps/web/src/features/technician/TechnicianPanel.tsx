@@ -5,6 +5,7 @@ import type { AccountUser, Offering, StaffAppointment } from '@instafix/contract
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppointmentCard, visitDayKey } from '../../components/appointments/AppointmentCard';
 import { api, ApiError } from '../../lib/api';
+import { confirmByText } from '../../lib/format';
 import { AppointmentSheet } from './AppointmentSheet';
 
 export type TechnicianTab = 'today' | 'upcoming' | 'pending' | 'history';
@@ -233,11 +234,19 @@ export function TechnicianPanel({
                       : undefined
                 }
                 details={
-                  <AppointmentLocation
-                    appointment={a}
-                    directions
-                    pending="Pendiente por WhatsApp"
-                  />
+                  <>
+                    <AppointmentLocation
+                      appointment={a}
+                      directions
+                      pending="Pendiente por WhatsApp"
+                    />
+                    {tab === 'pending' && a.confirmBy && (
+                      <div className="tech-deadline">
+                        <dt>Confirmar antes de</dt>
+                        <dd>{confirmByText(a.confirmBy, a.timeZone)} (si no, se cancela sola)</dd>
+                      </div>
+                    )}
+                  </>
                 }
               >
                 {tab === 'pending' && (

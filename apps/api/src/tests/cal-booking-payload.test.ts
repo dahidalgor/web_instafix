@@ -35,7 +35,7 @@ test('Cal booking sends only fields the event type defines', async () => {
       phone: '+593991234567',
       request: 'Mi PS5 se apaga',
       whatsappConsent: true,
-      reference: 'ref',
+      appointmentId: '00000000-0000-4000-8000-000000000001',
     });
   } finally {
     globalThis.fetch = original.fetch;
