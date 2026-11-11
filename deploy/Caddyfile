@@ -23,6 +23,13 @@
   # El service worker se revisa siempre (Cloudflare y el navegador no deben servir uno viejo).
   @sw path /sw.js
   header @sw Cache-Control "no-cache"
+  # La página (index.html y las rutas de la app) se revisa siempre: así una versión nueva llega
+  # al navegador y a la app instalada sin quedar una copia vieja. Los archivos de /assets llevan
+  # su versión en el nombre y pueden guardarse un año.
+  @assets path /assets/*
+  header @assets Cache-Control "public, max-age=31536000, immutable"
+  @page not path /assets/* /sw.js /api/*
+  header @page Cache-Control "no-cache"
   handle {
     root * /srv
     try_files {path} /index.html
