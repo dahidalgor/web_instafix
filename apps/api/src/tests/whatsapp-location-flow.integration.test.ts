@@ -12,6 +12,15 @@ import { BirdWhatsAppProvider } from '../whatsapp/bird/bird.provider';
 import { processWhatsAppWebhook, receiveWhatsAppWebhook } from '../whatsapp/webhook-inbox';
 import { signedWebhook, webhookSecret } from './support/bird-webhooks';
 
+/** Todas las citas de la cuenta (próximas + historial), como las ve Mi cuenta por partes. */
+async function allMine(controller: AccountController, request: Request) {
+  const [upcoming, past] = await Promise.all([
+    controller.appointments(request, 'upcoming'),
+    controller.appointments(request, 'past', '1', '50'),
+  ]);
+  return [...upcoming.items, ...past.items];
+}
+
 /**
  * Flujo real de ubicación: webhook firmado de Bird → bandeja → worker → cita en PostgreSQL →
  * respuestas de Mi cuenta y del panel técnico. Sin red: geocodificación desactivada.
@@ -159,7 +168,7 @@ test(
         expiresAt: new Date(Date.now() + 60000),
       },
     });
-    const mine = await new AccountController().appointments({
+    const mine = await allMine(new AccountController(), {
       headers: { cookie: `instafix_session=${token}` },
     } as unknown as Request);
     const card = mine.find((x) => x.id === a.id)!;
@@ -389,7 +398,7 @@ test(
         expiresAt: new Date(Date.now() + 60000),
       },
     });
-    const theirs = await new AccountController().appointments({
+    const theirs = await allMine(new AccountController(), {
       headers: { cookie: `instafix_session=${token}` },
     } as unknown as Request);
     assert.ok(!theirs.some((x) => x.id === a.id));

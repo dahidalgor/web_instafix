@@ -41,11 +41,17 @@ export function AdminJobs({ users, items, run, busy }: Props) {
       window.clearTimeout(timer);
     };
   }, [query]);
+  // Solo las citas activas del cliente elegido (nunca todas las citas).
   const load = () =>
-    api<(Appointment & { offeringId?: string })[]>('admin/appointments').then(setAppointments);
+    userId
+      ? api<{ items: (Appointment & { offeringId?: string })[] }>(
+          `admin/appointments?userId=${userId}&status=active&pageSize=50`,
+        ).then((res) => setAppointments(res.items))
+      : Promise.resolve(setAppointments([]));
   useEffect(() => {
     load().catch((e) => setError(e.message));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
   const choose = (id: string) => {
     setServiceId(id);
     const service = items.find((item) => item.id === id);
@@ -171,13 +177,11 @@ export function AdminJobs({ users, items, run, busy }: Props) {
           }}
         >
           <option value="">Trabajo sin cita registrada</option>
-          {appointments
-            .filter((a) => a.userId === userId && !['COMPLETED', 'CANCELLED'].includes(a.status))
-            .map((a) => (
-              <option key={a.id} value={a.id}>
-                {new Date(a.startsAt).toLocaleDateString('es-EC')} · {a.title}
-              </option>
-            ))}
+          {appointments.map((a) => (
+            <option key={a.id} value={a.id}>
+              {new Date(a.startsAt).toLocaleDateString('es-EC')} · {a.title}
+            </option>
+          ))}
         </select>
       </label>
       <label>

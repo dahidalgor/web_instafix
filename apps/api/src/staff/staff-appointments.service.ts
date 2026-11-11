@@ -132,13 +132,49 @@ async function deliverNow(ids: string[]) {
     });
 }
 
-export async function myAppointments(user: StaffUser) {
+/**
+ * Visitas actuales del técnico: las que siguen abiertas (confirmadas o en servicio, de cualquier
+ * día) y las completadas hoy. Son pocas: nunca incluye el historial.
+ */
+function currentWhere(user: StaffUser, now: Date): Prisma.AppointmentWhereInput {
+  const today = new Date(`${dayIn(now)}T00:00:00-05:00`);
+  return {
+    assignedTechnicianId: user.id,
+    deletedAt: null,
+    OR: [
+      { status: { in: ['CONFIRMED', 'IN_PROGRESS'] } },
+      { status: 'COMPLETED', startsAt: { gte: today, lt: new Date(today.getTime() + 86400000) } },
+    ],
+  };
+}
+
+export async function myAppointments(user: StaffUser, now = new Date()) {
   const items = await db.appointment.findMany({
-    where: { assignedTechnicianId: user.id, deletedAt: null },
+    where: currentWhere(user, now),
     orderBy: { startsAt: 'asc' },
     include,
   });
   return items.map((a) => serializeStaff(user, a));
+}
+
+/** Historial del técnico (completadas y canceladas), de la más reciente, por páginas. */
+export async function myHistory(user: StaffUser, page: number, pageSize: number, now = new Date()) {
+  const where: Prisma.AppointmentWhereInput = {
+    assignedTechnicianId: user.id,
+    deletedAt: null,
+    NOT: currentWhere(user, now),
+  };
+  const [total, items] = await Promise.all([
+    db.appointment.count({ where }),
+    db.appointment.findMany({
+      where,
+      orderBy: [{ startsAt: 'desc' }, { id: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include,
+    }),
+  ]);
+  return { total, page, pageSize, items: items.map((a) => serializeStaff(user, a)) };
 }
 
 export async function pendingAppointments(user: StaffUser, now = new Date()) {

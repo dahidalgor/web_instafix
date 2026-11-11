@@ -1,8 +1,11 @@
 import {
   appointmentSchema,
+  adminAppointmentQuerySchema,
   appointmentSortSchema,
   reassignSchema,
+  type AppointmentDateFilter,
   type AppointmentSort,
+  type AppointmentStatusFilter,
 } from '@instafix/contracts';
 import type { Prisma } from '@prisma/client';
 import {
@@ -25,7 +28,7 @@ import { db } from '../database/client';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
 import { z } from 'zod';
-import { cancelCalBooking } from '../integrations/cal-client';
+import { cancelCalBooking, dayIn } from '../integrations/cal-client';
 import { usesHold } from '../booking/hold';
 import { busyReason, technicianAgenda } from '../staff/availability';
 import { auditAdmin } from '../security/admin-audit';
@@ -51,6 +54,67 @@ export function appointmentOrder(
     starts_desc: ['startsAt', 'desc'],
   }[sort] as ['createdAt' | 'startsAt', 'asc' | 'desc'];
   return [{ [field]: direction }, { id: 'asc' }];
+}
+
+/** Estado del organizador → condición (CONFIRMED incluye «en servicio»). */
+function statusWhere(filter: AppointmentStatusFilter): Prisma.AppointmentWhereInput {
+  if (filter === 'all') return {};
+  if (filter === 'active')
+    return { status: { in: ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'] } };
+  if (filter === 'CONFIRMED') return { status: { in: ['CONFIRMED', 'IN_PROGRESS'] } };
+  return { status: filter };
+}
+
+/** Fecha del organizador (días de Ecuador) → rango de inicio de la cita. */
+function dateWhere(
+  f: { date: AppointmentDateFilter; from?: string; to?: string },
+  now: Date,
+): Prisma.AppointmentWhereInput {
+  const startOf = (day: string) => new Date(`${day}T00:00:00-05:00`);
+  const today = startOf(dayIn(now));
+  const days = (n: number) => new Date(today.getTime() + n * 86400000);
+  switch (f.date) {
+    case 'today':
+      return { startsAt: { gte: today, lt: days(1) } };
+    case 'upcoming':
+      return { startsAt: { gte: today } };
+    case 'week':
+      return { startsAt: { gte: today, lt: days(8) } };
+    case 'past':
+      return { startsAt: { lt: today } };
+    case 'custom':
+      return {
+        startsAt: {
+          ...(f.from ? { gte: startOf(f.from) } : {}),
+          ...(f.to ? { lt: new Date(startOf(f.to).getTime() + 86400000) } : {}),
+        },
+      };
+    default:
+      return {};
+  }
+}
+
+/**
+ * Búsqueda por nombre (cita o cuenta), solicitud o teléfono, sin distinguir tildes ni
+ * mayúsculas; el teléfono por cualquier parte de sus dígitos (0991…, +593 99…).
+ */
+async function searchAppointmentIds(text: string) {
+  const digits = text.replace(/\D/g, '').replace(/^0/, '');
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT a.id FROM "Appointment" a
+    LEFT JOIN "User" u ON u.id = a."userId"
+    WHERE a."deletedAt" IS NULL AND (
+      translate(lower(coalesce(a."contactName", '') || ' ' || coalesce(u.name, '') || ' ' || a.title),
+        'áéíóúüñ', 'aeiouun')
+        LIKE '%' || translate(lower(${text}), 'áéíóúüñ', 'aeiouun') || '%'
+      OR (${digits.length >= 3} AND (
+        regexp_replace(a."contactPhone", '[^0-9]', '', 'g') LIKE '%' || ${digits} || '%'
+        OR regexp_replace(coalesce(u.phone, ''), '[^0-9]', '', 'g') LIKE '%' || ${digits} || '%'
+      ))
+    )
+    ORDER BY a."startsAt" DESC
+    LIMIT 2000`;
+  return rows.map((row) => row.id);
 }
 
 @Controller('api/v1')
@@ -90,25 +154,60 @@ export class AppointmentsController {
     });
   }
 
+  /**
+   * Citas para Administración, por páginas: los filtros (estado, fecha, búsqueda, cliente) y el
+   * orden se aplican aquí, así la lista nunca trae todo el historial de golpe. `counts` da el
+   * número de citas de cada estado con los demás filtros, para los botones del organizador.
+   */
   @Get('admin/appointments') async adminAppointments(
     @Req() req: Request,
-    @Query('sort') sortParam?: string,
+    @Query() query: Record<string, string> = {},
   ) {
     await authenticated(req, true);
-    const sort = appointmentSortSchema.safeParse(sortParam ?? undefined);
-    if (!sort.success) throw new BadRequestException('Orden no válido');
-    const rows = await db.appointment.findMany({
-      where: { deletedAt: null },
-      // El orden se resuelve en PostgreSQL sobre campos reales, nunca sobre texto formateado.
-      orderBy: appointmentOrder(sort.data),
-      include: {
-        user: { select: { name: true, phone: true } },
-        assignedTechnician: { select: { id: true, name: true, active: true } },
-        services: { orderBy: { createdAt: 'asc' } },
-      },
-    });
-    // Pendientes por confirmar: qué técnicos están libres en su horario (null si no aplica).
+    const parsed = adminAppointmentQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException('Filtros de citas no válidos');
+    const f = parsed.data;
     const now = new Date();
+    const base: Prisma.AppointmentWhereInput = {
+      deletedAt: null,
+      ...(f.id ? { id: f.id } : {}),
+      ...(f.userId ? { userId: f.userId } : {}),
+      ...dateWhere(f, now),
+      ...(f.q ? { id: { in: await searchAppointmentIds(f.q) } } : {}),
+    };
+    if (f.id && f.q) delete base.id;
+    const where = { ...base, ...statusWhere(f.status) };
+    const ascending = f.status === 'active' || ['today', 'upcoming', 'week'].includes(f.date);
+    const orderBy =
+      f.sort === 'auto'
+        ? [{ startsAt: ascending ? ('asc' as const) : ('desc' as const) }, { id: 'asc' as const }]
+        : appointmentOrder(f.sort as AppointmentSort);
+    const [total, rows, byStatus] = await Promise.all([
+      db.appointment.count({ where }),
+      db.appointment.findMany({
+        where,
+        orderBy,
+        skip: (f.page - 1) * f.pageSize,
+        take: f.pageSize,
+        include: {
+          user: { select: { name: true, phone: true } },
+          assignedTechnician: { select: { id: true, name: true, active: true } },
+          services: { orderBy: { createdAt: 'asc' } },
+        },
+      }),
+      db.appointment.groupBy({ by: ['status'], where: base, _count: true }),
+    ]);
+    const n = (...statuses: string[]) =>
+      byStatus.filter((g) => statuses.includes(g.status)).reduce((sum, g) => sum + g._count, 0);
+    const counts: Record<AppointmentStatusFilter, number> = {
+      active: n('PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'),
+      PENDING_LOCATION: n('PENDING_LOCATION'),
+      CONFIRMED: n('CONFIRMED', 'IN_PROGRESS'),
+      COMPLETED: n('COMPLETED'),
+      CANCELLED: n('CANCELLED'),
+      all: n('PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
+    };
+    // Pendientes por confirmar: qué técnicos están libres en su horario (null si no aplica).
     const waiting = rows.filter(
       (a) => a.status === 'PENDING_LOCATION' && !a.assignedTechnicianId && a.endsAt > now,
     );
@@ -120,12 +219,18 @@ export class AppointmentsController {
         )
       : [];
     const waitingIds = new Set(waiting.map((a) => a.id));
-    return rows.map((a) => ({
-      ...a,
-      availableTechnicians: waitingIds.has(a.id)
-        ? agenda.filter((tech) => !busyReason(tech, a)).map((tech) => tech.name)
-        : null,
-    }));
+    return {
+      total,
+      page: f.page,
+      pageSize: f.pageSize,
+      counts,
+      items: rows.map((a) => ({
+        ...a,
+        availableTechnicians: waitingIds.has(a.id)
+          ? agenda.filter((tech) => !busyReason(tech, a)).map((tech) => tech.name)
+          : null,
+      })),
+    };
   }
 
   @Post('admin/appointments') async createAppointment(@Body() body: unknown, @Req() req: Request) {
