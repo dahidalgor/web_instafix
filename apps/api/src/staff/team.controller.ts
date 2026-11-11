@@ -1,4 +1,9 @@
-import { normalizePersonName, staffMemberSchema, staffUpdateSchema } from '@instafix/contracts';
+import {
+  normalizePersonName,
+  staffMemberSchema,
+  staffUpdateSchema,
+  weekStartOf,
+} from '@instafix/contracts';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import {
   BadRequestException,
@@ -6,10 +11,12 @@ import {
   ConflictException,
   Controller,
   Get,
+  Header,
   NotFoundException,
   Param,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -17,6 +24,7 @@ import type { Request } from 'express';
 import { authenticated, checkOrigin } from '../auth/session';
 import { hashPassword } from '../auth/security';
 import { db } from '../database/client';
+import { teamWeek } from './availability';
 
 const member = {
   id: true,
@@ -33,6 +41,16 @@ const member = {
 /** Equipo técnico. Solo ADMIN; desde aquí solo se crean técnicos, nunca administradores. */
 @Controller('api/v1/admin/staff')
 export class TeamController {
+  /** Semana del equipo (horarios ocupados y visitas) desde el lunes `week` (YYYY-MM-DD). */
+  @Get('schedule')
+  @Header('Cache-Control', 'no-store')
+  async schedule(@Req() req: Request, @Query('week') week = '') {
+    await authenticated(req, true);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || Number.isNaN(Date.parse(`${week}T12:00:00Z`)))
+      throw new BadRequestException('Indica la semana (YYYY-MM-DD).');
+    return { weekStart: weekStartOf(week), members: await teamWeek(weekStartOf(week)) };
+  }
+
   @Get() async list(@Req() req: Request) {
     await authenticated(req, true);
     const members = await db.user.findMany({

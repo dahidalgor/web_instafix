@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import {
+  addDays,
+  blocksOn,
+  localSpans,
+  weekStartOf,
   busyBlockAt,
   busyBlockHours,
   busyBlockInputSchema,
@@ -17,6 +21,7 @@ import { db } from '../database/client';
 import { setEmailProvider } from '../mail/email.service';
 import { endpointHash, setPushSender } from '../notifications/staff/web-push.channel';
 import { StaffController } from '../staff/staff.controller';
+import { TeamController } from '../staff/team.controller';
 
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 const vapid = webpush.generateVAPIDKeys();
@@ -105,6 +110,35 @@ test('horarios ocupados: semanales, un día, todo el día y vigencia', () => {
     { label: 'Clases', repeat: 'ONCE', date: '2026-11-26', allDay: true, userId: 'otro' },
   ])
     assert.equal(busyBlockInputSchema.safeParse(body).success, false);
+});
+
+test('calendario semanal: semanas de lunes a domingo, bloques por día y visitas por día', () => {
+  // Miércoles 11 → lunes 9; domingo 15 → lunes 9; lunes 16 → lunes 16.
+  assert.equal(weekStartOf('2026-11-11'), '2026-11-09');
+  assert.equal(weekStartOf('2026-11-15'), '2026-11-09');
+  assert.equal(weekStartOf('2026-11-16'), '2026-11-16');
+  assert.equal(addDays('2026-12-30', 3), '2027-01-02');
+  const blocks = [
+    { weekday: 3, date: null, validFrom: '2026-11-01', validUntil: '2026-11-30', label: 'Clases' },
+    { weekday: null, date: '2026-11-13', validFrom: null, validUntil: null, label: 'Médico' },
+  ];
+  assert.deepEqual(
+    blocksOn(blocks, '2026-11-11').map((b) => b.label),
+    ['Clases'],
+  );
+  assert.deepEqual(blocksOn(blocks, '2026-12-02'), [], 'fuera de vigencia');
+  assert.deepEqual(
+    blocksOn(blocks, '2026-11-13').map((b) => b.label),
+    ['Médico'],
+  );
+  // Visita de 13H00 a 15H00 en Ecuador; una que pasa de medianoche da dos tramos.
+  assert.deepEqual(localSpans(ec('2026-11-12', '13:00'), ec('2026-11-12', '15:00')), [
+    { day: '2026-11-12', startMinute: 780, endMinute: 900 },
+  ]);
+  assert.deepEqual(localSpans(ec('2026-11-12', '23:00'), ec('2026-11-13', '01:00')), [
+    { day: '2026-11-12', startMinute: 1380, endMinute: 1440 },
+    { day: '2026-11-13', startMinute: 0, endMinute: 60 },
+  ]);
 });
 
 test(
@@ -221,6 +255,26 @@ test(
     await staff.confirm(appointmentId, free.req);
 
     // Administración también registra sus horarios (atiende visitas): los lunes en la mañana no.
+    // Semana del equipo para Administración: cada persona con sus horarios y visitas.
+    const team = new TeamController();
+    assert.equal(
+      await team.schedule(student.req, day).then(
+        () => 200,
+        (e: any) => e.getStatus(),
+      ),
+      403,
+    );
+    const week = await team.schedule(admin.req, day);
+    assert.equal(week.weekStart, day, 'el lunes de esa semana');
+    const carlosWeek = week.members.find((m) => m.id === student.user.id)!;
+    assert.equal(carlosWeek.blocks[0].label, 'Clases');
+    assert.equal(
+      week.members.find((m) => m.id === free.user.id)!.visits[0].id,
+      appointmentId,
+      'la visita confirmada de Ana aparece en su semana',
+    );
+    await assert.rejects(team.schedule(admin.req, 'mañana'), (e: any) => e.getStatus() === 400);
+
     const meetings = await staff.addBusy(
       { label: 'Reuniones', repeat: 'WEEKLY', weekdays: [1], start: '08:00', end: '12:00' },
       admin.req,

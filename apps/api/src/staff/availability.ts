@@ -128,3 +128,41 @@ export async function removeBusyBlock(userId: string, id: string) {
   await db.technicianBusyBlock.deleteMany({ where: { id, userId } });
   return { blocks: await listBusyBlocks(userId) };
 }
+
+/**
+ * Semana del equipo para Administración: horarios ocupados y visitas confirmadas de cada
+ * técnico y administrador activo, del lunes `weekStart` al domingo (hora de Ecuador).
+ */
+export async function teamWeek(weekStart: string) {
+  const from = new Date(`${weekStart}T00:00:00-05:00`);
+  const to = new Date(from.getTime() + 7 * 86400000);
+  const members = await db.user.findMany({
+    where: { role: { in: ['TECHNICIAN', 'ADMIN'] }, active: true, deletedAt: null },
+    orderBy: [{ role: 'desc' }, { name: 'asc' }],
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      busyBlocks: { orderBy: { startMinute: 'asc' } },
+      assignedAppointments: {
+        where: {
+          status: { in: ['CONFIRMED', 'IN_PROGRESS'] },
+          deletedAt: null,
+          startsAt: { lt: to },
+          endsAt: { gt: from },
+        },
+        orderBy: { startsAt: 'asc' },
+        select: { id: true, startsAt: true, endsAt: true, contactName: true, title: true },
+      },
+    },
+  });
+  return members.map(({ busyBlocks, assignedAppointments, ...person }) => ({
+    ...person,
+    blocks: busyBlocks.map(({ userId: _u, createdAt: _c, ...b }) => b),
+    visits: assignedAppointments.map((v) => ({
+      ...v,
+      startsAt: v.startsAt.toISOString(),
+      endsAt: v.endsAt.toISOString(),
+    })),
+  }));
+}

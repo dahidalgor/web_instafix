@@ -138,3 +138,43 @@ export function busyBlockHours(block: Pick<BusyBlock, 'startMinute' | 'endMinute
     `${String(Math.floor(value / 60)).padStart(2, '0')}H${String(value % 60).padStart(2, '0')}`;
   return `${hhmm(block.startMinute)}–${hhmm(Math.min(block.endMinute, 1439))}`;
 }
+
+/** Suma días a una fecha «YYYY-MM-DD». */
+export function addDays(day: string, days: number) {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+/** Día de la semana (0 = domingo) de una fecha «YYYY-MM-DD». */
+export const weekdayOf = (day: string) => new Date(`${day}T12:00:00Z`).getUTCDay();
+/** Lunes de la semana de esa fecha (las semanas del calendario empiezan el lunes). */
+export const weekStartOf = (day: string) => addDays(day, -((weekdayOf(day) + 6) % 7));
+
+/** Bloques que rigen ese día. */
+export const blocksOn = <
+  T extends Pick<BusyBlock, 'weekday' | 'date' | 'validFrom' | 'validUntil'>,
+>(
+  blocks: T[],
+  day: string,
+) => blocks.filter((block) => blockAppliesOn(block, day, weekdayOf(day)));
+
+/**
+ * Tramos por día (hora de Ecuador) de un intervalo [start, end): una visita que pasa de
+ * medianoche da dos tramos.
+ */
+export function localSpans(start: Date, end: Date) {
+  const spans: { day: string; startMinute: number; endMinute: number }[] = [];
+  let from = start.getTime();
+  while (from < end.getTime()) {
+    const here = local(from);
+    const dayEnd = from - here.minute * 60000 - (from % 60000) + DAY;
+    const to = Math.min(end.getTime(), dayEnd);
+    spans.push({
+      day: here.day,
+      startMinute: here.minute,
+      endMinute: here.minute + Math.ceil((to - from) / 60000),
+    });
+    from = to;
+  }
+  return spans;
+}
