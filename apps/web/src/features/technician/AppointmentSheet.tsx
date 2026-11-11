@@ -2,9 +2,9 @@ import { BusyButton } from '../../components/ui/BusyButton';
 import { BusyLabel } from '../../components/ui/BusyLabel';
 import { TextSkeleton } from '../../components/ui/Skeleton';
 import {
-  giveaway,
-  giveawayOpen,
+  entriesLabel,
   suggestedGiveawayEntries,
+  type Giveaway,
   type Offering,
   type StaffAppointment,
 } from '@instafix/contracts';
@@ -42,8 +42,9 @@ export function AppointmentSheet({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [confirmComplete, setConfirmComplete] = useState(false);
-  // Sorteo: se marca solo al registrar un «Par de joysticks» de PS5 (un mando por unidad).
-  // Si el técnico cambia la casilla o el número, se respeta su decisión.
+  // Sorteo abierto (si hay): se marca solo al registrar un servicio que cuenta en él (una
+  // participación por unidad). Si el técnico cambia la casilla o el número, se respeta.
+  const [giveaway, setGiveaway] = useState<Giveaway | null>(null);
   const [joinGiveaway, setJoinGiveaway] = useState(false);
   const [giveawayEntries, setGiveawayEntries] = useState(1);
   const giveawayTouched = useRef(false);
@@ -57,6 +58,12 @@ export function AppointmentSheet({
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'No se pudo abrir la cita.'));
   }, [id]);
+  useEffect(() => {
+    // Sin sorteo (o sin respuesta) la visita se completa sin participaciones.
+    api<{ giveaway: Giveaway | null }>('staff/giveaway')
+      .then((res) => setGiveaway(res.giveaway))
+      .catch(() => setGiveaway(null));
+  }, []);
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
@@ -105,13 +112,15 @@ export function AppointmentSheet({
   // Fecha de Ecuador: no se completa una visita antes de su día.
   const ecDay = (value: Date) =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(value);
-  const suggestedEntries = item ? suggestedGiveawayEntries(item.services) : 0;
+  const suggestedEntries =
+    item && giveaway ? suggestedGiveawayEntries(item.services, giveaway.eligibleOfferingIds) : 0;
   useEffect(() => {
     if (giveawayTouched.current) return;
     setJoinGiveaway(suggestedEntries > 0);
     setGiveawayEntries(Math.max(1, suggestedEntries));
   }, [suggestedEntries]);
   const giveawayProps = {
+    giveaway: giveaway!,
     join: joinGiveaway,
     entries: giveawayEntries,
     suggested: suggestedEntries,
@@ -345,7 +354,7 @@ export function AppointmentSheet({
                     Total registrado <strong>{money(total)}</strong>
                   </p>
                 )}
-                {editable && giveawayOpen() && (suggestedEntries > 0 || joinGiveaway) && (
+                {editable && giveaway && (suggestedEntries > 0 || joinGiveaway) && (
                   <GiveawayPicker id="giveaway-services" {...giveawayProps} />
                 )}
                 {editable &&
@@ -497,8 +506,8 @@ export function AppointmentSheet({
               {item.status === 'COMPLETED' && <p className="tech-done">✓ Visita completada</p>}
               {item.status === 'COMPLETED' && item.giveawayEntries > 0 && (
                 <p className="tech-giveaway-done">
-                  Participa por {giveaway.prize} · {item.giveawayEntries}{' '}
-                  {item.giveawayEntries === 1 ? 'participación' : 'participaciones'}
+                  {item.giveawayPrize ? `Participa por ${item.giveawayPrize} · ` : 'Sorteo · '}
+                  {entriesLabel(item.giveawayEntries)}
                 </p>
               )}
             </div>
@@ -527,7 +536,7 @@ export function AppointmentSheet({
                 <p>No registraste servicios del catálogo; quedará solo la nota técnica.</p>
               )}
               {!!item.services.length && <p>Total: {money(total)}</p>}
-              {giveawayOpen() && <GiveawayPicker id="giveaway-confirm" {...giveawayProps} />}
+              {giveaway && <GiveawayPicker id="giveaway-confirm" {...giveawayProps} />}
               <p className="small">Después no podrás modificar los servicios ni las notas.</p>
               <div className="tech-actions-row">
                 <button
@@ -543,12 +552,12 @@ export function AppointmentSheet({
                   disabled={busy}
                   busyLabel="Completando…"
                   onClick={async () => {
-                    const entries = joinGiveaway && giveawayOpen() ? giveawayEntries : 0;
+                    const entries = joinGiveaway && giveaway ? giveawayEntries : 0;
                     await act(
                       '/complete',
                       { method: 'POST', body: JSON.stringify({ giveawayEntries: entries }) },
                       entries
-                        ? `✓ Visita completada. Participa por ${giveaway.prize}.`
+                        ? `✓ Visita completada. Participa por ${giveaway!.prize}.`
                         : '✓ Visita completada.',
                     );
                     setConfirmComplete(false);

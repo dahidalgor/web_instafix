@@ -173,7 +173,9 @@ model CompletedJob {
   warrantyTerms String
   priceMinor Int
   currency String @default("USD")
-  // Participaciones en el sorteo vigente, copiadas de la cita al registrar el trabajo.
+  // Participaciones en un sorteo, copiadas de la cita al registrar el trabajo.
+  giveawayId String?
+  giveaway Giveaway? @relation(fields: [giveawayId], references: [id], onDelete: SetNull)
   giveawayEntries Int @default(0)
   createdAt DateTime @default(now())
   @@index([userId, completedAt])
@@ -216,8 +218,9 @@ model Appointment {
   locationName String?
   // Reprogramaciones reales (cambio de fecha/hora). Máximo 2 por cita, comprobado en backend.
   rescheduleCount Int @default(0)
-  // Participaciones en el sorteo marcadas por el técnico al completar (mandos DualSense con par
-  // de joysticks magnéticos). 0 = no participa.
+  // Participaciones en el sorteo abierto, marcadas por el técnico al completar. 0 = no participa.
+  giveawayId String?
+  giveaway Giveaway? @relation(fields: [giveawayId], references: [id], onDelete: SetNull)
   giveawayEntries Int @default(0)
   // Sesión e IP (con hash) que crearon la cita: presupuesto de WhatsApp y límites por origen.
   originSessionKey String?
@@ -269,6 +272,7 @@ model Appointment {
   @@index([assignedTechnicianId, startsAt])
   @@index([status, startsAt])
   @@index([status, holdExpiresAt])
+  @@index([giveawayId, status])
   @@index([originSessionKey, createdAt])
   @@index([originIpHash, createdAt])
   @@index([contactPhone, createdAt])
@@ -596,4 +600,23 @@ model TechnicianBusyBlock {
   endMinute Int
   createdAt DateTime @default(now())
   @@index([userId])
+}
+
+// Sorteo para clientes: cada visita completada puede sumar participaciones (las marca el técnico).
+// Solo uno abierto a la vez. Abierto = sin closedAt y hasta el final de drawDate (fecha de Ecuador).
+model Giveaway {
+  id String @id @default(uuid())
+  prize String
+  drawDate String
+  // Cómo se participa: lo leen técnicos y clientes.
+  entryRule String
+  maxEntries Int @default(20)
+  // Servicios del catálogo que sugieren participaciones al técnico (cantidad registrada).
+  eligibleOfferingIds String[] @default([])
+  closedAt DateTime?
+  closedById String?
+  createdAt DateTime @default(now())
+  createdById String?
+  appointments Appointment[]
+  completedJobs CompletedJob[]
 }

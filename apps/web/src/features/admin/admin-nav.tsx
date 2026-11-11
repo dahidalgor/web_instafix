@@ -130,8 +130,8 @@ export const adminGroups: AdminNavGroup[] = [
       },
       {
         id: 'sorteo',
-        label: 'Sorteo',
-        description: 'Participantes del sorteo y corrección de participaciones por visita.',
+        label: 'Sorteos',
+        description: 'Crear y cerrar sorteos, participantes y corrección de participaciones.',
         icon: icons.sorteo,
       },
     ],

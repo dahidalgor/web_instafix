@@ -35,6 +35,7 @@ import {
   updateService,
 } from './staff-appointments.service';
 import { addBusyBlocks, listBusyBlocks, removeBusyBlock } from './availability';
+import { giveawayView, openGiveaway } from '../giveaways/giveaways';
 
 const uuid = /^[0-9a-f-]{36}$/i;
 function checkId(...ids: string[]) {
@@ -175,5 +176,14 @@ export class StaffController {
     checkOrigin(req);
     checkId(id);
     return removeBusyBlock((await authenticatedStaff(req)).id, id);
+  }
+
+  /** Sorteo abierto (o null): el panel ofrece marcar participaciones al completar. */
+  @Get('giveaway')
+  @Header('Cache-Control', 'no-store')
+  async giveaway(@Req() req: Request) {
+    await authenticatedStaff(req);
+    const open = await openGiveaway();
+    return { giveaway: open ? giveawayView(open) : null };
   }
 }
