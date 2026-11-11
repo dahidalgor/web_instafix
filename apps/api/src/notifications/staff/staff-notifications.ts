@@ -17,6 +17,7 @@ import { logEvent } from '../../common/log-event';
 import { db } from '../../database/client';
 import { dayIn } from '../../integrations/cal-client';
 import { activeTimeBetween, confirmDeadline, isQuietTime } from '../../booking/hold';
+import { availableTechnicianIds, technicianBusyReason } from '../../staff/availability';
 import type { StaffChannel } from './channels';
 import { WebPushChannel } from './web-push.channel';
 
@@ -92,8 +93,22 @@ async function recipients(tx: Prisma.TransactionClient, type: StaffNotificationT
       deletedAt: null,
       pushSubscriptions: { some: { active: true } },
     },
-    select: { id: true },
+    select: { id: true, role: true },
   });
+}
+
+/**
+ * Solo los técnicos libres en el horario de la cita (sin horario ocupado ni otra visita);
+ * administración siempre.
+ */
+async function onlyAvailable<T extends { id: string; role: Role }>(
+  client: Prisma.TransactionClient,
+  users: T[],
+  appointment: Appointment,
+) {
+  if (!users.some((user) => user.role === 'TECHNICIAN')) return users;
+  const free = new Set(await availableTechnicianIds(client, appointment));
+  return users.filter((user) => user.role !== 'TECHNICIAN' || free.has(user.id));
 }
 
 /**
@@ -109,7 +124,7 @@ export async function enqueueAppointmentRequested(
   const type: StaffNotificationType = 'APPOINTMENT_REQUESTED';
   const { title, body } = appointmentRequestedMessage(appointment);
   const ids: string[] = [];
-  for (const user of await recipients(tx, type)) {
+  for (const user of await onlyAvailable(tx, await recipients(tx, type), appointment)) {
     const dedupeKey = staffNotificationKey(type, appointment.id, user.id);
     // Misma cita y destinatario: el segundo intento (webhook, reintento) no crea otro aviso.
     const row = await tx.notification.upsert({
@@ -230,10 +245,10 @@ export async function scheduleConfirmationReminders(now = new Date()) {
         deletedAt: null,
         pushSubscriptions: { some: { active: true } },
       },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     const { title, body } = confirmationReminderMessage(appointment, deadline, now, last);
-    for (const user of users) {
+    for (const user of await onlyAvailable(db, users, appointment)) {
       const dedupeKey = staffNotificationKey(
         type,
         `${appointment.id}:${since.toISOString()}:${stage}`,
@@ -369,6 +384,15 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
       (type === 'APPOINTMENT_REQUESTED' && row.appointment.status === 'CANCELLED'))
   ) {
     await finish('CANCELLED', 'La cita fue cancelada o eliminada antes del envío');
+    return 'CANCELLED' as const;
+  }
+  // Un técnico que marcó ese horario como ocupado después de crearse el aviso ya no lo recibe.
+  if (
+    (type === 'APPOINTMENT_REQUESTED' || type === 'CONFIRMATION_REMINDER') &&
+    user.role === 'TECHNICIAN' &&
+    (await technicianBusyReason(db, row.recipient, row.appointment!))
+  ) {
+    await finish('CANCELLED', 'El técnico tiene ese horario ocupado');
     return 'CANCELLED' as const;
   }
   const meta = row.data as {

@@ -34,6 +34,7 @@ import {
   syncCalConfirmation,
   updateService,
 } from './staff-appointments.service';
+import { addBusyBlocks, listBusyBlocks, removeBusyBlock } from './availability';
 
 const uuid = /^[0-9a-f-]{36}$/i;
 function checkId(...ids: string[]) {
@@ -151,5 +152,28 @@ export class StaffController {
     const parsed = completeAppointmentSchema.safeParse(body ?? {});
     if (!parsed.success) throw new BadRequestException('Revisa la cantidad de mandos del sorteo.');
     return completeAppointment(await authenticatedStaff(req), id, new Date(), parsed.data);
+  }
+
+  /** Horarios ocupados del propio técnico (clases, otro trabajo…). */
+  @Get('busy')
+  @Header('Cache-Control', 'no-store')
+  async busy(@Req() req: Request) {
+    return { blocks: await listBusyBlocks((await authenticatedStaff(req)).id) };
+  }
+
+  @Post('busy')
+  @HttpCode(201)
+  @RateLimit('staff')
+  async addBusy(@Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    return addBusyBlocks((await authenticatedStaff(req)).id, body);
+  }
+
+  @Delete('busy/:id')
+  @RateLimit('staff')
+  async removeBusy(@Param('id') id: string, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    return removeBusyBlock((await authenticatedStaff(req)).id, id);
   }
 }

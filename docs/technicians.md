@@ -76,8 +76,27 @@ reservas de los horarios de Cal.com, y dos clientes no pueden tomar el mismo hor
 - Las citas creadas a mano por administración (sin agenda) no vencen.
 - El barrido corre cada minuto en `NotificationWorker` (`sweepBookingHolds`).
 
+### Horarios ocupados de los técnicos
+
+Cada técnico marca en **Horarios** (menú «Más» del panel) las horas en que no puede atender
+visitas: cada semana (uno o varios días, con fecha «hasta» opcional, p. ej. fin de semestre) o
+un día concreto, por horas o todo el día (`TechnicianBusyBlock`, hora de Ecuador). Con eso:
+
+- **Avisos**: «Nueva solicitud» y los recordatorios para confirmar llegan solo a los técnicos
+  libres en el horario de la cita (sin horario ocupado ni otra visita que se cruce);
+  administración los recibe siempre. Si el técnico marca el horario después, el aviso pendiente
+  se anula al enviarse.
+- **Pendientes**: cada técnico ve solo las solicitudes de horarios en que está libre. Si abre una
+  por enlace, ve el motivo y no puede confirmarla (409); administración sí puede.
+- **Web**: un horario en que ningún técnico está libre no se ofrece ni se acepta (si no hay
+  ningún técnico registrado, no se restringe). Administración puede mover una cita ahí.
+- **Administración**: cada cita pendiente muestra «Técnicos libres» (o «Ninguno»).
+- Las visitas ya confirmadas no cambian; al guardar un horario que choca con una, se avisa al
+  técnico para que hable con administración.
+- API: `GET/POST /api/v1/staff/busy`, `DELETE /api/v1/staff/busy/:id` (solo los propios).
+
 **Avisos para confirmar** (`CONFIRMATION_REMINDER`, push): a los 10 min, a los 30 min y luego cada
-30 min de tiempo activo, a todos los técnicos con dispositivo. A 30 min del vencimiento,
+30 min de tiempo activo, a los técnicos libres en ese horario con dispositivo. A 30 min del vencimiento,
 «Última oportunidad», también a administración. Se anulan solos si alguien confirma o la cita
 cambia.
 

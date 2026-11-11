@@ -143,6 +143,8 @@ export type StaffAppointment = {
   giveawayEntries: number;
   /** Pendiente: si nadie la confirma antes de este momento, se cancela sola. */
   confirmBy?: string | null;
+  /** Técnico: motivo por el que no puede confirmar esta cita (horario ocupado u otra visita). */
+  busyReason?: string | null;
   canManage: boolean;
 };
 

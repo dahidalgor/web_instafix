@@ -539,3 +539,100 @@ body.sheet-open {
   font-size: 0.92rem;
   font-weight: 600;
 }
+
+/* Horarios ocupados del técnico. */
+.busy-heading {
+  margin: 14px 0 6px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.busy-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.busy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.busy-row div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.busy-row span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+.busy-form {
+  display: grid;
+  gap: 14px;
+}
+.busy-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.busy-form legend {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.busy-repeat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.busy-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.busy-days button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+.busy-days button.is-on {
+  border-color: #a00d68;
+  background: linear-gradient(110deg, #762257, #a00d68);
+  color: #fff;
+}
+.busy-hours {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.busy-form label {
+  margin-bottom: 0;
+}
+.busy-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.busy-form .checkbox-label input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--brand-magenta);
+}

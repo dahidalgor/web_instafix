@@ -31,6 +31,8 @@ type AdminAppointment = Appointment & {
   holdExpiresAt?: string | null;
   responseDueAt?: string | null;
   autoCancelReason?: string | null;
+  /** Pendiente: técnicos libres en su horario (sin horario ocupado ni otra visita). */
+  availableTechnicians?: string[] | null;
   whatsappConsentAt?: string;
   automationIssue?: string;
   assignedTechnician?: { id: string; name: string; active?: boolean } | null;
@@ -795,6 +797,16 @@ export function AdminAppointments({
                             <div>
                               <dt>Incidencia</dt>
                               <dd>{item.automationIssue}</dd>
+                            </div>
+                          )}
+                          {item.availableTechnicians && (
+                            <div>
+                              <dt>Técnicos libres</dt>
+                              <dd>
+                                {item.availableTechnicians.length
+                                  ? item.availableTechnicians.join(', ')
+                                  : 'Ninguno: todos tienen ese horario ocupado. Confírmala tú o cambia la hora.'}
+                              </dd>
                             </div>
                           )}
                           {autoCancelAt(item) && (

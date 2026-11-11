@@ -25,6 +25,7 @@ import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '..
 import { z } from 'zod';
 import { cancelCalBooking } from '../integrations/cal-client';
 import { usesHold } from '../booking/hold';
+import { busyReason, technicianAgenda } from '../staff/availability';
 import { auditAdmin } from '../security/admin-audit';
 import { isConsentIssue } from '../whatsapp/consent';
 import { deliverNotification } from '../notifications/notification.service';
@@ -90,7 +91,7 @@ export class AppointmentsController {
     await authenticated(req, true);
     const sort = appointmentSortSchema.safeParse(sortParam ?? undefined);
     if (!sort.success) throw new BadRequestException('Orden no válido');
-    return db.appointment.findMany({
+    const rows = await db.appointment.findMany({
       where: { deletedAt: null },
       // El orden se resuelve en PostgreSQL sobre campos reales, nunca sobre texto formateado.
       orderBy: appointmentOrder(sort.data),
@@ -100,6 +101,25 @@ export class AppointmentsController {
         services: { orderBy: { createdAt: 'asc' } },
       },
     });
+    // Pendientes por confirmar: qué técnicos están libres en su horario (null si no aplica).
+    const now = new Date();
+    const waiting = rows.filter(
+      (a) => a.status === 'PENDING_LOCATION' && !a.assignedTechnicianId && a.endsAt > now,
+    );
+    const agenda = waiting.length
+      ? await technicianAgenda(
+          db,
+          new Date(Math.min(...waiting.map((a) => a.startsAt.getTime()))),
+          new Date(Math.max(...waiting.map((a) => a.endsAt.getTime()))),
+        )
+      : [];
+    const waitingIds = new Set(waiting.map((a) => a.id));
+    return rows.map((a) => ({
+      ...a,
+      availableTechnicians: waitingIds.has(a.id)
+        ? agenda.filter((tech) => !busyReason(tech, a)).map((tech) => tech.name)
+        : null,
+    }));
   }
 
   @Post('admin/appointments') async createAppointment(@Body() body: unknown, @Req() req: Request) {

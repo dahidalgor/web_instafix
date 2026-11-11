@@ -1,8 +1,8 @@
 import { shellIcons, staffSvg, type StaffNavGroup } from '../../components/staff/StaffShell';
 import type { TechnicianTab } from './TechnicianPanel';
 
-/** Ventanas del panel de técnicos: cuatro listas de visitas y los ajustes de la cuenta. */
-export type TechAppTab = 'hoy' | 'proximas' | 'pendientes' | 'historial' | 'ajustes';
+/** Ventanas del panel de técnicos: cuatro listas de visitas, horarios ocupados y ajustes. */
+export type TechAppTab = 'hoy' | 'proximas' | 'pendientes' | 'historial' | 'horarios' | 'ajustes';
 
 const svg = staffSvg;
 export const techGroups: StaffNavGroup<TechAppTab>[] = [
@@ -56,6 +56,17 @@ export const techGroups: StaffNavGroup<TechAppTab>[] = [
     label: 'Cuenta',
     items: [
       {
+        id: 'horarios',
+        label: 'Horarios',
+        description: 'Las horas en que no puedes atender visitas (clases, otro trabajo…).',
+        icon: svg(
+          <>
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M3 10h18M8 3v4M16 3v4M9 14l6 5M15 14l-6 5" />
+          </>,
+        ),
+      },
+      {
         id: 'ajustes',
         label: 'Ajustes',
         description:
@@ -66,14 +77,15 @@ export const techGroups: StaffNavGroup<TechAppTab>[] = [
   },
 ];
 
-/** Todo cabe en la barra inferior: no hace falta «Más». */
-export const techPrimary: TechAppTab[] = ['hoy', 'proximas', 'pendientes', 'historial', 'ajustes'];
+/** Barra inferior: las visitas; Horarios y Ajustes quedan en «Más». */
+export const techPrimary: TechAppTab[] = ['hoy', 'proximas', 'pendientes', 'historial'];
+const techTabs: TechAppTab[] = [...techPrimary, 'horarios', 'ajustes'];
 
-export const techViews: Record<Exclude<TechAppTab, 'ajustes'>, TechnicianTab> = {
+export const techViews: Record<Exclude<TechAppTab, 'ajustes' | 'horarios'>, TechnicianTab> = {
   hoy: 'today',
   proximas: 'upcoming',
   pendientes: 'pending',
   historial: 'history',
 };
 export const isTechTab = (value: unknown): value is TechAppTab =>
-  typeof value === 'string' && (techPrimary as string[]).includes(value);
+  typeof value === 'string' && (techTabs as string[]).includes(value);

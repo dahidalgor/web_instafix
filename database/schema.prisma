@@ -131,6 +131,7 @@ model User {
   performedServices AppointmentService[]
   appointmentActivity AppointmentActivity[]
   pushSubscriptions PushSubscription[]
+  busyBlocks TechnicianBusyBlock[]
 }
 // Desafíos aislados por finalidad. Nunca se guarda el código en texto plano.
 model EmailChallenge {
@@ -577,4 +578,22 @@ model PushSubscription {
   updatedAt DateTime @updatedAt
   @@index([userId, active])
   @@index([userId, installationId])
+}
+
+// Horario ocupado de un técnico (clases, otro trabajo…): en esas horas no recibe solicitudes ni
+// puede confirmar citas. Hora de Ecuador. Semanal (weekday, con vigencia opcional) o un día
+// concreto (date). Minutos desde las 00H00; 0–1440 = todo el día.
+model TechnicianBusyBlock {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label String
+  weekday Int?
+  date String?
+  validFrom String?
+  validUntil String?
+  startMinute Int
+  endMinute Int
+  createdAt DateTime @default(now())
+  @@index([userId])
 }

@@ -450,9 +450,18 @@ export function AppointmentSheet({
             )}
 
             <div className="tech-sheet-footer">
+              {item.status === 'PENDING_LOCATION' &&
+                !item.assignedTechnician &&
+                item.busyReason && (
+                  <p className="tech-deadline-note" role="note">
+                    {item.busyReason === 'otra visita confirmada'
+                      ? 'Ya tienes otra visita confirmada a esa hora: no puedes tomar esta.'
+                      : `Tienes ese horario marcado como ocupado («${item.busyReason}»). Si sí puedes ir, quítalo en Horarios.`}
+                  </p>
+                )}
               {item.status === 'PENDING_LOCATION' && !item.assignedTechnician && item.confirmBy && (
                 <p className="tech-deadline-note">
-                  Confírmala antes de {confirmByText(item.confirmBy, item.timeZone)} o se cancelará
+                  Confírmala hasta {confirmByText(item.confirmBy, item.timeZone)} o se cancelará
                   sola y el horario quedará libre.
                 </p>
               )}
@@ -460,7 +469,7 @@ export function AppointmentSheet({
                 <BusyButton
                   type="button"
                   className="btn btn-primary btn-block"
-                  disabled={busy}
+                  disabled={busy || !!item.busyReason}
                   busyLabel="Confirmando…"
                   onClick={() =>
                     act('/confirm', { method: 'POST' }, '✓ Cita confirmada. Ya está en tus citas.')
