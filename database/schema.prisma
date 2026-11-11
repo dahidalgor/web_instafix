@@ -226,6 +226,14 @@ model Appointment {
   deletedById String?
   automationIssue String?
   bookingIdentityIssue String?
+  // Reserva provisional (solo en Instafix): mientras ningún técnico confirme, el horario se
+  // guarda aquí y no en Cal.com. Vence en holdExpiresAt (o en responseDueAt si el cliente no
+  // responde al WhatsApp inicial) y la cita se cancela sola. Ver booking/hold.ts.
+  holdStartedAt DateTime?
+  holdExpiresAt DateTime?
+  responseDueAt DateTime?
+  // Motivo de una cancelación automática (sin respuesta del cliente o sin técnico a tiempo).
+  autoCancelReason String?
   automationRevision Int @default(0)
   // INSTAFIX_API: creada por Instafix mediante la API de Cal.com. CAL_EMBED: histórico del iframe.
   source String @default("CAL_EMBED")
@@ -259,6 +267,7 @@ model Appointment {
   @@index([contactPhone, status])
   @@index([assignedTechnicianId, startsAt])
   @@index([status, startsAt])
+  @@index([status, holdExpiresAt])
   @@index([originSessionKey, createdAt])
   @@index([originIpHash, createdAt])
   @@index([contactPhone, createdAt])

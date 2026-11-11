@@ -53,6 +53,8 @@ export type Appointment = z.infer<typeof appointmentSchema> & {
   confirmedAt?: string | null;
   completedAt?: string | null;
   locationReceivedAt?: string | null;
+  /** Motivo si la cita se canceló sola (sin respuesta del cliente o sin técnico a tiempo). */
+  autoCancelReason?: string | null;
   locationLatitude?: number | null;
   locationLongitude?: number | null;
   locationArea?: string | null;
@@ -139,6 +141,8 @@ export type StaffAppointment = {
   services: PerformedService[];
   /** Participaciones en el sorteo marcadas por el técnico al completar. */
   giveawayEntries: number;
+  /** Pendiente: si nadie la confirma antes de este momento, se cancela sola. */
+  confirmBy?: string | null;
   canManage: boolean;
 };
 

@@ -19,6 +19,7 @@ const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 Object.assign(process.env, {
   CAL_API_KEY: 'test-key',
   CAL_API_VERSION: '2026-02-25',
+  CAL_EVENT_TYPE_ID: '515151',
   APPOINTMENT_EMAILS_ENABLED: 'true',
   SMTP_HOST: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
   SMTP_FROM: process.env.SMTP_FROM || 'Instafix <test@instafix.ec>',
@@ -45,6 +46,21 @@ globalThis.fetch = (async (input: any, init?: RequestInit) => {
   const method = init?.method || 'GET';
   calCalls.push({ url, method });
   if (calFails) return Response.json({}, { status: 503 });
+  // Al confirmar una reserva provisional, Instafix crea la reserva en Cal.com.
+  if (method === 'POST' && url.endsWith('/bookings')) {
+    const body = JSON.parse(String(init?.body));
+    const created = `tech-${randomUUID()}`;
+    calStatus.set(created, 'pending');
+    return Response.json({
+      status: 'success',
+      data: {
+        uid: created,
+        status: 'pending',
+        start: body.start,
+        end: new Date(new Date(body.start).getTime() + 3600000).toISOString(),
+      },
+    });
+  }
   const uid = decodeURIComponent(url.split('/bookings/')[1]?.split('/')[0] || '');
   if (method === 'POST' && url.endsWith('/confirm')) {
     calStatus.set(uid, 'accepted');

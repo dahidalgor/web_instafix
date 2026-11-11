@@ -24,6 +24,7 @@ import { normalizePhone } from '@instafix/contracts/src/phone';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
 import { z } from 'zod';
 import { cancelCalBooking } from '../integrations/cal-client';
+import { usesHold } from '../booking/hold';
 import { auditAdmin } from '../security/admin-audit';
 import { isConsentIssue } from '../whatsapp/consent';
 import { deliverNotification } from '../notifications/notification.service';
@@ -179,7 +180,7 @@ export class AppointmentsController {
       const { whatsappConsent, ...data } = parsed.data;
       // Las reservas externas se cancelan/reprograman en Cal para conservar disponibilidad real.
       if (
-        existing.calUid &&
+        usesHold(existing) &&
         (new Date(data.startsAt).getTime() !== existing.startsAt.getTime() ||
           new Date(data.endsAt).getTime() !== existing.endsAt.getTime() ||
           data.status !== existing.status)

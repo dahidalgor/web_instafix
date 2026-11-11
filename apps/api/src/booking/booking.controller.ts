@@ -22,7 +22,7 @@ import { newToken, tokenHash } from '../auth/security';
 import { db } from '../database/client';
 import { getCalSlots } from '../integrations/cal-client';
 import { logEvent } from '../common/log-event';
-import { cancelBooking, createBooking, rescheduleBooking } from './booking.service';
+import { bookableSlots, cancelBooking, createBooking, rescheduleBooking } from './booking.service';
 
 const slotCache = new Map<string, { at: number; value: Record<string, string[]> }>();
 const day = /^\d{4}-\d{2}-\d{2}$/;
@@ -61,8 +61,9 @@ export class BookingController {
       throw new BadRequestException('El rango máximo es de 35 días');
     const key = `${from}:${to}`;
     const cached = slotCache.get(key);
+    // La caché guarda lo que dice Cal.com; las reservas provisionales se descuentan siempre.
     if (cached && cached.at > Date.now() - 30000)
-      return { timeZone: 'America/Guayaquil', days: cached.value };
+      return { timeZone: 'America/Guayaquil', days: await bookableSlots(cached.value) };
     try {
       const value = await getCalSlots(from, to, 'America/Guayaquil');
       // Un mes entero sin horarios casi siempre es configuración de Cal.com (disponibilidad,
@@ -79,7 +80,7 @@ export class BookingController {
         );
       slotCache.set(key, { at: Date.now(), value });
       if (slotCache.size > 50) slotCache.delete(slotCache.keys().next().value!);
-      return { timeZone: 'America/Guayaquil', days: value };
+      return { timeZone: 'America/Guayaquil', days: await bookableSlots(value) };
     } catch {
       throw new ServiceUnavailableException(
         'No pudimos consultar los horarios. Inténtalo de nuevo.',

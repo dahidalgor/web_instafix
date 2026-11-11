@@ -3,6 +3,8 @@ import {
   appointmentRequestedMessage,
   completionReminderDelaysHours,
   completionReminderMessage,
+  confirmationReminderMessage,
+  confirmationReminderMinutes,
   DEFAULT_PUSH_URL,
   dailyAgendaHours,
   dailyAgendaMessage,
@@ -14,6 +16,7 @@ import type { Appointment, Notification, Prisma, Role } from '@prisma/client';
 import { logEvent } from '../../common/log-event';
 import { db } from '../../database/client';
 import { dayIn } from '../../integrations/cal-client';
+import { activeTimeBetween, confirmDeadline, isQuietTime } from '../../booking/hold';
 import type { StaffChannel } from './channels';
 import { WebPushChannel } from './web-push.channel';
 
@@ -43,6 +46,8 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
   APPOINTMENT_ASSIGNED: ['TECHNICIAN'],
   // Solo al técnico asignado a la visita (un administrador también puede tomar visitas).
   COMPLETION_REMINDER: ['ADMIN', 'TECHNICIAN'],
+  // Cita pendiente sin confirmar: técnicos (y administración en el último aviso).
+  CONFIRMATION_REMINDER: ['ADMIN', 'TECHNICIAN'],
   // Resumen diario de sus propias visitas (mañana a las 19H00, hoy a las 08H00).
   DAILY_AGENDA: ['ADMIN', 'TECHNICIAN'],
   // Prueba enviada por el propio usuario a sus dispositivos (POST /staff/push/test).
@@ -53,6 +58,7 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
 export const producedStaffNotifications: readonly StaffNotificationType[] = [
   'APPOINTMENT_REQUESTED',
   'COMPLETION_REMINDER',
+  'CONFIRMATION_REMINDER',
   'DAILY_AGENDA',
 ];
 
@@ -183,6 +189,82 @@ export async function scheduleCompletionReminders(
   return ids;
 }
 
+/**
+ * Recordatorios para confirmar citas pendientes. Cada minuto, para cada cita que espera técnico
+ * y tiene plazo, se calcula qué aviso le toca según el tiempo activo transcurrido (10 min, 30 min
+ * y luego cada 30) y se crea una vez por destinatario (clave única por etapa). Si el worker se
+ * retrasó, solo sale la etapa actual, nunca las atrasadas. A 30 min o menos del vencimiento sale
+ * «Última oportunidad», también a administración. De noche (22H00–07H00) no se envía ninguno.
+ */
+export async function scheduleConfirmationReminders(now = new Date()) {
+  if (isQuietTime(now)) return [];
+  const pending = await db.appointment.findMany({
+    where: {
+      status: 'PENDING_LOCATION',
+      assignedTechnicianId: null,
+      deletedAt: null,
+      holdExpiresAt: { gt: now },
+    },
+  });
+  const ids: string[] = [];
+  const { first, second, every, lastBefore } = confirmationReminderMinutes;
+  for (const appointment of pending) {
+    const deadline = confirmDeadline(appointment);
+    if (!deadline || deadline <= now) continue;
+    const since = appointment.holdStartedAt ?? appointment.createdAt;
+    const last = deadline.getTime() - now.getTime() <= lastBefore * 60000;
+    const elapsed = activeTimeBetween(since, now) / 60000;
+    const stage = last
+      ? 'LAST'
+      : elapsed < first
+        ? null
+        : elapsed < second
+          ? '1'
+          : String(2 + Math.floor((elapsed - second) / every));
+    if (!stage) continue;
+    const type: StaffNotificationType = 'CONFIRMATION_REMINDER';
+    const users = await db.user.findMany({
+      where: {
+        role: { in: last ? ['ADMIN', 'TECHNICIAN'] : ['TECHNICIAN'] },
+        active: true,
+        deletedAt: null,
+        pushSubscriptions: { some: { active: true } },
+      },
+      select: { id: true },
+    });
+    const { title, body } = confirmationReminderMessage(appointment, deadline, now, last);
+    for (const user of users) {
+      const dedupeKey = staffNotificationKey(
+        type,
+        `${appointment.id}:${since.toISOString()}:${stage}`,
+        user.id,
+      );
+      const row = await db.notification.upsert({
+        where: { dedupeKey },
+        update: {},
+        create: {
+          dedupeKey,
+          channel: 'WEB_PUSH',
+          kind: type,
+          appointmentId: appointment.id,
+          recipient: user.id,
+          data: {
+            title,
+            body,
+            url: appointmentPanelPath(appointment.id),
+            createdAt: now,
+            scheduledFor: now,
+            holdStartedAt: since.toISOString(),
+            stage,
+          },
+        },
+      });
+      ids.push(row.id);
+    }
+  }
+  return ids;
+}
+
 const AGENDA_TIME_ZONE = 'America/Guayaquil';
 /** Si la API estuvo detenida a la hora del resumen, aún se envía dentro de este margen. */
 const AGENDA_WINDOW_HOURS = 3;
@@ -289,7 +371,25 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
     await finish('CANCELLED', 'La cita fue cancelada o eliminada antes del envío');
     return 'CANCELLED' as const;
   }
-  const meta = row.data as { scheduledFor?: string; endsAt?: string };
+  const meta = row.data as {
+    scheduledFor?: string;
+    endsAt?: string;
+    holdStartedAt?: string;
+  };
+  if (type === 'CONFIRMATION_REMINDER') {
+    const a = row.appointment!;
+    const since = (a.holdStartedAt ?? a.createdAt).toISOString();
+    const reason =
+      a.status !== 'PENDING_LOCATION' || a.assignedTechnicianId
+        ? 'La cita ya se confirmó o se canceló'
+        : meta.holdStartedAt && meta.holdStartedAt !== since
+          ? 'La cita cambió de horario: hay recordatorios nuevos'
+          : null;
+    if (reason) {
+      await finish('CANCELLED', reason);
+      return 'CANCELLED' as const;
+    }
+  }
   if (type === 'COMPLETION_REMINDER') {
     const a = row.appointment!;
     const reason = !OPEN_WORK.includes(a.status)
@@ -309,7 +409,12 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
   // Un aviso programado caduca contando desde su hora prevista, no desde que se creó.
   const since = meta.scheduledFor ? new Date(meta.scheduledFor).getTime() : row.createdAt.getTime();
   // El resumen del día solo sirve a su hora: pasado el margen ya no se envía.
-  const staleAfter = type === 'DAILY_AGENDA' ? AGENDA_WINDOW_HOURS * 3600 * 1000 : STALE_AFTER_MS;
+  const staleAfter =
+    type === 'DAILY_AGENDA'
+      ? AGENDA_WINDOW_HOURS * 3600 * 1000
+      : type === 'CONFIRMATION_REMINDER'
+        ? 30 * 60000
+        : STALE_AFTER_MS;
   if (now.getTime() - since > staleAfter) {
     await finish('CANCELLED', 'Aviso caducado: no se envió a tiempo');
     return 'CANCELLED' as const;

@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GiveawayPicker } from './GiveawayPicker';
 import { StatusPill, visitDay, visitTime } from '../../components/appointments/AppointmentCard';
 import { api, ApiError } from '../../lib/api';
-import { money } from '../../lib/format';
+import { confirmByText, money } from '../../lib/format';
 import { AppointmentLocation } from '../../components/appointments/AppointmentLocation';
 
 const CAL_ISSUE = 'Confirmada en Instafix; pendiente de confirmar en Cal.com.';
@@ -450,6 +450,12 @@ export function AppointmentSheet({
             )}
 
             <div className="tech-sheet-footer">
+              {item.status === 'PENDING_LOCATION' && !item.assignedTechnician && item.confirmBy && (
+                <p className="tech-deadline-note">
+                  Confírmala antes de {confirmByText(item.confirmBy, item.timeZone)} o se cancelará
+                  sola y el horario quedará libre.
+                </p>
+              )}
               {item.status === 'PENDING_LOCATION' && !item.assignedTechnician && (
                 <BusyButton
                   type="button"

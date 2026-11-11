@@ -58,6 +58,7 @@ Service worker /sw.js                                        apps/web/src/sw/
 | `APPOINTMENT_ASSIGNED`    | Técnicos                                   | Regla preparada, sin productor |
 | `COMPLETION_REMINDER`     | El técnico asignado a la visita            | Implementado                   |
 | `DAILY_AGENDA`            | Cada técnico con visitas ese día           | Implementado                   |
+| `CONFIRMATION_REMINDER`   | Técnicos; el último también administración | Implementado                   |
 
 Solo cuenta como solicitud nueva el hecho `appointment.created` de una reserva hecha por el
 cliente (estado `PENDING_LOCATION`). Una edición, una reprogramación, una consulta de
@@ -76,6 +77,8 @@ desactiva los avisos de ese dispositivo.
 | 2 h después del primero      | «Falta completar la visita de Saúl» | «El trabajo de las 10H00 sigue sin completar. Márcalo para cerrar la cita y activar la garantía del cliente.» |
 
 Al tocarlo se abre la cita en el panel técnico. Antes de enviar cada uno se comprueba que el trabajo siga abierto (confirmado o en servicio), con el mismo técnico y el mismo horario: si ya se completó, se canceló, se reasignó o se reprogramó, no se envía (queda `CANCELLED` con el motivo). Si se confirma tarde, el primero sale al confirmar y el segundo 2 h después. Caducan 24 h después de su hora prevista.
+
+**Recordatorio para confirmar** (`CONFIRMATION_REMINDER`). Mientras una cita espera técnico: a los 10 min, a los 30 min y luego cada 30 min (tiempo activo, 07H00–22H00). Título «Cita pendiente por confirmar», texto «Saúl solicitó una cita para el jueves 26 de noviembre a las 10H00. Confírmala antes de las 14H00 o se cancelará.». A 30 min del vencimiento: «Última oportunidad: cita de Saúl», también a administración. Ver «Reserva provisional» en `docs/technicians.md`.
 
 **Resumen de trabajos del día** (`DAILY_AGENDA`). El worker revisa cada minuto la hora de Ecuador y, para cada técnico con visitas confirmadas (o en servicio) asignadas a él, crea un aviso:
 

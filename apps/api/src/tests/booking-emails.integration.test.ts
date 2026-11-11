@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import type { Request } from 'express';
 import { newToken, tokenHash } from '../auth/security';
 import { BookingController } from '../booking/booking.controller';
+import type { StaffUser } from '../auth/session';
+import { confirmAppointment } from '../staff/staff-appointments.service';
 import { db } from '../database/client';
 import { setEmailProvider } from '../mail/email.service';
 
@@ -83,6 +85,7 @@ test(
     const controller = new BookingController();
     const email = `cliente-${randomUUID()}@example.com`;
     const contact = phone();
+    const calls = calBodies.length;
     try {
       // Invitado con correo.
       const result = await controller.create(
@@ -101,9 +104,8 @@ test(
         emails.filter((e) => e.to === email).map((e) => e.subject),
         ['Recibimos tu solicitud de visita · Instafix'],
       );
-      // Cal.com no recibe ningún correo: no puede escribir al cliente ni duplicar avisos.
-      assert.equal('email' in calBodies.at(-1).attendee, false);
-      assert.equal(JSON.stringify(calBodies.at(-1)).includes(email), false);
+      // Reserva provisional: Cal.com no recibe nada al agendar (y nunca el correo del cliente).
+      assert.equal(calBodies.length, calls);
     } finally {
       await db.appointment.deleteMany({ where: { contactPhone: contact } });
     }
@@ -181,6 +183,9 @@ test(
     const contact = phone();
     calRequiresEmail = true;
     const before = calBodies.length;
+    const tech = await db.user.create({
+      data: { name: 'Técnico Correo', phone: phone(), passwordHash: 'x', role: 'TECHNICIAN' },
+    });
     try {
       const result = await controller.create(
         {
@@ -194,6 +199,8 @@ test(
         req(),
       );
       assert.ok(result.appointmentId);
+      // La reserva en Cal.com se crea al confirmar el técnico.
+      await confirmAppointment({ ...tech, role: 'TECHNICIAN' } as StaffUser, result.appointmentId);
       const sent = calBodies.slice(before);
       assert.equal(sent.length, 2, 'un intento sin correo y un reintento');
       assert.equal('email' in sent[0].attendee, false);
@@ -202,6 +209,7 @@ test(
     } finally {
       calRequiresEmail = false;
       await db.appointment.deleteMany({ where: { contactPhone: contact } });
+      await db.user.delete({ where: { id: tech.id } });
     }
   },
 );

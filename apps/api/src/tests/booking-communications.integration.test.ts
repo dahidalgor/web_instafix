@@ -9,6 +9,8 @@ import { db } from '../database/client';
 import { receiveCalWebhook } from '../integrations/cal-webhook';
 import { setEmailProvider } from '../mail/email.service';
 import { NotificationWorker } from '../notifications/notification.service';
+import type { StaffUser } from '../auth/session';
+import { confirmAppointment } from '../staff/staff-appointments.service';
 
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 const RELAY = 'reservas@instafix.ec';
@@ -96,24 +98,50 @@ function webhook(
 const sentTo = (to: string, subject: RegExp) =>
   emails.filter((e) => e.to === to && subject.test(e.subject)).length;
 
+/** Técnico que confirma las citas en estas pruebas. */
+async function technician() {
+  return db.user.create({
+    data: {
+      name: 'Técnico Agenda',
+      phone: testPhone(),
+      passwordHash: 'x',
+      role: 'TECHNICIAN',
+      phoneVerifiedAt: new Date(),
+    },
+  });
+}
+const creates = () => calCalls.filter((c) => c.url.endsWith('/bookings') && c.method === 'POST');
+
 test(
-  'Instafix creates the Cal booking, saves it and sends exactly one confirmation; Cal never gets the client email',
+  'agendar guarda una reserva provisional (Cal.com no recibe nada); al confirmar el técnico se crea en Cal.com sin el correo del cliente',
   { skip: !enabled },
   async () => {
     const controller = new BookingController();
     const phone = testPhone();
     const email = `book-${randomUUID()}@example.com`;
     const uid = `test-${randomUUID()}`;
-    const start = future(3);
+    const start = future(30 + randomInt(0, 300));
+    const tech = await technician();
     try {
-      // Carrera: el webhook BOOKING_REQUESTED llega antes que la respuesta de la API.
       calHandler = async (call) => {
         if (call.url.endsWith('/bookings') && call.method === 'POST') {
-          await receiveCalWebhook(webhook('BOOKING_REQUESTED', uid, start, phone));
+          // Carrera: el webhook BOOKING_REQUESTED llega antes que la respuesta de la API.
+          await receiveCalWebhook(
+            webhook('BOOKING_REQUESTED', uid, start, phone, {
+              metadata: {
+                instafixSource: 'api',
+                instafixAppointmentId: call.body.metadata.instafixAppointmentId,
+              },
+            }),
+          );
           return Response.json(bookingData(uid, start));
         }
+        if (call.url.includes(`/bookings/${uid}`) && call.method === 'GET')
+          return Response.json({ status: 'success', data: { uid, status: 'pending' } });
+        if (call.url.endsWith('/confirm')) return Response.json({ status: 'success' });
         return Response.json({}, { status: 404 });
       };
+      const before = creates().length;
       const result = await controller.create(
         {
           start: start.toISOString(),
@@ -125,68 +153,128 @@ test(
         },
         req(),
       );
-      const create = calCalls.find((c) => c.url.endsWith('/bookings'))!;
+      assert.equal(creates().length, before, 'agendar no crea nada en Cal.com');
+      const held = await db.appointment.findUniqueOrThrow({ where: { id: result.appointmentId } });
+      assert.equal(held.calUid, null);
+      assert.equal(held.source, 'INSTAFIX_API');
+      assert.equal(held.status, 'PENDING_LOCATION');
+      assert.ok(held.holdExpiresAt && held.holdExpiresAt > new Date());
+      assert.equal(held.contactEmail, email);
+      assert.equal(result.email.status, 'SENT');
+      assert.equal(result.account, 'GUEST');
+      assert.equal(sentTo(email, /Recibimos tu solicitud/), 1);
+      assert.equal(
+        await db.automationJob.count({ where: { appointmentId: held.id, kind: 'INITIAL' } }),
+        1,
+      );
+
+      // El técnico confirma: recién ahora se crea (y se acepta) la reserva en Cal.com.
+      const confirmed = await confirmAppointment(
+        { ...tech, role: 'TECHNICIAN' } as StaffUser,
+        held.id,
+      );
+      assert.equal(confirmed.cal, 'SYNCED');
+      const create = creates().at(-1)!;
+      assert.equal(creates().length, before + 1);
       // A Cal.com no se le envía ningún correo de asistente: solo el teléfono.
       assert.equal('email' in create.body.attendee, false);
       assert.equal(create.body.attendee.phoneNumber, phone);
       assert.equal(JSON.stringify(create.body).includes(email), false);
       assert.equal(create.body.bookingFieldsResponses.notes, 'Mi PS5 se apaga');
+      assert.equal(create.body.metadata.instafixAppointmentId, held.id);
+      // El webhook que llegó antes se enlazó a la misma cita: no hay otra fila ni otro aviso.
       assert.equal(await db.appointment.count({ where: { calUid: uid } }), 1);
-      const appointment = await db.appointment.findUniqueOrThrow({ where: { calUid: uid } });
-      assert.equal(appointment.source, 'INSTAFIX_API');
-      assert.equal(appointment.contactEmail, email);
-      assert.equal(appointment.contactPhone, phone);
-      assert.equal(result.email.status, 'SENT');
-      assert.equal(result.account, 'GUEST');
-      assert.equal(sentTo(email, /Recibimos tu solicitud/), 1);
-      // BOOKING_CREATED/REQUESTED repetidos no generan otro correo.
+      const after = await db.appointment.findUniqueOrThrow({ where: { id: held.id } });
+      assert.equal(after.calUid, uid);
+      assert.equal(after.status, 'CONFIRMED');
+      assert.equal(after.calStatus, 'accepted');
       await receiveCalWebhook(
         webhook('BOOKING_CREATED', uid, start, phone, { status: 'ACCEPTED' }),
       );
-      await receiveCalWebhook(webhook('BOOKING_REQUESTED', uid, start, phone));
-      assert.equal(emails.filter((e) => e.to === email).length, 1);
-      assert.equal(
-        await db.notification.count({ where: { appointmentId: appointment.id, channel: 'EMAIL' } }),
-        1,
-      );
-      // WhatsApp inicial (pedir ubicación) encolado una sola vez.
-      assert.equal(
-        await db.automationJob.count({ where: { appointmentId: appointment.id, kind: 'INITIAL' } }),
-        1,
-      );
+      assert.equal(sentTo(email, /Recibimos tu solicitud/), 1);
+      assert.equal(await db.appointment.count({ where: { contactPhone: phone } }), 1);
     } finally {
       await db.appointment.deleteMany({ where: { contactPhone: phone } });
+      await db.user.delete({ where: { id: tech.id } });
     }
   },
 );
 
-test('Cal.com failure creates nothing and sends nothing', { skip: !enabled }, async () => {
-  const controller = new BookingController();
-  const phone = testPhone();
-  const email = `fail-${randomUUID()}@example.com`;
-  calHandler = async () => Response.json({ error: 'slot unavailable' }, { status: 400 });
-  await assert.rejects(
-    controller.create(
-      {
-        start: future(4).toISOString(),
-        name: 'Cliente',
-        email,
-        phone,
-        request: 'Laptop lenta',
-        whatsappConsent: true,
-      },
-      req(),
-    ),
-    // Sin evidencia de que el horario se ocupó (Cal.com también falla al consultar horarios),
-    // no se culpa al horario: es un rechazo de la agenda.
-    (e: any) => e.getStatus() === 502 && e.getResponse().code === 'BOOKING_REJECTED',
-  );
-  assert.equal(await db.appointment.count({ where: { contactPhone: phone } }), 0);
-  assert.equal(emails.filter((e) => e.to === email).length, 0);
-});
+test(
+  'dos clientes no pueden quedarse el mismo horario: la reserva provisional lo ocupa',
+  { skip: !enabled },
+  async () => {
+    const controller = new BookingController();
+    const first = testPhone();
+    const second = testPhone();
+    const start = future(30 + randomInt(0, 300));
+    calHandler = async () => Response.json({}, { status: 404 });
+    const body = (phone: string) => ({
+      start: start.toISOString(),
+      name: 'Cliente',
+      phone,
+      request: 'Revisión',
+      whatsappConsent: true,
+    });
+    try {
+      await controller.create(body(first), req());
+      await assert.rejects(
+        controller.create(body(second), req()),
+        (e: any) => e.getStatus() === 409 && e.getResponse().code === 'SLOT_UNAVAILABLE',
+      );
+      assert.equal(await db.appointment.count({ where: { contactPhone: second } }), 0);
+    } finally {
+      await db.appointment.deleteMany({ where: { contactPhone: { in: [first, second] } } });
+    }
+  },
+);
 
 test(
-  'customer reschedule and cancel: one email each, webhooks do not duplicate, Cal failure sends nothing',
+  'Cal.com rechaza al confirmar: la cita sigue pendiente, sin correo de confirmación',
+  { skip: !enabled },
+  async () => {
+    const controller = new BookingController();
+    const phone = testPhone();
+    const email = `fail-${randomUUID()}@example.com`;
+    const start = future(30 + randomInt(0, 300));
+    const tech = await technician();
+    calHandler = async () => Response.json({}, { status: 404 });
+    try {
+      const { appointmentId } = await controller.create(
+        {
+          start: start.toISOString(),
+          name: 'Cliente',
+          email,
+          phone,
+          request: 'Laptop lenta',
+          whatsappConsent: true,
+        },
+        req(),
+      );
+      // Cal.com rechaza la reserva y su disponibilidad ya no ofrece ese horario.
+      calHandler = async (call) =>
+        call.url.includes('/slots')
+          ? Response.json({ status: 'success', data: {} })
+          : Response.json({ error: 'slot unavailable' }, { status: 400 });
+      await assert.rejects(
+        confirmAppointment({ ...tech, role: 'TECHNICIAN' } as StaffUser, appointmentId),
+        (e: any) => e.getStatus() === 409 && /ya no está libre en Cal\.com/.test(e.message),
+      );
+      const row = await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
+      assert.equal(row.status, 'PENDING_LOCATION');
+      assert.equal(row.assignedTechnicianId, null);
+      assert.equal(row.calUid, null);
+      assert.match(row.automationIssue ?? '', /ya no está libre en Cal\.com/);
+      assert.equal(sentTo(email, /confirmada/), 0);
+    } finally {
+      await db.appointment.deleteMany({ where: { contactPhone: phone } });
+      await db.user.delete({ where: { id: tech.id } });
+    }
+  },
+);
+
+test(
+  'customer reschedule and cancel: one email each; a confirmed visit leaves Cal.com when it goes back to pending',
   { skip: !enabled },
   async () => {
     const controller = new BookingController();
@@ -210,18 +298,21 @@ test(
       },
     });
     const cookie = `instafix_session=${token}`;
+    const tech = await technician();
     const uid = `test-${randomUUID()}`;
-    const newUid = `test-${randomUUID()}`;
-    const start = future(5);
-    const moved = future(6, 15);
+    const base = 30 + randomInt(0, 300);
+    const start = future(base);
+    const moved = future(base + 1, 15);
+    const later = future(base + 2, 16);
+    const cancelled: string[] = [];
     try {
       calHandler = async (call) => {
-        if (call.url.endsWith('/bookings'))
-          return Response.json(bookingData(uid, start, 'accepted'));
-        if (call.url.endsWith(`/${uid}/reschedule`))
-          return Response.json(bookingData(newUid, moved, 'accepted'));
-        if (call.url.endsWith('/cancel'))
-          return Response.json({ status: 'error' }, { status: 500 });
+        if (call.url.endsWith('/bookings') && call.method === 'POST')
+          return Response.json(bookingData(uid, new Date(call.body.start), 'accepted'));
+        if (call.url.endsWith('/cancel')) {
+          cancelled.push(call.url);
+          return Response.json({ status: 'success', data: {} });
+        }
         return Response.json({}, { status: 404 });
       };
       // Con sesión, los datos del formulario se ignoran: manda la cuenta verificada.
@@ -236,51 +327,52 @@ test(
         req(cookie),
       );
       assert.equal(result.account, 'LINKED');
-      const appointment = await db.appointment.findUniqueOrThrow({
-        where: { id: result.appointmentId },
-      });
+      const id = result.appointmentId;
+      const appointment = await db.appointment.findUniqueOrThrow({ where: { id } });
       assert.equal(appointment.userId, user.id);
       assert.equal(appointment.contactPhone, phone);
       assert.equal(sentTo(email, /Recibimos tu solicitud/), 1);
-      // Agendada ≠ confirmada: ningún correo de confirmación hasta que un técnico la confirme.
       assert.equal(sentTo(email, /confirmada/), 0);
 
-      await controller.reschedule(appointment.id, { start: moved.toISOString() }, req(cookie));
-      const after = await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
-      assert.equal(after.calUid, newUid);
+      // Reprogramar una reserva provisional: solo cambia en Instafix.
+      await controller.reschedule(id, { start: moved.toISOString() }, req(cookie));
+      let after = await db.appointment.findUniqueOrThrow({ where: { id } });
       assert.equal(after.startsAt.getTime(), moved.getTime());
+      assert.equal(after.calUid, null);
       assert.equal(sentTo(email, /reprogramada/), 1);
-      // Webhook de la misma reprogramación: sin segunda fila ni segundo correo.
-      await receiveCalWebhook(
-        webhook('BOOKING_RESCHEDULED', newUid, moved, phone, {
-          rescheduleUid: uid,
-          status: 'ACCEPTED',
-        }),
-      );
-      assert.equal(sentTo(email, /reprogramada/), 1);
-      assert.equal(await db.appointment.count({ where: { userId: user.id } }), 1);
+      assert.equal(cancelled.length, 0);
 
-      // Cancelación fallida en Cal.com: ni cambio de estado ni correo. Aunque Cal.com aceptó la
-      // reserva, sigue pendiente hasta que un técnico la confirme.
-      await assert.rejects(controller.cancel(appointment.id, req(cookie)));
+      // Confirmada (ya en Cal.com) y reprogramada por el cliente: vuelve a pendiente y su
+      // reserva en Cal.com se cancela; ese webhook no cancela la cita.
+      await confirmAppointment({ ...tech, role: 'TECHNICIAN' } as StaffUser, id);
+      assert.equal((await db.appointment.findUniqueOrThrow({ where: { id } })).calUid, uid);
+      await controller.reschedule(id, { start: later.toISOString() }, req(cookie));
+      after = await db.appointment.findUniqueOrThrow({ where: { id } });
+      assert.equal(after.status, 'PENDING_LOCATION');
+      assert.equal(after.assignedTechnicianId, null);
+      assert.equal(after.calUid, null);
+      assert.ok(after.holdExpiresAt);
+      assert.ok(cancelled.some((url) => url.includes(uid)));
+      await receiveCalWebhook(webhook('BOOKING_CANCELLED', uid, start, phone));
       assert.equal(
-        (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status,
+        (await db.appointment.findUniqueOrThrow({ where: { id } })).status,
         'PENDING_LOCATION',
       );
-      assert.equal(sentTo(email, /cancelada/), 0);
+      assert.equal(sentTo(email, /reprogramada/), 2);
 
-      calHandler = async () => Response.json({ status: 'success', data: {} });
-      await controller.cancel(appointment.id, req(cookie));
-      assert.equal(
-        (await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status,
-        'CANCELLED',
-      );
+      // Cancelar una reserva provisional: no llama a Cal.com y avisa una vez.
+      const calls = cancelled.length;
+      await controller.cancel(id, req(cookie));
+      assert.equal((await db.appointment.findUniqueOrThrow({ where: { id } })).status, 'CANCELLED');
+      assert.equal(cancelled.length, calls);
       assert.equal(sentTo(email, /cancelada/), 1);
-      await receiveCalWebhook(webhook('BOOKING_CANCELLED', newUid, moved, phone));
+      const again = await controller.cancel(id, req(cookie));
+      assert.equal(again.alreadyCancelled, true);
       assert.equal(sentTo(email, /cancelada/), 1);
     } finally {
       await db.appointment.deleteMany({ where: { userId: user.id } });
       await db.user.delete({ where: { id: user.id } });
+      await db.user.delete({ where: { id: tech.id } });
     }
   },
 );
@@ -293,10 +385,14 @@ test(
     const phone = testPhone();
     const email = `host-${randomUUID()}@example.com`;
     const uid = `test-${randomUUID()}`;
-    const start = future(7);
+    const start = future(30 + randomInt(0, 300));
+    const tech = await technician();
     try {
-      calHandler = async () => Response.json(bookingData(uid, start));
-      await controller.create(
+      calHandler = async (call) =>
+        call.url.endsWith('/bookings') && call.method === 'POST'
+          ? Response.json(bookingData(uid, start, 'accepted'))
+          : Response.json({}, { status: 404 });
+      const { appointmentId } = await controller.create(
         {
           start: start.toISOString(),
           name: 'Cliente',
@@ -307,6 +403,7 @@ test(
         },
         req(),
       );
+      await confirmAppointment({ ...tech, role: 'TECHNICIAN' } as StaffUser, appointmentId);
       await receiveCalWebhook(webhook('BOOKING_CANCELLED', uid, start, phone));
       await receiveCalWebhook(webhook('BOOKING_CANCELLED', uid, start, phone));
       // El webhook responde sin esperar al proveedor; la bandeja entrega el aviso.
@@ -316,6 +413,7 @@ test(
       assert.equal(sentTo(email, /cancelada/), 1);
     } finally {
       await db.appointment.deleteMany({ where: { contactPhone: phone } });
+      await db.user.delete({ where: { id: tech.id } });
     }
   },
 );

@@ -12,6 +12,8 @@ export const staffNotificationTypes = [
   'APPOINTMENT_ASSIGNED',
   /** Al técnico asignado: marcar como completado el trabajo (2 h y 4 h después del fin). */
   'COMPLETION_REMINDER',
+  /** A los técnicos: una cita sigue sin confirmar y se cancelará si nadie la confirma. */
+  'CONFIRMATION_REMINDER',
   /** Al técnico: sus trabajos de mañana (19H00) y de hoy (08H00). */
   'DAILY_AGENDA',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */
@@ -215,4 +217,41 @@ export function dailyAgendaMessage(
   return stage === 'TODAY'
     ? { title: '¡Recuerda tus trabajos de hoy!', body }
     : { title: `Mañana tienes ${count}`, body };
+}
+
+/**
+ * Recordatorios para confirmar una cita pendiente (minutos activos desde que llegó la cita):
+ * a los 10, a los 30 y luego cada 30. El último aviso sale 30 min antes de que venza.
+ */
+export const confirmationReminderMinutes = { first: 10, second: 30, every: 30, lastBefore: 30 };
+
+const lowerFirst = (text: string) => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+
+/** Título y cuerpo del aviso «confirma esta cita» (`last` = última oportunidad). */
+export function confirmationReminderMessage(
+  input: { contactName: string | null | undefined; startsAt: Date; timeZone: string },
+  deadline: Date,
+  now: Date,
+  last: boolean,
+) {
+  const { day, time } = formatAppointmentMoment(input.startsAt, input.timeZone);
+  const limit = formatAppointmentMoment(deadline, input.timeZone);
+  const today = formatAppointmentMoment(now, input.timeZone).day === limit.day;
+  const before = today
+    ? `antes de las ${limit.time}`
+    : `antes del ${lowerFirst(limit.day)} a las ${limit.time}`;
+  const at = today ? `a las ${limit.time}` : `el ${lowerFirst(limit.day)} a las ${limit.time}`;
+  const who = customerFirstName(input.contactName);
+  const visit = `el ${lowerFirst(day)} a las ${time}`;
+  return last
+    ? {
+        title: who
+          ? `Última oportunidad: cita de ${who}`
+          : 'Última oportunidad para confirmar una cita',
+        body: `Se cancela ${at} si nadie la confirma. Es para ${visit}.`,
+      }
+    : {
+        title: 'Cita pendiente por confirmar',
+        body: `${who ?? 'Un cliente'} solicitó una cita para ${visit}. Confírmala ${before} o se cancelará.`,
+      };
 }

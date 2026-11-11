@@ -7,12 +7,23 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Appointment, AppointmentService, Prisma } from '@prisma/client';
 import { giveaway, giveawayOpen, type StaffAppointment } from '@instafix/contracts';
 import type { StaffUser } from '../auth/session';
 import { db } from '../database/client';
-import { confirmCalBooking } from '../integrations/cal-client';
+import {
+  cancelCalBooking,
+  confirmCalBooking,
+  isCalSlotAvailable,
+  type CalHttpError,
+} from '../integrations/cal-client';
+import { ProviderError } from '../integrations/provider-error';
+import { logEvent } from '../common/log-event';
+import { exclusiveWait } from '../security/idempotency';
+import { createAgendaBooking } from '../booking/booking.service';
+import { confirmDeadline } from '../booking/hold';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
 import { cancelPendingJobs, lockAppointment } from '../whatsapp/queue';
@@ -71,6 +82,7 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     completedAt: a.completedAt?.toISOString() ?? null,
     ...(manage ? { technicianNotes: a.technicianNotes } : {}),
     giveawayEntries: a.giveawayEntries,
+    confirmBy: confirmDeadline(a)?.toISOString() ?? null,
     services: a.services.map((s) => ({
       id: s.id,
       offeringId: s.offeringId,
@@ -187,47 +199,146 @@ export async function retryCalConfirmations(now = new Date()) {
   }
 }
 
+/** El horario ya no está libre en Cal.com (reserva directa, bloqueo del calendario…). */
+export const CAL_SLOT_ISSUE =
+  'Ese horario ya no está libre en Cal.com: cambia la fecha y hora de la cita para poder confirmarla.';
+
+/** Comprobaciones previas a confirmar (se repiten dentro de la transacción). */
+function assertClaimable(current: Appointment | null, user: StaffUser, now: Date) {
+  if (!current || current.deletedAt) throw new NotFoundException('Cita no encontrada');
+  if (current.status === 'CONFIRMED' && current.assignedTechnicianId === user.id) return 'MINE';
+  if (current.status === 'CANCELLED')
+    throw new ConflictException(
+      current.autoCancelReason
+        ? 'Esta cita se canceló automáticamente porque venció su plazo.'
+        : 'Esta cita fue cancelada.',
+    );
+  if (current.assignedTechnicianId || current.status !== 'PENDING_LOCATION')
+    throw new ConflictException(takenMessage);
+  if (current.endsAt <= now) throw new BadRequestException('Esta cita ya pasó.');
+  if (current.bookingIdentityIssue)
+    throw new BadRequestException(
+      'Los datos de contacto de esta cita están en revisión. Resuélvelo en Administración antes de confirmarla.',
+    );
+  return 'CLAIMABLE';
+}
+
 /**
- * Confirmar = asignarse la cita. La identidad sale de la sesión. El bloqueo por cita y la
- * actualización condicional garantizan que, ante dos técnicos simultáneos, solo uno la obtenga
- * y que solo se publique un evento (un correo, un WhatsApp).
+ * Reserva provisional → reserva real en Cal.com, al confirmar. Si Cal.com ya no tiene ese
+ * horario, la confirmación no ocurre y la cita queda marcada para que administración la mueva.
+ */
+async function reserveInCal(a: Appointment) {
+  try {
+    return await createAgendaBooking({
+      start: a.startsAt,
+      name: a.contactName || 'Cliente Instafix',
+      phone: a.contactPhone,
+      request: a.title,
+      whatsappConsent: Boolean(a.whatsappConsentAt),
+      appointmentId: a.id,
+    });
+  } catch (error) {
+    const status = error instanceof ProviderError ? (error as CalHttpError).httpStatus : undefined;
+    const check =
+      error instanceof ProviderError && error.disposition === 'FAILED' && status
+        ? await isCalSlotAvailable(a.startsAt).catch(() => null)
+        : null;
+    logEvent(
+      'staff.confirm_cal_rejected',
+      {
+        appointmentId: a.id,
+        calStatus: status ?? null,
+        available: check?.available ?? null,
+        reason:
+          error instanceof ProviderError
+            ? (error as CalHttpError).providerMessage || error.message
+            : 'Error inesperado',
+      },
+      'warn',
+    );
+    if (check && !check.available) {
+      await db.appointment.updateMany({
+        where: { id: a.id, status: 'PENDING_LOCATION' },
+        data: { automationIssue: CAL_SLOT_ISSUE },
+      });
+      throw new ConflictException(
+        'Ese horario ya no está libre en Cal.com. Pide a administración que cambie la fecha y hora de la cita.',
+      );
+    }
+    if (error instanceof ProviderError && error.disposition === 'REVIEW')
+      throw new ServiceUnavailableException(
+        'Cal.com no respondió a tiempo. Espera un minuto y revisa si la cita ya aparece confirmada antes de intentarlo otra vez.',
+      );
+    throw new ServiceUnavailableException(
+      'Cal.com no aceptó la reserva en este momento. Inténtalo de nuevo en unos minutos.',
+    );
+  }
+}
+
+/**
+ * Confirmar = asignarse la cita. La identidad sale de la sesión. Una sola operación por cita a
+ * la vez y la actualización condicional garantizan que, ante dos técnicos simultáneos, solo uno
+ * la obtenga y que solo se publique un evento (un correo, un WhatsApp). Si la cita era una
+ * reserva provisional, la reserva de Cal.com se crea recién aquí.
  */
 export async function confirmAppointment(user: StaffUser, id: string, now = new Date()) {
-  const outcome = await db.$transaction(async (tx) => {
-    await lockAppointment(tx, id);
-    const current = await tx.appointment.findUnique({ where: { id } });
-    if (!current || current.deletedAt) throw new NotFoundException('Cita no encontrada');
-    // Repetir la acción (doble pulsación, reintento de red) no genera otra confirmación.
-    if (current.status === 'CONFIRMED' && current.assignedTechnicianId === user.id)
+  const outcome = await exclusiveWait(`appointment:${id}`, async () => {
+    const before = await db.appointment.findUnique({ where: { id } });
+    if (assertClaimable(before, user, now) === 'MINE')
       return { already: true, notifications: [] as string[] };
-    if (current.status === 'CANCELLED') throw new ConflictException('Esta cita fue cancelada.');
-    if (current.assignedTechnicianId || current.status !== 'PENDING_LOCATION')
-      throw new ConflictException(takenMessage);
-    if (current.endsAt <= now) throw new BadRequestException('Esta cita ya pasó.');
-    if (current.bookingIdentityIssue)
-      throw new BadRequestException(
-        'Los datos de contacto de esta cita están en revisión. Resuélvelo en Administración antes de confirmarla.',
+    // Solo una reserva provisional de la web pasa a Cal.com; las manuales no están en la agenda.
+    const created =
+      !before!.calUid && before!.source === 'INSTAFIX_API' ? await reserveInCal(before!) : null;
+    // Cal.com debe reservar exactamente ese horario; si no, se anula y no se confirma.
+    if (created && created.start.getTime() !== before!.startsAt.getTime()) {
+      await cancelCalBooking(created.uid, 'Horario distinto al solicitado').catch(() =>
+        logEvent('staff.confirm_cal_release_failed', { appointmentId: id }, 'warn'),
       );
-    const claimed = await tx.appointment.updateMany({
-      where: { id, status: 'PENDING_LOCATION', assignedTechnicianId: null },
-      data: {
-        status: 'CONFIRMED',
-        assignedTechnicianId: user.id,
-        technician: user.name,
-        confirmedAt: now,
-        confirmedById: user.id,
-      },
-    });
-    if (!claimed.count) throw new ConflictException(takenMessage);
-    const updated = await tx.appointment.findUniqueOrThrow({ where: { id } });
-    await activity(tx, id, user.id, 'CONFIRMED', { technicianId: user.id });
-    const notifications = await publishAppointmentEvent(
-      tx,
-      updated,
-      { type: 'appointment.confirmed', technicianName: user.name },
-      now,
-    );
-    return { already: false, notifications };
+      logEvent('staff.confirm_cal_mismatch', { appointmentId: id }, 'warn');
+      throw new ServiceUnavailableException(
+        'Cal.com reservó otro horario. Pide a administración que revise la cita.',
+      );
+    }
+    try {
+      return await db.$transaction(async (tx) => {
+        await lockAppointment(tx, id);
+        const current = await tx.appointment.findUnique({ where: { id } });
+        // Repetir la acción (doble pulsación, reintento de red) no genera otra confirmación.
+        if (assertClaimable(current, user, now) === 'MINE')
+          return { already: true, notifications: [] as string[] };
+        const claimed = await tx.appointment.updateMany({
+          where: { id, status: 'PENDING_LOCATION', assignedTechnicianId: null },
+          data: {
+            status: 'CONFIRMED',
+            assignedTechnicianId: user.id,
+            technician: user.name,
+            confirmedAt: now,
+            confirmedById: user.id,
+            ...(created
+              ? { calUid: created.uid, calStatus: created.status, endsAt: created.end }
+              : {}),
+            ...(current!.automationIssue === CAL_SLOT_ISSUE ? { automationIssue: null } : {}),
+          },
+        });
+        if (!claimed.count) throw new ConflictException(takenMessage);
+        const updated = await tx.appointment.findUniqueOrThrow({ where: { id } });
+        await activity(tx, id, user.id, 'CONFIRMED', { technicianId: user.id });
+        const notifications = await publishAppointmentEvent(
+          tx,
+          updated,
+          { type: 'appointment.confirmed', technicianName: user.name },
+          now,
+        );
+        return { already: false, notifications };
+      });
+    } catch (error) {
+      // No quedó confirmada: la reserva recién creada en Cal.com se libera.
+      if (created)
+        await cancelCalBooking(created.uid, 'Confirmación no completada en Instafix').catch(() =>
+          logEvent('staff.confirm_cal_release_failed', { appointmentId: id }, 'warn'),
+        );
+      throw error;
+    }
   });
   const cal = outcome.already ? 'NOT_APPLICABLE' : await syncCalConfirmation(id);
   await deliverNow(outcome.notifications);

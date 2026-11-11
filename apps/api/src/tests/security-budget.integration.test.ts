@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomInt, randomUUID } from 'node:crypto';
-import { test } from 'node:test';
+import { beforeEach, test } from 'node:test';
 import type { Request } from 'express';
 import { PeopleAdminController } from '../admin/people-admin.controller';
 import { AppointmentsController } from '../appointments/appointments.controller';
@@ -31,8 +31,13 @@ Object.assign(process.env, {
 setEmailProvider({ name: 'TEST', send: async () => ({ messageId: null }) });
 
 const testPhone = () => `+59397${String(randomInt(1000000, 9999999))}`;
+// Cada prueba usa fechas propias: las reservas provisionales ocupan su horario de verdad.
+let shift = 0;
+beforeEach(() => {
+  shift = randomInt(30, 900);
+});
 const future = (days: number, hourUtc = 15) => {
-  const d = new Date(Date.now() + days * 86400000);
+  const d = new Date(Date.now() + (days + shift) * 86400000);
   d.setUTCHours(hourUtc, 0, 0, 0);
   return d;
 };
@@ -283,7 +288,8 @@ test(
     const reload = await controller.create(body, req(cookie));
     assert.equal(again.appointmentId, first.appointmentId);
     assert.equal(reload.appointmentId, first.appointmentId);
-    assert.equal(creates() - before, 1);
+    // Reserva provisional: Cal.com no recibe nada hasta que un técnico confirma.
+    assert.equal(creates() - before, 0);
     const id = first.appointmentId;
     assert.equal((await jobs(id)).filter((j) => j.kind === 'INITIAL').length, 1);
 
@@ -293,6 +299,8 @@ test(
     const second = await confirmAppointment(staff, id);
     assert.equal(second.alreadyConfirmed, true);
     assert.equal((await jobs(id)).filter((j) => j.kind === 'CONFIRMED').length, 1);
+    // Al confirmar se crea una sola reserva en Cal.com.
+    assert.equal(creates() - before, 1);
 
     // Un reintento técnico del worker no reenvía un mensaje ya enviado.
     await runJobs(id);
@@ -501,7 +509,8 @@ test(
       { confirm: true },
       req(admin.cookie),
     );
-    assert.equal(done.calReleased, true);
+    // Era una reserva provisional: no estaba en Cal.com y eliminarla libera el horario.
+    assert.equal(done.calReleased, false);
     const row = await db.appointment.findUniqueOrThrow({ where: { id: created.appointmentId } });
     // Eliminada ≠ cancelada: el historial se conserva y deja de mostrarse.
     assert.ok(row.deletedAt);

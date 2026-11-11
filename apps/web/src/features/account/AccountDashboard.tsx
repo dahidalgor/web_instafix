@@ -299,6 +299,17 @@ export function AccountDashboard() {
                           pending="Pendiente: envíanos tu ubicación por WhatsApp"
                         />
                       ) : null}
+                      {item.status === 'CANCELLED' && item.autoCancelReason && (
+                        <div className="appt-meta-wide">
+                          <dt>Cancelada automáticamente</dt>
+                          <dd>
+                            {item.autoCancelReason.includes('cliente no respondió')
+                              ? 'No recibimos tu respuesta por WhatsApp a tiempo y el horario quedó libre.'
+                              : 'No pudimos confirmarla a tiempo y el horario quedó libre.'}{' '}
+                            Puedes agendar otra cita cuando quieras.
+                          </dd>
+                        </div>
+                      )}
                       {!!item.services?.length && (
                         <div className="appt-meta-wide">
                           <dt>Servicios realizados</dt>

@@ -10,6 +10,7 @@ import { WhatsAppService } from './whatsapp.service';
 import { lockAppointment, queueJob, queueReminders } from './queue';
 import { deliveryState } from './delivery';
 import { budgetVerdict, logSuppressed } from './budget';
+import { responseDeadline, usesHold } from '../booking/hold';
 
 type Providers = {
   send: (
@@ -116,6 +117,18 @@ export async function processJob(id: string, providers: Providers, now = new Dat
                 ...delivery,
               },
             });
+            // Desde que sale el WhatsApp inicial corre el plazo para que el cliente responda.
+            if (
+              job.kind === 'INITIAL' &&
+              appointment.status === 'PENDING_LOCATION' &&
+              !appointment.assignedTechnicianId &&
+              !appointment.locationReceivedAt &&
+              usesHold(appointment)
+            )
+              await tx.appointment.update({
+                where: { id: appointment.id },
+                data: { responseDueAt: responseDeadline(now) },
+              });
           }
         } catch (error) {
           const failure =
