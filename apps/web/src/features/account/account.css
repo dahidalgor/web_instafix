@@ -643,7 +643,7 @@
   stroke: #2e2840;
 }
 
-/* Sorteo vigente: aviso con el total y etiqueta en cada servicio que participa. */
+/* Sorteo abierto: aviso con el total y etiqueta en cada servicio que participa. */
 .giveaway-banner {
   display: grid;
   gap: 4px;

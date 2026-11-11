@@ -8,9 +8,9 @@ import { AppointmentsController } from '../appointments/appointments.controller'
 import { newToken, tokenHash } from '../auth/security';
 import { CatalogController } from '../catalog/catalog.controller';
 import { db } from '../database/client';
+import { closeOpenGiveaways } from './giveaway-helpers';
 import { setEmailProvider } from '../mail/email.service';
 import { NotificationWorker } from '../notifications/notification.service';
-import { giveawayOpen } from '@instafix/contracts';
 import { CAL_SYNC_ISSUE } from '../staff/staff-appointments.service';
 import { StaffController } from '../staff/staff.controller';
 import { TeamController } from '../staff/team.controller';
@@ -356,6 +356,7 @@ test(
   async () => {
     const staff = new StaffController();
     const account = new AccountController();
+    let cleanupGiveaway: string | null = null;
     const tech = await member('TECHNICIAN', 'Anthony Servicios');
     const other = await member('TECHNICIAN', 'Otro Servicios');
     const customer = await member(
@@ -445,13 +446,27 @@ test(
           endsAt: new Date(Date.now() + 3600000),
         },
       });
-      // Cantidad de mandos fuera de rango: rechazada sin completar.
+      // Sin sorteo abierto no se aceptan participaciones.
+      await closeOpenGiveaways();
+      await assert.rejects(
+        staff.complete(appointment.id, { giveawayEntries: 1 }, req(tech.token)),
+        (e) => status(e) === 400,
+      );
+      const giveaway = await db.giveaway.create({
+        data: {
+          prize: 'Premio de prueba',
+          drawDate: '2999-12-31',
+          entryRule: 'Una participación por cada mando reparado.',
+          maxEntries: 20,
+        },
+      });
+      cleanupGiveaway = giveaway.id;
+      // Más participaciones que el máximo del sorteo: rechazada sin completar.
       await assert.rejects(
         staff.complete(appointment.id, { giveawayEntries: 21 }, req(tech.token)),
         (e) => status(e) === 400,
       );
-      // Tras el día del sorteo ya no se aceptan participaciones: la prueba sigue siendo válida.
-      const entries = giveawayOpen() ? 2 : 0;
+      const entries = 2;
       const done = await staff.complete(
         appointment.id,
         { giveawayEntries: entries },
@@ -507,6 +522,8 @@ test(
       assert.match(jobs[0].warrantyTerms, /Garantía de 30 días/);
       // Las participaciones del sorteo pasan de la visita al trabajo de la cuenta.
       assert.equal(jobs[0].giveawayEntries, entries);
+      assert.equal(jobs[0].giveaway?.prize, 'Premio de prueba');
+      assert.equal(stored.giveawayId, giveaway.id);
       // Repetir la consulta no duplica el trabajo.
       assert.equal(
         (await account.jobs(req(customer.token))).filter((j) => j.appointmentId === appointment.id)
@@ -519,6 +536,7 @@ test(
     } finally {
       await db.completedJob.deleteMany({ where: { userId: customer.user.id } });
       await db.appointment.deleteMany({ where: { id: appointment.id } });
+      if (cleanupGiveaway) await db.giveaway.delete({ where: { id: cleanupGiveaway } });
       await db.offering.deleteMany({ where: { id: { in: [maintenance.id, metal.id] } } });
       await db.equipment.delete({ where: { id: equipment.id } });
       await db.user.deleteMany({

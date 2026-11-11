@@ -14,6 +14,12 @@ export class AccountController {
     return db.completedJob.findMany({
       where: { userId: user.id },
       orderBy: { completedAt: 'desc' },
+      // Sorteo de cada trabajo: la cuenta muestra las participaciones mientras siga abierto.
+      include: {
+        giveaway: {
+          select: { id: true, prize: true, drawDate: true, entryRule: true, closedAt: true },
+        },
+      },
     });
   }
 

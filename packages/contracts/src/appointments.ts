@@ -141,6 +141,8 @@ export type StaffAppointment = {
   services: PerformedService[];
   /** Participaciones en el sorteo marcadas por el técnico al completar. */
   giveawayEntries: number;
+  /** Premio del sorteo en que participa la visita (si participa). */
+  giveawayPrize?: string | null;
   /** Pendiente: si nadie la confirma antes de este momento, se cancela sola. */
   confirmBy?: string | null;
   /** Técnico: motivo por el que no puede confirmar esta cita (horario ocupado u otra visita). */

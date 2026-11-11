@@ -774,3 +774,61 @@
 .appt-move .small {
   margin: 0;
 }
+.giveaway-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.giveaway-toolbar label {
+  flex: 1 1 280px;
+  margin: 0;
+}
+.giveaway-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.giveaway-form {
+  display: grid;
+  gap: 4px;
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.giveaway-form h3 {
+  margin-top: 0;
+}
+.giveaway-offerings {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  margin: 0 0 14px;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+}
+.giveaway-offerings legend {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.giveaway-offerings .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+}
+.giveaway-offerings .checkbox-label input {
+  width: auto;
+  margin: 0;
+}
+.giveaway-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { test } from 'node:test';
 import type { Request } from 'express';
-import { GiveawayAdminController } from '../admin/giveaway-admin.controller';
+import { GiveawayAdminController } from '../giveaways/giveaway-admin.controller';
 import { newToken, tokenHash } from '../auth/security';
 import { db } from '../database/client';
+import { closeOpenGiveaways } from './giveaway-helpers';
 
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 const tag = `Sorteo${randomInt(1e6)}`;
@@ -39,11 +40,16 @@ const status = async (promise: Promise<unknown>) => {
   }
 };
 
+const inDays = (days: number) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(
+    new Date(Date.now() + days * 86400000),
+  );
+
 test(
-  'sorteo en administración: participantes por persona y corrección de visitas',
+  'sorteos en administración: crear (uno abierto a la vez), participantes, corrección y cierre',
   { skip: !enabled },
   async () => {
-    const giveaway = new GiveawayAdminController();
+    const controller = new GiveawayAdminController();
     const admin = await person('ADMIN', `Admin ${tag}`);
     const tech = await person('TECHNICIAN', `Técnico ${tag}`);
     const customer = await person('CUSTOMER', `Paul ${tag}`);
@@ -64,20 +70,43 @@ test(
         },
       });
     const ids: string[] = [];
+    const giveaways: string[] = [];
+    await closeOpenGiveaways();
     try {
-      // Dos visitas del mismo cliente (con cuenta) y una de un invitado.
-      const a = await visit({
-        userId: customer.user.id,
-        status: 'COMPLETED',
-        completedAt: new Date(),
-        giveawayEntries: 2,
-      });
-      const b = await visit({
-        userId: customer.user.id,
-        status: 'COMPLETED',
-        completedAt: new Date(),
-        giveawayEntries: 1,
-      });
+      // Solo administración.
+      const input = {
+        prize: `Premio ${tag}`,
+        drawDate: inDays(10),
+        entryRule: 'Una participación por cada mando con par de joysticks.',
+        maxEntries: 5,
+      };
+      assert.equal(await status(controller.create(input, tech.req)), 403);
+      assert.equal(await status(controller.list(customer.req)), 403);
+
+      // Validación: premio, fecha pasada, regla corta, campos extra, servicio inexistente.
+      for (const bad of [
+        { ...input, prize: 'X' },
+        { ...input, drawDate: inDays(-1) },
+        { ...input, entryRule: 'corta' },
+        { ...input, maxEntries: 0 },
+        { ...input, extra: true },
+        { ...input, eligibleOfferingIds: ['no-existe'] },
+      ])
+        assert.equal(await status(controller.create(bad, admin.req)), 400);
+
+      const created = await controller.create(input, admin.req);
+      giveaways.push(created.id);
+      assert.equal(created.open, true);
+      // Solo uno abierto a la vez.
+      assert.equal(
+        await status(controller.create({ ...input, prize: `Otro ${tag}` }, admin.req)),
+        409,
+      );
+
+      // Dos visitas del mismo cliente (con cuenta) en este sorteo y una de un invitado sin marcar.
+      const inThis = { status: 'COMPLETED', completedAt: new Date(), giveawayId: created.id };
+      const a = await visit({ ...inThis, userId: customer.user.id, giveawayEntries: 2 });
+      const b = await visit({ ...inThis, userId: customer.user.id, giveawayEntries: 1 });
       const forgotten = await visit({
         contactName: `Invitado ${tag}`,
         contactPhone: guestPhone,
@@ -85,7 +114,15 @@ test(
         completedAt: new Date(),
       });
       const pending = await visit({ status: 'CONFIRMED' });
-      ids.push(a.id, b.id, forgotten.id, pending.id);
+      // Una visita que participa en el sorteo anterior (GTA VI) no se pasa a este.
+      const previous = await visit({
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        giveawayId: 'gta-vi-2026',
+        giveawayEntries: 1,
+        contactName: `Anterior ${tag}`,
+      });
+      ids.push(a.id, b.id, forgotten.id, pending.id, previous.id);
       await db.completedJob.create({
         data: {
           userId: customer.user.id,
@@ -95,83 +132,94 @@ test(
           completedAt: new Date(),
           warrantyTerms: '—',
           priceMinor: 0,
+          giveawayId: created.id,
           giveawayEntries: 2,
         },
       });
 
-      // Solo administración.
-      assert.equal(await status(giveaway.participants(tech.req)), 403);
-      assert.equal(await status(giveaway.participants(customer.req)), 403);
-      assert.equal(await status(giveaway.correct(a.id, { giveawayEntries: 3 }, tech.req)), 403);
-
-      const mine = (await giveaway.participants(admin.req)).participants.filter((p) =>
-        p.name.includes(tag),
-      );
-      assert.equal(mine.length, 1, 'el invitado sin participaciones no aparece');
-      assert.equal(mine[0].entries, 3, 'las visitas del mismo cliente se suman');
-      assert.equal(mine[0].visits.length, 2);
+      let detail = await controller.participants(created.id, admin.req);
+      assert.equal(detail.people.length, 1, 'el invitado sin participaciones no aparece');
+      assert.equal(detail.people[0].entries, 3, 'las visitas del mismo cliente se suman');
+      assert.equal(detail.totalEntries, 3);
+      const listed = (await controller.list(admin.req)).find((g) => g.id === created.id)!;
+      assert.equal(listed.totalEntries, 3);
+      // El sorteo de GTA VI sigue en la lista, cerrado y con sus participaciones.
+      const gta = (await controller.list(admin.req)).find((g) => g.id === 'gta-vi-2026');
+      assert.equal(gta?.open, false);
 
       // El técnico olvidó marcar: se busca la visita completada y se corrige.
-      const found = await giveaway.visits(admin.req, `Invitado ${tag}`);
+      const found = await controller.visits(created.id, admin.req, `Invitado ${tag}`);
       assert.deepEqual(
         found.map((v) => v.id),
         [forgotten.id],
       );
-      assert.equal((await giveaway.visits(admin.req, guestPhone.slice(-7)))[0]?.id, forgotten.id);
-      const fixed = await giveaway.correct(forgotten.id, { giveawayEntries: 2 }, admin.req);
+      assert.equal(
+        (await controller.visits(created.id, admin.req, guestPhone.slice(-7)))[0]?.id,
+        forgotten.id,
+      );
+      const fixed = await controller.correct(
+        created.id,
+        forgotten.id,
+        { giveawayEntries: 2 },
+        admin.req,
+      );
       assert.equal(fixed.giveawayEntries, 2);
-
+      assert.equal(
+        (await db.appointment.findUniqueOrThrow({ where: { id: forgotten.id } })).giveawayId,
+        created.id,
+      );
       // Corregir una visita con trabajo en Mi cuenta actualiza también el trabajo.
-      await giveaway.correct(a.id, { giveawayEntries: 4 }, admin.req);
+      await controller.correct(created.id, a.id, { giveawayEntries: 4 }, admin.req);
       assert.equal(
         (await db.completedJob.findFirstOrThrow({ where: { appointmentId: a.id } }))
           .giveawayEntries,
         4,
       );
-      const after = (await giveaway.participants(admin.req)).participants.filter((p) =>
-        p.name.includes(tag),
-      );
+      detail = await controller.participants(created.id, admin.req);
       assert.deepEqual(
-        after.map((p) => [p.name, p.entries]),
+        detail.people.map((p) => [p.name, p.entries]),
         [
           [`Paul ${tag}`, 5],
           [`Invitado ${tag}`, 2],
         ],
       );
-      // Quitar todas las participaciones lo saca de la lista.
-      await giveaway.correct(forgotten.id, { giveawayEntries: 0 }, admin.req);
+      // Quitar todas las participaciones lo saca de la lista (y del sorteo).
+      await controller.correct(created.id, forgotten.id, { giveawayEntries: 0 }, admin.req);
       assert.ok(
-        !(await giveaway.participants(admin.req)).participants.some(
+        !(await controller.participants(created.id, admin.req)).people.some(
           (p) => p.name === `Invitado ${tag}`,
         ),
       );
-
-      // Auditoría y validación.
       assert.equal(
-        await db.appointmentActivity.count({
-          where: { appointmentId: { in: ids }, action: 'GIVEAWAY_UPDATED' },
-        }),
-        3,
+        (await db.appointment.findUniqueOrThrow({ where: { id: forgotten.id } })).giveawayId,
+        null,
       );
+
+      // Validación y reglas.
       assert.equal(
-        await status(giveaway.correct(pending.id, { giveawayEntries: 1 }, admin.req)),
+        await status(controller.correct(created.id, pending.id, { giveawayEntries: 1 }, admin.req)),
         409,
         'solo visitas completadas',
       );
-      for (const bad of [
-        { giveawayEntries: -1 },
-        { giveawayEntries: 21 },
-        { giveawayEntries: 1.5 },
-        {},
-      ])
-        assert.equal(await status(giveaway.correct(a.id, bad, admin.req)), 400);
-      assert.equal(
-        await status(giveaway.correct(a.id, { giveawayEntries: 1, userId: 'x' }, admin.req)),
-        400,
-      );
       assert.equal(
         await status(
-          giveaway.correct(
+          controller.correct(created.id, previous.id, { giveawayEntries: 1 }, admin.req),
+        ),
+        409,
+        'ya participa en otro sorteo',
+      );
+      for (const bad of [
+        { giveawayEntries: -1 },
+        { giveawayEntries: 6 },
+        { giveawayEntries: 1.5 },
+        {},
+        { giveawayEntries: 1, userId: 'x' },
+      ])
+        assert.equal(await status(controller.correct(created.id, a.id, bad, admin.req)), 400);
+      assert.equal(
+        await status(
+          controller.correct(
+            created.id,
             '00000000-0000-4000-8000-000000000000',
             { giveawayEntries: 1 },
             admin.req,
@@ -179,9 +227,28 @@ test(
         ),
         404,
       );
+      assert.equal(
+        await db.appointmentActivity.count({
+          where: { appointmentId: { in: ids }, action: 'GIVEAWAY_UPDATED' },
+        }),
+        3,
+      );
+
+      // Cerrar: ya no se corrige, las participaciones se conservan y se puede crear otro.
+      const closed = await controller.close(created.id, admin.req);
+      assert.equal(closed.open, false);
+      assert.equal(closed.totalEntries, 5);
+      assert.equal(
+        await status(controller.correct(created.id, a.id, { giveawayEntries: 1 }, admin.req)),
+        409,
+      );
+      const next = await controller.create({ ...input, prize: `Siguiente ${tag}` }, admin.req);
+      giveaways.push(next.id);
+      assert.equal(next.open, true);
     } finally {
       await db.completedJob.deleteMany({ where: { appointmentId: { in: ids } } });
       await db.appointment.deleteMany({ where: { id: { in: ids } } });
+      await db.giveaway.deleteMany({ where: { id: { in: giveaways } } });
       await db.adminAction.deleteMany({ where: { actorId: admin.user.id } });
       await db.user.deleteMany({
         where: { id: { in: [admin.user.id, tech.user.id, customer.user.id] } },

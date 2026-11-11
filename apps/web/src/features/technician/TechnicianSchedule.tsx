@@ -44,7 +44,7 @@ export function TechnicianSchedule() {
   });
 
   useEffect(() => {
-    api<{ blocks: BusyBlock[] }>('/staff/busy')
+    api<{ blocks: BusyBlock[] }>('staff/busy')
       .then((res) => setBlocks(res.blocks))
       .catch((e) =>
         setError(e instanceof ApiError ? e.message : 'No pudimos cargar tus horarios.'),
@@ -66,7 +66,7 @@ export function TechnicianSchedule() {
       ...(form.allDay ? {} : { start: form.start, end: form.end }),
     };
     try {
-      const res = await api<{ blocks: BusyBlock[]; conflicts: number }>('/staff/busy', {
+      const res = await api<{ blocks: BusyBlock[]; conflicts: number }>('staff/busy', {
         method: 'POST',
         body: JSON.stringify(body),
       });
@@ -89,7 +89,7 @@ export function TechnicianSchedule() {
     setError('');
     setMessage('');
     try {
-      const res = await api<{ blocks: BusyBlock[] }>(`/staff/busy/${id}`, { method: 'DELETE' });
+      const res = await api<{ blocks: BusyBlock[] }>(`staff/busy/${id}`, { method: 'DELETE' });
       setBlocks(res.blocks);
       setMessage('Horario quitado.');
     } catch (e) {

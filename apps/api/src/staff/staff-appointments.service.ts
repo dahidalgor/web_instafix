@@ -10,7 +10,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Appointment, AppointmentService, Prisma } from '@prisma/client';
-import { giveaway, giveawayOpen, type StaffAppointment } from '@instafix/contracts';
+import type { StaffAppointment } from '@instafix/contracts';
 import type { StaffUser } from '../auth/session';
 import { db } from '../database/client';
 import {
@@ -24,6 +24,7 @@ import { logEvent } from '../common/log-event';
 import { exclusiveWait } from '../security/idempotency';
 import { createAgendaBooking } from '../booking/booking.service';
 import { confirmDeadline } from '../booking/hold';
+import { openGiveaway } from '../giveaways/giveaways';
 import { busyReason, OTHER_VISIT, technicianAgenda, technicianBusyReason } from './availability';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
@@ -36,10 +37,12 @@ export const takenMessage = 'Esta cita acaba de ser confirmada por otro técnico
 type Loaded = Appointment & {
   services: AppointmentService[];
   assignedTechnician: { id: string; name: string } | null;
+  giveaway?: { prize: string } | null;
 };
 const include = {
   services: { orderBy: { createdAt: 'asc' } },
   assignedTechnician: { select: { id: true, name: true } },
+  giveaway: { select: { prize: true } },
 } satisfies Prisma.AppointmentInclude;
 
 const isAdmin = (user: StaffUser) => user.role === 'ADMIN';
@@ -83,6 +86,7 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     completedAt: a.completedAt?.toISOString() ?? null,
     ...(manage ? { technicianNotes: a.technicianNotes } : {}),
     giveawayEntries: a.giveawayEntries,
+    giveawayPrize: a.giveawayEntries > 0 ? (a.giveaway?.prize ?? null) : null,
     confirmBy: confirmDeadline(a)?.toISOString() ?? null,
     services: a.services.map((s) => ({
       id: s.id,
@@ -518,8 +522,14 @@ export async function completeAppointment(
   now = new Date(),
   { giveawayEntries = 0 }: { giveawayEntries?: number } = {},
 ) {
-  if (giveawayEntries > 0 && !giveawayOpen(now))
-    throw new BadRequestException(`El sorteo de ${giveaway.prize} ya cerró.`);
+  // Las participaciones van al sorteo abierto; sin sorteo abierto no se aceptan.
+  const giveaway = giveawayEntries > 0 ? await openGiveaway(db, now) : null;
+  if (giveawayEntries > 0 && !giveaway)
+    throw new BadRequestException(
+      'No hay un sorteo abierto: completa la visita sin participaciones.',
+    );
+  if (giveaway && giveawayEntries > giveaway.maxEntries)
+    throw new BadRequestException(`Como máximo ${giveaway.maxEntries} participaciones por visita.`);
   const already = await db.$transaction(async (tx) => {
     await lockAppointment(tx, id);
     const a = await tx.appointment.findUnique({ where: { id }, include: { services: true } });
@@ -538,13 +548,19 @@ export async function completeAppointment(
       );
     const done = await tx.appointment.updateMany({
       where: { id, status: { in: ['CONFIRMED', 'IN_PROGRESS'] } },
-      data: { status: 'COMPLETED', completedAt: now, completedById: user.id, giveawayEntries },
+      data: {
+        status: 'COMPLETED',
+        completedAt: now,
+        completedById: user.id,
+        giveawayId: giveaway?.id ?? null,
+        giveawayEntries,
+      },
     });
     if (!done.count) return true;
     await cancelPendingJobs(tx, id);
     await activity(tx, id, user.id, 'COMPLETED', {
       services: a.services.length,
-      ...(giveawayEntries ? { giveawayEntries } : {}),
+      ...(giveaway ? { giveawayId: giveaway.id, giveawayEntries } : {}),
     });
     // La cuenta del cliente recibe el trabajo realizado con su garantía.
     await recordCompletedJob(tx, id);
