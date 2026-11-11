@@ -1,6 +1,7 @@
 import {
   appointmentSchema,
   appointmentSortSchema,
+  reassignSchema,
   type AppointmentSort,
 } from '@instafix/contracts';
 import type { Prisma } from '@prisma/client';
@@ -10,6 +11,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Patch,
@@ -31,7 +33,11 @@ import { isConsentIssue } from '../whatsapp/consent';
 import { deliverNotification } from '../notifications/notification.service';
 import { restoreBookingFlow } from './whatsapp-consent';
 import { adminRescheduleBooking } from '../booking/booking.service';
-import { syncCalConfirmation } from '../staff/staff-appointments.service';
+import {
+  reassignAppointment,
+  syncCalConfirmation,
+  teamForAppointment,
+} from '../staff/staff-appointments.service';
 import { exclusive } from '../security/idempotency';
 
 /** createdAt = alta de la cita en Instafix; startsAt = inicio de la visita. Desempate por id. */
@@ -151,6 +157,31 @@ export class AppointmentsController {
       }
       return appointment;
     });
+  }
+
+  /** Equipo para reasignar una visita: quién está libre en su horario y quién no (y por qué). */
+  @Get('admin/appointments/:id/team') async appointmentTeam(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    await authenticated(req, true);
+    return teamForAppointment(id);
+  }
+
+  /**
+   * Pasar una visita confirmada a otra persona del equipo (p. ej. el técnico la aceptó por error
+   * o tuvo un imprevisto). Mismo horario en Cal.com; el cliente recibe un correo.
+   */
+  @Post('admin/appointments/:id/reassign')
+  @HttpCode(200)
+  async reassignAppointment(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const admin = await authenticated(req, true);
+    const parsed = reassignSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Elige a quién pasar la visita.');
+    const result = await reassignAppointment(admin, id, parsed.data.technicianId);
+    await auditAdmin(admin.id, 'APPOINTMENT_REASSIGNED', id, { to: parsed.data.technicianId });
+    return result;
   }
 
   /**

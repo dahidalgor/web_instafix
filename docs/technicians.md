@@ -103,6 +103,27 @@ un día concreto, por horas o todo el día (`TechnicianBusyBlock`, hora de Ecuad
 - API: `GET/POST /api/v1/staff/busy`, `DELETE /api/v1/staff/busy/:id` (solo los propios);
   `GET /api/v1/admin/staff/schedule?week=YYYY-MM-DD` (semana del equipo, solo ADMIN).
 
+### Reemplazo de técnico (visita confirmada)
+
+Si el técnico asignado no puede ir (la aceptó por error o tuvo un imprevisto):
+
+1. En la cita pulsa **«No puedo ir: pedir reemplazo»** (motivo opcional). **Sigue a cargo** hasta
+   que alguien la tome; puede **retirar el pedido** si al final sí puede ir.
+2. Les llega un aviso («¿Puedes tomar esta visita?») a quienes están **libres a esa hora**
+   (técnicos y administradores sin horario ocupado ni otra visita). La ven en **Pendientes** con
+   «Busca reemplazo» y **«Tomar visita»**; el primero que la toma se la queda.
+3. Al tomarla: pasa a su cargo (ve contacto y ubicación exacta), el anterior recibe «X tomó tu
+   visita», el cliente recibe el correo **«Cambió el técnico de tu visita»** y los recordatorios
+   de completar el trabajo pasan al nuevo. La reserva de Cal.com no cambia (mismo horario).
+4. **Administración** puede pasarla directamente: en la cita, «Ver y editar» → **«Cambiar
+   técnico»**, con el equipo y su disponibilidad («libre» / «ocupado: Clases»).
+5. Si a **24 h o menos** de la visita nadie la tomó (y el pedido tiene al menos 1 h),
+   administración recibe «Nadie tomó un reemplazo» (una vez; de noche, a la mañana).
+
+API: `POST/DELETE /api/v1/staff/appointments/:id/handover`, `POST …/:id/take`,
+`GET /api/v1/admin/appointments/:id/team`, `POST /api/v1/admin/appointments/:id/reassign`.
+Auditoría: `HANDOVER_REQUESTED`, `HANDOVER_CANCELLED`, `REASSIGNED`.
+
 **Avisos para confirmar** (`CONFIRMATION_REMINDER`, push): a los 10 min, a los 30 min y luego cada
 30 min de tiempo activo, a los técnicos libres en ese horario con dispositivo. A 30 min del vencimiento,
 «Última oportunidad», también a administración. Se anulan solos si alguien confirma o la cita

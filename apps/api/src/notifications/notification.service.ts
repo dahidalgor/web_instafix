@@ -9,6 +9,7 @@ import {
   deliverStaffNotification,
   scheduleConfirmationReminders,
   scheduleDailyAgendas,
+  scheduleHandoverAlerts,
 } from './staff/staff-notifications';
 import {
   appointmentEmailsEnabled,
@@ -20,6 +21,7 @@ import {
   appointmentCancelledEmail,
   appointmentConfirmedEmail,
   appointmentCreatedEmail,
+  appointmentReassignedEmail,
   appointmentRescheduledEmail,
   type AppointmentEmailData,
 } from '../mail/templates';
@@ -27,6 +29,7 @@ import {
 export const appointmentEmailKinds = {
   APPOINTMENT_CREATED: appointmentCreatedEmail,
   APPOINTMENT_CONFIRMED: appointmentConfirmedEmail,
+  APPOINTMENT_REASSIGNED: appointmentReassignedEmail,
   APPOINTMENT_RESCHEDULED: appointmentRescheduledEmail,
   APPOINTMENT_CANCELLED: appointmentCancelledEmail,
 } as const;
@@ -39,8 +42,15 @@ const MAX_ATTEMPTS = 5;
  */
 export function notificationKey(
   kind: AppointmentEmailKind,
-  appointment: Pick<Appointment, 'id' | 'startsAt'> & { confirmedAt?: Date | null },
+  appointment: Pick<Appointment, 'id' | 'startsAt'> & {
+    confirmedAt?: Date | null;
+    assignedTechnicianId?: string | null;
+    updatedAt?: Date;
+  },
 ) {
+  // Un correo por cambio de técnico (cada reasignación es un hecho distinto).
+  if (kind === 'APPOINTMENT_REASSIGNED')
+    return `email:${appointment.id}:${kind}:${appointment.assignedTechnicianId}:${appointment.updatedAt?.toISOString()}`;
   if (kind === 'APPOINTMENT_RESCHEDULED')
     return `email:${appointment.id}:${kind}:${appointment.startsAt.toISOString()}`;
   // Una confirmación por asignación: tras reprogramar y volver a confirmar hay un aviso nuevo.
@@ -127,7 +137,8 @@ export async function deliverNotification(id: string, now = new Date()): Promise
     (row.kind !== 'APPOINTMENT_CANCELLED' &&
       (!row.appointment || row.appointment.status === 'CANCELLED')) ||
     // Una confirmación pendiente pierde sentido si la cita volvió a quedar sin técnico.
-    (row.kind === 'APPOINTMENT_CONFIRMED' && !row.appointment?.assignedTechnicianId)
+    ((row.kind === 'APPOINTMENT_CONFIRMED' || row.kind === 'APPOINTMENT_REASSIGNED') &&
+      !row.appointment?.assignedTechnicianId)
   ) {
     await db.notification.update({ where: { id }, data: { status: 'CANCELLED' } });
     return 'CANCELLED';
@@ -215,6 +226,9 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
         );
         await scheduleConfirmationReminders().catch(() =>
           console.error('No se pudieron preparar los recordatorios de confirmación'),
+        );
+        await scheduleHandoverAlerts().catch(() =>
+          console.error('No se pudieron revisar los reemplazos pendientes'),
         );
       }
       // Hasta 5 tandas por vuelta: una ráfaga de avisos (p. ej. recordatorios a todo el equipo)

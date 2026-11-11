@@ -20,6 +20,7 @@ export type AppointmentEvent =
   | { type: 'appointment.rescheduled'; previousStartsAt: Date }
   | { type: 'appointment.cancelled' }
   | { type: 'appointment.confirmed'; technicianName: string }
+  | { type: 'appointment.reassigned'; technicianName: string }
   | { type: 'appointment.completed' };
 
 export async function publishAppointmentEvent(
@@ -65,6 +66,13 @@ export async function publishAppointmentEvent(
       await whatsapp('CONFIRMED');
       await queueReminders(tx, appointment, now);
       // Al técnico: recordatorios para marcar el trabajo como completado (2 h y 4 h después).
+      await scheduleCompletionReminders(tx, appointment, now);
+      break;
+    case 'appointment.reassigned':
+      // Otro técnico tomó la visita confirmada: correo al cliente con el técnico nuevo (por
+      // WhatsApp haría falta otra plantilla aprobada). Los recordatorios de «completar trabajo»
+      // pasan al técnico nuevo; los del anterior se anulan solos al enviarse.
+      await email('APPOINTMENT_REASSIGNED', { technicianName: event.technicianName });
       await scheduleCompletionReminders(tx, appointment, now);
       break;
     case 'appointment.completed':
