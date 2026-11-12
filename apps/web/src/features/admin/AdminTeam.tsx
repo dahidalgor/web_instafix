@@ -5,6 +5,7 @@ import { BusyButton } from '../../components/ui/BusyButton';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import { api, ApiError } from '../../lib/api';
+import { MemberSchedule } from './TeamSchedule';
 
 const empty = { firstName: '', lastName: '', phone: '', email: '', password: '' };
 type Profile = { firstName: string; lastName: string; phone: string; email: string };
@@ -23,6 +24,8 @@ export function AdminTeam() {
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  // Persona cuyos horarios (ocupados y citas) se están viendo.
+  const [scheduleFor, setScheduleFor] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>({
     firstName: '',
     lastName: '',
@@ -227,42 +230,53 @@ export function AdminTeam() {
                   ` · ${m.upcomingAppointments === 1 ? '1 cita futura' : `${m.upcomingAppointments} citas futuras`}`}
               </p>
             </div>
-            {m.role === 'TECHNICIAN' && (
-              <div className="tech-actions-row">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-small"
-                  aria-expanded={editing === m.id}
-                  disabled={busy}
-                  onClick={() => startEdit(m)}
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-small"
-                  aria-expanded={resetFor === m.id}
-                  disabled={busy}
-                  onClick={() => {
-                    setEditing(null);
-                    setResetFor(resetFor === m.id ? null : m.id);
-                    setNewPassword('');
-                  }}
-                >
-                  Cambiar contraseña
-                </button>
-                <BusyButton
-                  type="button"
-                  className={`btn btn-small ${m.active ? 'btn-danger' : 'btn-secondary'}`}
-                  disabled={busy}
-                  busy={busyAction === `active:${m.id}`}
-                  busyLabel={m.active ? 'Desactivando…' : 'Activando…'}
-                  onClick={() => void setActive(m, !m.active)}
-                >
-                  {m.active ? 'Desactivar' : 'Activar'}
-                </BusyButton>
-              </div>
-            )}
+            <div className="tech-actions-row">
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                aria-expanded={scheduleFor === m.id}
+                onClick={() => setScheduleFor(scheduleFor === m.id ? null : m.id)}
+              >
+                {scheduleFor === m.id ? 'Ocultar horarios' : 'Ver horarios'}
+              </button>
+              {m.role === 'TECHNICIAN' && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    aria-expanded={editing === m.id}
+                    disabled={busy}
+                    onClick={() => startEdit(m)}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-small"
+                    aria-expanded={resetFor === m.id}
+                    disabled={busy}
+                    onClick={() => {
+                      setEditing(null);
+                      setResetFor(resetFor === m.id ? null : m.id);
+                      setNewPassword('');
+                    }}
+                  >
+                    Cambiar contraseña
+                  </button>
+                  <BusyButton
+                    type="button"
+                    className={`btn btn-small ${m.active ? 'btn-danger' : 'btn-secondary'}`}
+                    disabled={busy}
+                    busy={busyAction === `active:${m.id}`}
+                    busyLabel={m.active ? 'Desactivando…' : 'Activando…'}
+                    onClick={() => void setActive(m, !m.active)}
+                  >
+                    {m.active ? 'Desactivar' : 'Activar'}
+                  </BusyButton>
+                </>
+              )}
+            </div>
+            {scheduleFor === m.id && <MemberSchedule userId={m.id} name={m.name} />}
             {confirmDeactivate?.id === m.id && (
               <div className="team-confirm" role="alertdialog" aria-label="Confirmar desactivación">
                 <p>{confirmDeactivate.text} Su historial no se modifica.</p>

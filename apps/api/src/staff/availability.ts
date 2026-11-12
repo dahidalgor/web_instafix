@@ -133,17 +133,26 @@ export async function removeBusyBlock(userId: string, id: string) {
  * Semana del equipo para Administración: horarios ocupados y visitas confirmadas de cada
  * técnico y administrador activo, del lunes `weekStart` al domingo (hora de Ecuador).
  */
-export async function teamWeek(weekStart: string) {
+export async function teamWeek(
+  weekStart: string,
+  { userId, blocks = true }: { userId?: string; blocks?: boolean } = {},
+) {
   const from = new Date(`${weekStart}T00:00:00-05:00`);
   const to = new Date(from.getTime() + 7 * 86400000);
   const members = await db.user.findMany({
-    where: { role: { in: ['TECHNICIAN', 'ADMIN'] }, active: true, deletedAt: null },
+    // Una persona concreta se muestra aunque esté desactivada (su tarjeta en Equipo técnico).
+    where: {
+      role: { in: ['TECHNICIAN', 'ADMIN'] },
+      deletedAt: null,
+      ...(userId ? { id: userId } : { active: true }),
+    },
     orderBy: [{ role: 'desc' }, { name: 'asc' }],
     select: {
       id: true,
       name: true,
       role: true,
-      busyBlocks: { orderBy: { startMinute: 'asc' } },
+      // Sin horarios ocupados cuando no se van a mostrar (Administración → Horarios).
+      busyBlocks: blocks ? { orderBy: { startMinute: 'asc' } } : { take: 0 },
       assignedAppointments: {
         where: {
           status: { in: ['CONFIRMED', 'IN_PROGRESS'] },
