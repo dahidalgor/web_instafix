@@ -96,12 +96,15 @@ un día concreto, por horas o todo el día (`TechnicianBusyBlock`, hora de Ecuad
   técnico para que hable con administración.
 - **Calendario semanal** (`WeekCalendar`): en Horarios cada persona ve su semana (lunes a
   domingo) con sus horas ocupadas (rayado) y sus visitas confirmadas (sólido), y navega entre
-  semanas. Administración → **Horarios → Equipo** muestra la semana de todo el equipo, un color
-  por persona, con filtro por persona. Lo que coincide a la misma hora se ve lado a lado; los
+  semanas. Administración → **Horarios → Equipo** muestra solo las **citas** de todo el equipo,
+  un color por persona, con filtro por persona. Los **horarios ocupados** de cada persona se ven
+  en **Equipo técnico → «Ver horarios»** de su tarjeta, con casillas para ocultar los horarios
+  ocupados o los de citas. Lo que coincide a la misma hora se ve lado a lado; los
   bloques de todo el día van en la fila superior; al tocar un bloque se ve su detalle. En el
   teléfono la grilla se desliza de lado con la columna de horas fija.
 - API: `GET/POST /api/v1/staff/busy`, `DELETE /api/v1/staff/busy/:id` (solo los propios);
-  `GET /api/v1/admin/staff/schedule?week=YYYY-MM-DD` (semana del equipo, solo ADMIN).
+  `GET /api/v1/admin/staff/schedule?week=YYYY-MM-DD[&busy=0][&userId=…]` (semana del equipo,
+  solo ADMIN; `busy=0` omite los horarios ocupados, `userId` limita a una persona).
 
 ### Reemplazo de técnico (visita confirmada)
 

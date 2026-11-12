@@ -41,14 +41,29 @@ const member = {
 /** Equipo técnico. Solo ADMIN; desde aquí solo se crean técnicos, nunca administradores. */
 @Controller('api/v1/admin/staff')
 export class TeamController {
-  /** Semana del equipo (horarios ocupados y visitas) desde el lunes `week` (YYYY-MM-DD). */
+  /**
+   * Semana del equipo desde el lunes `week` (YYYY-MM-DD): visitas y, salvo `busy=0`, horarios
+   * ocupados. Con `userId`, solo esa persona (botón «Ver horarios» de su tarjeta).
+   */
   @Get('schedule')
   @Header('Cache-Control', 'no-store')
-  async schedule(@Req() req: Request, @Query('week') week = '') {
+  async schedule(
+    @Req() req: Request,
+    @Query('week') week = '',
+    @Query('userId') userId = '',
+    @Query('busy') busy = '1',
+  ) {
     await authenticated(req, true);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || Number.isNaN(Date.parse(`${week}T12:00:00Z`)))
       throw new BadRequestException('Indica la semana (YYYY-MM-DD).');
-    return { weekStart: weekStartOf(week), members: await teamWeek(weekStartOf(week)) };
+    if (userId && !/^[\w-]{1,64}$/.test(userId))
+      throw new BadRequestException('Persona no válida.');
+    const members = await teamWeek(weekStartOf(week), {
+      userId: userId || undefined,
+      blocks: busy !== '0',
+    });
+    if (userId && !members.length) throw new NotFoundException('No encontramos a esa persona.');
+    return { weekStart: weekStartOf(week), members };
   }
 
   @Get() async list(@Req() req: Request) {

@@ -36,32 +36,78 @@ const palette = [
 ];
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
-/**
- * Administración → Horarios → Equipo: la semana de cada técnico y administrador (horas ocupadas
- * y visitas confirmadas). Sirve para ver quién puede atender y cuándo.
- */
-export function TeamSchedule() {
-  const [week, setWeek] = useState(() => weekStartOf(todayInEcuador()));
+/** La semana del equipo (o de una persona) desde el lunes `week`. */
+function useStaffWeek(week: string, { userId, busy }: { userId?: string; busy: boolean }) {
   const [members, setMembers] = useState<Member[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [person, setPerson] = useState('all');
-
   useEffect(() => {
     const controller = new AbortController();
+    const query = new URLSearchParams({ week, busy: busy ? '1' : '0' });
+    if (userId) query.set('userId', userId);
     setLoading(true);
-    api<{ members: Member[] }>(`admin/staff/schedule?week=${week}`, { signal: controller.signal })
+    api<{ members: Member[] }>(`admin/staff/schedule?${query}`, { signal: controller.signal })
       .then((res) => {
         setMembers(res.members);
         setError('');
       })
       .catch((e) => {
         if (!controller.signal.aborted)
-          setError(e instanceof Error ? e.message : 'No se pudo cargar el horario del equipo.');
+          setError(e instanceof Error ? e.message : 'No se pudo cargar el horario.');
       })
       .finally(() => !controller.signal.aborted && setLoading(false));
     return () => controller.abort();
-  }, [week]);
+  }, [week, userId, busy]);
+  return { members, loading, error };
+}
+
+/** Bloques del calendario de una persona: horas ocupadas (rayado) y visitas (sólido). */
+function memberItems(
+  m: Member,
+  week: string,
+  { color, team, busy, visits }: { color?: string; team: boolean; busy: boolean; visits: boolean },
+): CalendarItem[] {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
+  const who = firstName(m.name);
+  const blocks = busy
+    ? days.flatMap((day) =>
+        blocksOn(m.blocks, day).map((block) => ({
+          id: `${m.id}:${block.id}:${day}`,
+          day,
+          startMinute: block.startMinute,
+          endMinute: block.endMinute,
+          title: block.label,
+          detail: m.name,
+          kind: 'busy' as const,
+          color,
+        })),
+      )
+    : [];
+  const appointments = visits
+    ? m.visits.flatMap((visit) =>
+        localSpans(new Date(visit.startsAt), new Date(visit.endsAt))
+          .filter((span) => days.includes(span.day))
+          .map((span) => ({
+            ...span,
+            id: `${m.id}:${visit.id}:${span.day}`,
+            title: team ? who : `Visita · ${customerFirstName(visit.contactName) ?? 'cliente'}`,
+            detail: `Visita de ${customerFirstName(visit.contactName) ?? 'un cliente'} (${visit.title}) · ${m.name}`,
+            kind: 'visit' as const,
+            color,
+          })),
+      )
+    : [];
+  return [...blocks, ...appointments];
+}
+
+/**
+ * Administración → Horarios → Equipo: las visitas confirmadas de cada técnico y administrador
+ * en la semana. Los horarios ocupados se ven en Equipo técnico → «Ver horarios».
+ */
+export function TeamSchedule() {
+  const [week, setWeek] = useState(() => weekStartOf(todayInEcuador()));
+  const [person, setPerson] = useState('all');
+  const { members, loading, error } = useStaffWeek(week, { busy: false });
 
   const colors = useMemo(
     () => new Map((members ?? []).map((m, i) => [m.id, palette[i % palette.length]])),
@@ -71,47 +117,26 @@ export function TeamSchedule() {
     () => (members ?? []).filter((m) => person === 'all' || m.id === person),
     [members, person],
   );
-  const items = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
-    const all = person === 'all';
-    return shown.flatMap((m): CalendarItem[] => {
-      const color = colors.get(m.id);
-      const who = firstName(m.name);
-      const blocks = days.flatMap((day) =>
-        blocksOn(m.blocks, day).map((block) => ({
-          id: `${m.id}:${block.id}:${day}`,
-          day,
-          startMinute: block.startMinute,
-          endMinute: block.endMinute,
-          title: all ? who : block.label,
-          detail: all ? `${block.label} · ${m.name}` : m.name,
-          kind: 'busy' as const,
-          color,
-        })),
-      );
-      const visits = m.visits.flatMap((visit) =>
-        localSpans(new Date(visit.startsAt), new Date(visit.endsAt))
-          .filter((span) => days.includes(span.day))
-          .map((span) => ({
-            ...span,
-            id: `${m.id}:${visit.id}:${span.day}`,
-            title: all ? who : `Visita · ${customerFirstName(visit.contactName) ?? 'cliente'}`,
-            detail: `Visita de ${customerFirstName(visit.contactName) ?? 'un cliente'} (${visit.title}) · ${m.name}`,
-            kind: 'visit' as const,
-            color,
-          })),
-      );
-      return [...blocks, ...visits];
-    });
-  }, [shown, colors, week, person]);
+  const items = useMemo(
+    () =>
+      shown.flatMap((m) =>
+        memberItems(m, week, {
+          color: colors.get(m.id),
+          team: person === 'all',
+          busy: false,
+          visits: true,
+        }),
+      ),
+    [shown, colors, week, person],
+  );
 
   return (
     <section className="settings-card team-schedule" aria-labelledby="team-week">
       <div className="settings-card-head">
-        <h2 id="team-week">Semana del equipo</h2>
+        <h2 id="team-week">Citas del equipo</h2>
         <p>
-          Horas ocupadas (rayado) y visitas confirmadas (sólido) de cada persona. Una solicitud solo
-          se ofrece en horarios en que alguien está libre.
+          Visitas confirmadas de cada persona en la semana. Los horarios ocupados se revisan en
+          Equipo técnico → «Ver horarios».
         </p>
       </div>
       {error && (
@@ -155,6 +180,64 @@ export function TeamSchedule() {
         }
       />
     </section>
+  );
+}
+
+/**
+ * Equipo técnico → «Ver horarios»: la semana de una persona con sus horarios ocupados y sus
+ * citas; cada capa se puede ocultar.
+ */
+export function MemberSchedule({ userId, name }: { userId: string; name: string }) {
+  const [week, setWeek] = useState(() => weekStartOf(todayInEcuador()));
+  const [showBusy, setShowBusy] = useState(true);
+  const [showVisits, setShowVisits] = useState(true);
+  const { members, loading, error } = useStaffWeek(week, { userId, busy: true });
+  const member = members?.[0];
+  const items = useMemo(
+    () =>
+      member ? memberItems(member, week, { team: false, busy: showBusy, visits: showVisits }) : [],
+    [member, week, showBusy, showVisits],
+  );
+  const hidden = !showBusy && !showVisits;
+  return (
+    <div className="member-schedule" aria-label={`Horarios de ${name}`}>
+      {error && (
+        <p className="admin-message" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="member-schedule-toggles" role="group" aria-label="Qué mostrar">
+        <label>
+          <input
+            type="checkbox"
+            checked={showBusy}
+            onChange={(e) => setShowBusy(e.target.checked)}
+          />
+          <i className="week-swatch is-busy" aria-hidden="true" /> Horarios ocupados
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={showVisits}
+            onChange={(e) => setShowVisits(e.target.checked)}
+          />
+          <i className="week-swatch is-visit" aria-hidden="true" /> Horarios de citas
+        </label>
+      </div>
+      <WeekCalendar
+        weekStart={week}
+        items={items}
+        onWeekChange={(day) => setWeek(weekStartOf(day))}
+        loading={loading}
+        legend={
+          hidden ? (
+            <span>Activa al menos una de las dos opciones para ver el horario.</span>
+          ) : member && !loading && !items.length ? (
+            <span>Nada registrado esta semana.</span>
+          ) : null
+        }
+      />
+    </div>
   );
 }
 

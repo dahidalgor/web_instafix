@@ -1,8 +1,16 @@
 /* Calendario semanal de horarios ocupados y visitas (técnicos y Administración). */
-.week-calendar {
-  --week-hour: 40px;
+.week-calendar,
+.member-schedule {
   --week-busy: #8a6a9e;
   --week-visit: #0f8a5f;
+}
+:root[data-theme='dark'] .week-calendar,
+:root[data-theme='dark'] .member-schedule {
+  --week-busy: #c9a6e0;
+  --week-visit: #4fd1a1;
+}
+.week-calendar {
+  --week-hour: 40px;
   --week-line: var(--border);
   --week-today: rgba(160, 13, 104, 0.06);
   display: grid;
@@ -10,8 +18,6 @@
   min-width: 0;
 }
 :root[data-theme='dark'] .week-calendar {
-  --week-busy: #c9a6e0;
-  --week-visit: #4fd1a1;
   --week-today: rgba(243, 152, 208, 0.08);
 }
 @media (min-width: 760px) {

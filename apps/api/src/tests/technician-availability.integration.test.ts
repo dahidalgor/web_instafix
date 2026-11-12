@@ -274,6 +274,19 @@ test(
       'la visita confirmada de Ana aparece en su semana',
     );
     await assert.rejects(team.schedule(admin.req, 'mañana'), (e: any) => e.getStatus() === 400);
+    // Horarios (solo citas): sin horarios ocupados. «Ver horarios» de una persona: solo ella.
+    const visitsOnly = await team.schedule(admin.req, day, '', '0');
+    assert.ok(visitsOnly.members.every((m) => m.blocks.length === 0));
+    const onlyCarlos = await team.schedule(admin.req, day, student.user.id);
+    assert.deepEqual(
+      onlyCarlos.members.map((m) => m.id),
+      [student.user.id],
+    );
+    assert.equal(onlyCarlos.members[0].blocks[0].label, 'Clases');
+    await assert.rejects(
+      team.schedule(admin.req, day, 'no-existe'),
+      (e: any) => e.getStatus() === 404,
+    );
 
     const meetings = await staff.addBusy(
       { label: 'Reuniones', repeat: 'WEEKLY', weekdays: [1], start: '08:00', end: '12:00' },

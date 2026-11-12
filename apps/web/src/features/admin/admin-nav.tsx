@@ -188,14 +188,14 @@ export const adminGroups: AdminNavGroup[] = [
         id: 'equipo',
         label: 'Equipo técnico',
         short: 'Equipo',
-        description: 'Altas, datos de acceso y activación de los técnicos.',
+        description: 'Altas, datos de acceso, activación y horarios de cada técnico.',
         icon: icons.equipo,
       },
       {
         id: 'horarios',
         label: 'Horarios',
         description:
-          'La semana del equipo y tus horas ocupadas (clases, otro trabajo…). Cuentan para repartir las citas.',
+          'Las citas del equipo en la semana y tus horas ocupadas (clases, otro trabajo…).',
         icon: icons.horarios,
       },
       {
