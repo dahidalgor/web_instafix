@@ -3,6 +3,7 @@ import {
   appointmentRequestedMessage,
   completionReminderDelaysHours,
   completionReminderMessage,
+  completionReminderNextMorningHour,
   handoverRequestedMessage,
   handoverTakenMessage,
   handoverUnclaimedMessage,
@@ -190,11 +191,18 @@ export async function scheduleCompletionReminders(
   const ends = appointment.endsAt.toISOString();
   const ids: string[] = [];
   let previous = 0;
-  for (const [index, hours] of completionReminderDelaysHours.entries()) {
-    const stage = (index + 1) as 1 | 2;
-    const dueAt = new Date(
-      Math.max(appointment.endsAt.getTime() + hours * 3600000, now.getTime(), previous),
-    );
+  // Mañana siguiente al fin de la visita, a las 09H00 de Ecuador (UTC-5).
+  const endDay = new Date(appointment.endsAt.getTime() - 5 * 3600000).toISOString().slice(0, 10);
+  const nextMorning =
+    new Date(`${endDay}T00:00:00-05:00`).getTime() +
+    (24 + completionReminderNextMorningHour) * 3600000;
+  const delays = [
+    ...completionReminderDelaysHours.map((hours) => appointment.endsAt.getTime() + hours * 3600000),
+    nextMorning,
+  ];
+  for (const [index, at] of delays.entries()) {
+    const stage = (index + 1) as 1 | 2 | 3;
+    const dueAt = new Date(Math.max(at, now.getTime(), previous));
     previous = dueAt.getTime() + 2 * 3600000;
     const { title, body } = completionReminderMessage(appointment, stage);
     const dedupeKey = staffNotificationKey(
@@ -227,6 +235,26 @@ export async function scheduleCompletionReminders(
     ids.push(row.id);
   }
   return ids;
+}
+
+/**
+ * Cada minuto: visitas que terminaron en las últimas 48 h y siguen abiertas reciben los
+ * recordatorios de completar que les falten (p. ej. el de la mañana siguiente para las
+ * confirmadas antes de que existiera). Las claves únicas evitan duplicados.
+ */
+export async function scheduleMissedCompletionReminders(now = new Date()) {
+  const open = await db.appointment.findMany({
+    where: {
+      status: { in: OPEN_WORK as never },
+      deletedAt: null,
+      assignedTechnicianId: { not: null },
+      endsAt: { lte: now, gt: new Date(now.getTime() - 48 * 3600000) },
+    },
+    take: 50,
+  });
+  for (const appointment of open)
+    await db.$transaction((tx) => scheduleCompletionReminders(tx, appointment, now));
+  return open.length;
 }
 
 /**

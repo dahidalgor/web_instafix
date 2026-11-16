@@ -98,6 +98,10 @@ cliente le llega un WhatsApp con dos botones, «Sí, me sirve» y «No, mantener
   dentro de 60 días. Si no se cumplen, se coordina con administración.
 - Administración puede mover citas a **hoy** desde «Cambiar fecha y hora»: la regla «desde
   mañana» es solo para los clientes.
+- **Visita que no se pudo hacer** (su hora pasó y no se marcó como completada): el técnico aún
+  puede proponer otro horario y administración aún puede cambiar la fecha. Como Cal.com no deja
+  mover una reserva pasada, se crea una reserva nueva en el horario nuevo y la vieja se cancela
+  si Cal.com lo permite.
 
 ### Horarios ocupados de los técnicos
 

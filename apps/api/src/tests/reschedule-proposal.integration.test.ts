@@ -8,7 +8,10 @@ import { AppointmentsController } from '../appointments/appointments.controller'
 import { newToken, tokenHash } from '../auth/security';
 import { db } from '../database/client';
 import { setEmailProvider } from '../mail/email.service';
-import { enqueueAppointmentRequested } from '../notifications/staff/staff-notifications';
+import {
+  enqueueAppointmentRequested,
+  scheduleMissedCompletionReminders,
+} from '../notifications/staff/staff-notifications';
 import { endpointHash, setPushSender } from '../notifications/staff/web-push.channel';
 import {
   answerProposal,
@@ -357,5 +360,32 @@ test(
       (await db.automationJob.findUniqueOrThrow({ where: { id: received.id } })).status,
       'CANCELLED',
     );
+
+    // 8) La visita fue ayer y no se pudo hacer: Carlos recibe a la mañana siguiente «sigue
+    //    abierta» y aún puede proponer otro horario.
+    const yesterday = new Date(Date.now() - 26 * HOUR);
+    const missed = await visit({
+      startsAt: yesterday,
+      endsAt: new Date(yesterday.getTime() + 2 * HOUR),
+    });
+    await scheduleMissedCompletionReminders();
+    const morning = await db.notification.findMany({
+      where: { appointmentId: missed.id, kind: 'COMPLETION_REMINDER', recipient: carlos.user.id },
+    });
+    assert.ok(
+      morning.some((n) => /propón otro horario/.test((n.data as { body: string }).body)),
+      'aviso de la mañana siguiente',
+    );
+    await scheduleMissedCompletionReminders();
+    assert.equal(
+      await db.notification.count({
+        where: { appointmentId: missed.id, kind: 'COMPLETION_REMINDER' },
+      }),
+      morning.length,
+      'sin duplicados',
+    );
+    const retry = new Date(Date.now() + 3 * 24 * HOUR).toISOString();
+    const missedProposal = await staff.propose(missed.id, { startsAt: retry }, carlos.req);
+    assert.equal(missedProposal.proposal?.startsAt, retry);
   },
 );

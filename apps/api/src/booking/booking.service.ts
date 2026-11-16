@@ -493,11 +493,18 @@ async function ownedChangeable(userId: string, id: string) {
  * Libera en Cal.com una reserva que Instafix ya dejó de usar. Si Cal.com no responde, la cita
  * queda marcada para que administración la cancele allí (el horario seguiría ocupado).
  */
-async function releaseCalBooking(appointmentId: string, uid: string, reason: string) {
+async function releaseCalBooking(
+  appointmentId: string,
+  uid: string,
+  reason: string,
+  /** El horario de esa reserva ya pasó: no ocupa nada y Cal.com suele rechazar cancelarla. */
+  past = false,
+) {
   try {
     await cancelCalBooking(uid, reason);
   } catch {
-    logEvent('booking.cal_release_failed', { appointmentId }, 'warn');
+    logEvent('booking.cal_release_failed', { appointmentId, past }, 'warn');
+    if (past) return;
     await db.appointment.updateMany({
       where: { id: appointmentId, automationIssue: null },
       data: {
@@ -641,7 +648,13 @@ async function moveToHold(
       options.origin,
     );
   });
-  if (previousUid) await releaseCalBooking(appointment.id, previousUid, 'Reprogramada en Instafix');
+  if (previousUid)
+    await releaseCalBooking(
+      appointment.id,
+      previousUid,
+      'Reprogramada en Instafix',
+      appointment.endsAt <= new Date(),
+    );
   return notifications;
 }
 
@@ -759,12 +772,28 @@ export async function moveConfirmedVisit(
   actor: { adminId?: string; acceptedProposalOf?: string },
 ) {
   const calUid = appointment.calUid!;
+  // Una visita cuya hora ya pasó (no se pudo hacer) no se puede mover en Cal.com: se crea una
+  // reserva nueva y la vieja se cancela si Cal.com lo permite.
+  const missed = appointment.startsAt.getTime() <= Date.now();
   let booking: CalBooking;
   try {
-    booking = await rescheduleCalBooking(calUid, start, 'Reprogramada por Instafix');
+    booking = missed
+      ? await createAgendaBooking({
+          start,
+          name: appointment.contactName || 'Cliente Instafix',
+          phone: appointment.contactPhone,
+          request: appointment.title,
+          whatsappConsent: Boolean(appointment.whatsappConsentAt),
+          appointmentId: appointment.id,
+        })
+      : await rescheduleCalBooking(calUid, start, 'Reprogramada por Instafix');
   } catch (error) {
     return calFailure(error, start);
   }
+  if (missed)
+    await cancelCalBooking(calUid, 'Visita no realizada: reprogramada por Instafix').catch(() =>
+      logEvent('booking.missed_cal_release_failed', { appointmentId: appointment.id }, 'warn'),
+    );
   const now = new Date();
   return db.$transaction(async (tx) => {
     await calLock(tx);
@@ -794,6 +823,7 @@ export async function moveConfirmedVisit(
       from: appointment.startsAt.toISOString(),
       to: booking.start.toISOString(),
       keptTechnician: true,
+      ...(missed ? { missedVisit: true } : {}),
     };
     if (actor.adminId)
       await tx.adminAction.create({

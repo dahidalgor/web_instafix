@@ -170,6 +170,8 @@ export function appointmentRequestedMessage(input: {
 
 /** Recordatorios para completar un trabajo: horas después del fin previsto de la visita. */
 export const completionReminderDelaysHours = [2, 4] as const;
+/** Y un último aviso a la mañana siguiente (hora de Ecuador) si sigue sin completar. */
+export const completionReminderNextMorningHour = 9;
 
 /**
  * Título y cuerpo del recordatorio al técnico para marcar el trabajo como completado.
@@ -177,11 +179,16 @@ export const completionReminderDelaysHours = [2, 4] as const;
  */
 export function completionReminderMessage(
   input: { contactName: string | null | undefined; startsAt: Date; timeZone: string },
-  stage: 1 | 2,
+  stage: 1 | 2 | 3,
 ) {
-  const { time } = formatAppointmentMoment(input.startsAt, input.timeZone);
+  const { day, time } = formatAppointmentMoment(input.startsAt, input.timeZone);
   const who = customerFirstName(input.contactName);
   const visit = who ? `la visita de ${who}` : 'la visita';
+  if (stage === 3)
+    return {
+      title: `Sigue abierta ${visit}`,
+      body: `La visita del ${day.charAt(0).toLowerCase()}${day.slice(1)} a las ${time} no se marcó como completada. Si se hizo, complétala; si no se pudo, propón otro horario al cliente.`,
+    };
   return stage === 1
     ? {
         title: `¿Terminaste ${visit}?`,

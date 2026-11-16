@@ -18,7 +18,7 @@ import { enqueueStaffMessage } from '../notifications/staff/staff-notifications'
 import { exclusive, exclusiveWait } from '../security/idempotency';
 import { lockAppointment, queueJob } from '../whatsapp/queue';
 import { OTHER_VISIT, technicianBusyReason } from './availability';
-import { staffAppointment } from './staff-appointments.service';
+import { staffAppointment, syncCalConfirmation } from './staff-appointments.service';
 
 /**
  * Propuesta de otro horario del técnico al cliente.
@@ -46,10 +46,13 @@ const HOUR = 3600000;
 
 /** Vencimiento de una propuesta enviada en `now` (null si ya no da tiempo a responder). */
 export function proposalDeadline(now: Date, current: Date, proposed: Date) {
+  // Si la visita actual ya pasó (no se pudo hacer), solo cuenta la propuesta.
+  const visit =
+    current > now ? Math.min(current.getTime(), proposed.getTime()) : proposed.getTime();
   const deadline = new Date(
     Math.min(
       now.getTime() + PROPOSAL_RULES.answerHours * HOUR,
-      Math.min(current.getTime(), proposed.getTime()) - PROPOSAL_RULES.beforeVisitHours * HOUR,
+      visit - PROPOSAL_RULES.beforeVisitHours * HOUR,
     ),
   );
   return deadline.getTime() - now.getTime() >= PROPOSAL_RULES.minimumMinutes * 60000
@@ -83,8 +86,11 @@ export async function proposeReschedule(
     if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
     if (a.assignedTechnicianId !== user.id)
       throw new ForbiddenException('Solo el técnico a cargo puede proponer otro horario.');
-    if (a.status !== 'CONFIRMED' || a.startsAt <= now)
-      throw new BadRequestException('Solo se puede proponer otro horario para una visita futura.');
+    // También una visita cuya hora pasó sin completarse (no se pudo hacer).
+    if (a.status !== 'CONFIRMED')
+      throw new BadRequestException(
+        'Solo se puede proponer otro horario para una visita confirmada y sin completar.',
+      );
     if (!usesHold(a) || !a.calUid)
       throw new BadRequestException(
         'Esta visita no está en la agenda: pide a administración que cambie la fecha.',
@@ -294,6 +300,8 @@ export async function answerProposal(input: {
         acceptedProposalOf: a.proposedById ?? undefined,
       });
       await deliverNow(notifications);
+      // La reserva nueva de Cal.com queda aceptada (si falla, se reintenta sola).
+      await syncCalConfirmation(a.id);
     } catch (error) {
       if (!(error instanceof HttpException)) throw error;
       outcome = 'FAILED';

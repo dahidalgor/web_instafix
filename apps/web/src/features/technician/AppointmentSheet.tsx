@@ -521,7 +521,8 @@ export function AppointmentSheet({
                   )}
                 </>
               )}
-              {mine && item.status === 'CONFIRMED' && upcoming && !item.handover && (
+              {/* También si la hora ya pasó sin completarla (la visita no se pudo hacer). */}
+              {mine && item.status === 'CONFIRMED' && !item.handover && (
                 <div className="tech-handover">
                   {item.proposal ? (
                     <>

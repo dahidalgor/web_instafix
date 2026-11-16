@@ -97,10 +97,17 @@ test(
     start.setUTCHours(15, 0, 0, 0); // 10H00 en Ecuador
     const job = await visit(start);
     await confirmAppointment(staff, job.id);
-    const [first, second] = await reminders(job.id);
+    const [first, second, third] = await reminders(job.id);
     assert.equal(first.recipient, tech.user.id);
     assert.equal(first.dueAt.getTime(), job.endsAt.getTime() + 2 * 3600000);
     assert.equal(second.dueAt.getTime(), job.endsAt.getTime() + 4 * 3600000);
+    // Y uno más a la mañana siguiente (09H00 de Ecuador) si sigue abierta.
+    assert.equal(
+      new Date(third.dueAt.getTime() - 5 * 3600000).toISOString().slice(11, 16),
+      '09:00',
+    );
+    assert.ok(third.dueAt > second.dueAt);
+    assert.match((third.data as { body: string }).body, /propón otro horario/);
     // Antes de su hora no se envía.
     await deliverNotification(first.id);
     assert.equal(
@@ -109,7 +116,7 @@ test(
     );
     // Confirmar otra vez (doble pulsación) no duplica los recordatorios.
     await confirmAppointment(staff, job.id);
-    assert.equal((await reminders(job.id)).length, 2);
+    assert.equal((await reminders(job.id)).length, 3);
 
     // Primer recordatorio: llega solo al técnico asignado, con el mensaje propuesto.
     await due(first.id);
