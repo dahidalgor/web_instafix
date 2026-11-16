@@ -8,7 +8,9 @@ import {
   holdDeadline,
   holdDeadlineForExisting,
   isQuietTime,
+  confirmHoursFor,
   responseDeadline,
+  responseWarningTime,
 } from '../booking/hold';
 
 /** Hora de Ecuador (UTC-5). */
@@ -25,15 +27,25 @@ test('horario nocturno: de 22H00 a 07H00 el reloj se detiene', () => {
   // Agendada a las 23H00: el plazo empieza a las 07H00.
   assert.deepEqual(addActiveTime(ec('2026-11-20T23:00'), 2 * H), ec('2026-11-21T09:00'));
   assert.equal(activeTimeBetween(ec('2026-11-20T21:00'), ec('2026-11-21T08:00')), 2 * H);
-  assert.deepEqual(responseDeadline(ec('2026-11-20T10:15')), ec('2026-11-20T12:15'));
+  // El cliente tiene 3 h activas para responder; el aviso «se cancelará» sale 1 h antes.
+  assert.deepEqual(responseDeadline(ec('2026-11-20T10:15')), ec('2026-11-20T13:15'));
+  assert.deepEqual(responseWarningTime(ec('2026-11-20T10:15')), ec('2026-11-20T12:15'));
+  assert.deepEqual(responseDeadline(ec('2026-11-20T21:00')), ec('2026-11-21T09:00'));
 });
 
-test('reserva provisional: 4 h activas para confirmar y como tarde 3 h antes de la cita', () => {
-  // Normal: 10H00 → 14H00.
-  assert.deepEqual(
-    holdDeadline(ec('2026-11-20T10:00'), ec('2026-11-25T10:00')),
-    ec('2026-11-20T14:00'),
-  );
+test('reserva provisional: 4, 24 o 48 h activas según lo lejana que sea, y como tarde 3 h antes', () => {
+  const from = ec('2026-11-20T10:00');
+  assert.equal(confirmHoursFor(from, ec('2026-11-20T18:00')), 4, 'hoy');
+  assert.equal(confirmHoursFor(from, ec('2026-11-21T08:00')), 4, 'mañana');
+  assert.equal(confirmHoursFor(from, ec('2026-11-22T08:00')), 24, 'en 2 días');
+  assert.equal(confirmHoursFor(from, ec('2026-11-23T20:00')), 24, 'en 3 días');
+  assert.equal(confirmHoursFor(from, ec('2026-11-24T08:00')), 48, 'en 4 días');
+  // Mañana: 10H00 → 14H00.
+  assert.deepEqual(holdDeadline(from, ec('2026-11-21T18:00')), ec('2026-11-20T14:00'));
+  // En 2 días: 24 h activas (12 h el viernes + 12 h el sábado) → sábado 19H00.
+  assert.deepEqual(holdDeadline(from, ec('2026-11-22T10:00')), ec('2026-11-21T19:00'));
+  // En 5 días: 48 h activas (12 + 15 + 15 + 6) → lunes 13H00.
+  assert.deepEqual(holdDeadline(from, ec('2026-11-25T10:00')), ec('2026-11-23T13:00'));
   // Cita pronto: vence 3 h antes (11H00 para una cita a las 14H00).
   assert.deepEqual(
     holdDeadline(ec('2026-11-20T09:00'), ec('2026-11-20T14:00')),

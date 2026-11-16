@@ -47,6 +47,9 @@ export function AppointmentSheet({
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [askingHandover, setAskingHandover] = useState(false);
   const [handoverReason, setHandoverReason] = useState('');
+  // Propuesta de otro horario al cliente (fecha y hora de Ecuador, «YYYY-MM-DDTHH:mm»).
+  const [proposing, setProposing] = useState(false);
+  const [proposedAt, setProposedAt] = useState('');
   // Sorteo abierto (si hay): se marca solo al registrar un servicio que cuenta en él (una
   // participación por unidad). Si el técnico cambia la casilla o el número, se respeta.
   const [giveaway, setGiveaway] = useState<Giveaway | null>(null);
@@ -477,6 +480,12 @@ export function AppointmentSheet({
                       : `Tienes ese horario marcado como ocupado («${item.busyReason}»). Si sí puedes ir, quítalo en Horarios.`}
                   </p>
                 )}
+              {item.onlyYouFree && !item.busyReason && (
+                <p className="tech-sole-note" role="note">
+                  Eres el único técnico disponible en este horario: el resto del equipo está
+                  ocupado.
+                </p>
+              )}
               {item.status === 'PENDING_LOCATION' && !item.assignedTechnician && item.confirmBy && (
                 <p className="tech-deadline-note">
                   Confírmala hasta {confirmByText(item.confirmBy, item.timeZone)} o se cancelará
@@ -512,7 +521,100 @@ export function AppointmentSheet({
                   )}
                 </>
               )}
-              {mine && item.status === 'CONFIRMED' && upcoming && (
+              {mine && item.status === 'CONFIRMED' && upcoming && !item.handover && (
+                <div className="tech-handover">
+                  {item.proposal ? (
+                    <>
+                      <p>
+                        <strong>Propusiste moverla</strong> al{' '}
+                        {visitDay(item.proposal.startsAt, item.timeZone).toLowerCase()} a las{' '}
+                        {visitTime(item.proposal.startsAt, item.timeZone)}. Esperamos la respuesta
+                        del cliente por WhatsApp hasta el{' '}
+                        {visitDay(item.proposal.expiresAt, item.timeZone).toLowerCase()} a las{' '}
+                        {visitTime(item.proposal.expiresAt, item.timeZone)}; si no responde, la
+                        visita se queda como está. Te avisaremos.
+                      </p>
+                      <BusyButton
+                        type="button"
+                        className="btn btn-ghost btn-block"
+                        disabled={busy}
+                        busyLabel="Retirando…"
+                        onClick={() =>
+                          act(
+                            '/proposal',
+                            { method: 'DELETE' },
+                            'Retiraste la propuesta: la visita sigue en su horario.',
+                          )
+                        }
+                      >
+                        Retirar propuesta
+                      </BusyButton>
+                    </>
+                  ) : proposing ? (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!proposedAt) return;
+                        const ok = await act(
+                          '/proposal',
+                          {
+                            method: 'POST',
+                            // Hora de Ecuador (UTC-5 todo el año).
+                            body: JSON.stringify({ startsAt: `${proposedAt}:00-05:00` }),
+                          },
+                          'Propuesta enviada: el cliente responde con un botón en WhatsApp.',
+                        );
+                        if (ok) setProposing(false);
+                      }}
+                    >
+                      <label>
+                        Nueva fecha y hora
+                        <input
+                          type="datetime-local"
+                          required
+                          value={proposedAt}
+                          onChange={(e) => setProposedAt(e.target.value)}
+                        />
+                      </label>
+                      <p className="small">
+                        Al cliente le llega un WhatsApp con «Sí, me sirve» y «No, mantener». Si
+                        acepta, la visita se mueve y sigue contigo; si no responde, se queda como
+                        está.
+                      </p>
+                      <div className="tech-actions-row">
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setProposing(false)}
+                        >
+                          Cancelar
+                        </button>
+                        <BusyButton
+                          type="submit"
+                          className="btn btn-primary"
+                          disabled={busy || !proposedAt}
+                          busyLabel="Enviando…"
+                        >
+                          Enviar propuesta
+                        </BusyButton>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-block"
+                      disabled={busy}
+                      onClick={() => {
+                        setAskingHandover(false);
+                        setProposing(true);
+                      }}
+                    >
+                      Proponer otro horario al cliente
+                    </button>
+                  )}
+                </div>
+              )}
+              {mine && item.status === 'CONFIRMED' && upcoming && !item.proposal && (
                 <div className="tech-handover">
                   {item.handover ? (
                     <>
@@ -565,7 +667,7 @@ export function AppointmentSheet({
                       </label>
                       <p className="small">
                         Sigues a cargo hasta que otra persona libre la tome. El cliente recibe un
-                        correo con el técnico nuevo.
+                        correo y un WhatsApp con el técnico nuevo.
                       </p>
                       <div className="tech-actions-row">
                         <button
@@ -590,7 +692,10 @@ export function AppointmentSheet({
                       type="button"
                       className="btn btn-ghost btn-block"
                       disabled={busy}
-                      onClick={() => setAskingHandover(true)}
+                      onClick={() => {
+                        setProposing(false);
+                        setAskingHandover(true);
+                      }}
                     >
                       No puedo ir: pedir reemplazo
                     </button>

@@ -60,10 +60,10 @@ El horario de una cita que nadie confirmó se guarda solo en Instafix (`holdStar
 `holdExpiresAt`, `responseDueAt`; ver `apps/api/src/booking/hold.ts`). La web descuenta esas
 reservas de los horarios de Cal.com, y dos clientes no pueden tomar el mismo horario.
 
-| Plazo                                            | Duración                                                         | Si vence        |
-| ------------------------------------------------ | ---------------------------------------------------------------- | --------------- |
-| Técnico confirma                                 | 4 h activas desde que se agenda; como tarde 3 h antes de la cita | Se cancela sola |
-| Cliente responde (ubicación o cualquier mensaje) | 2 h activas desde que sale el WhatsApp inicial                   | Se cancela sola |
+| Plazo                                            | Duración                                                                                                                                                 | Si vence        |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Técnico confirma                                 | Horas activas desde que se agenda: 4 h si la cita es mañana (u hoy), 24 h si es en 2–3 días, 48 h si es en 4 días o más; como tarde 3 h antes de la cita | Se cancela sola |
+| Cliente responde (ubicación o cualquier mensaje) | 3 h activas desde que sale el WhatsApp inicial; 1 h antes recibe «envía la ubicación o se cancelará»                                                     | Se cancela sola |
 
 - **Horas activas**: 07H00–22H00 de Ecuador. De noche no corren los plazos ni salen avisos.
 - Un horario que no deja al menos 30 min activos para confirmar no se ofrece ni se acepta.
@@ -75,6 +75,29 @@ reservas de los horarios de Cal.com, y dos clientes no pueden tomar el mismo hor
   cambio: el barrido les da plazo desde que las ve y, al vencer, también se cancelan en Cal.com.
 - Las citas creadas a mano por administración (sin agenda) no vencen.
 - El barrido corre cada minuto en `NotificationWorker` (`sweepBookingHolds`).
+- Recordatorios para confirmar: a los 10 y 30 min y luego cada 30 min; en plazos largos (24 o
+  48 h) se espacian para que sean unos 8 en total. El último («Última oportunidad») sale 30 min
+  antes de que venza.
+- **Único disponible**: si quien recibe la solicitud es la única persona del equipo libre a esa
+  hora, el aviso y la tarjeta de Pendientes lo dicen («Eres el único técnico disponible»).
+
+### Proponer otro horario al cliente
+
+En una visita confirmada, el técnico a cargo puede pulsar **«Proponer otro horario al
+cliente»** (`POST /api/v1/staff/appointments/:id/proposal`, retirarla con `DELETE`). Al
+cliente le llega un WhatsApp con dos botones, «Sí, me sirve» y «No, mantener»
+(`appointment_reschedule_proposal`).
+
+- **Acepta**: la visita se mueve (también en Cal.com), sigue con el mismo técnico y el cliente
+  recibe «confirmada» con la fecha nueva. Si el horario ya no está libre, no se mueve.
+- **Rechaza o no responde**: la visita se queda en su horario. La propuesta espera como mucho
+  12 h y vence 2 h antes de la visita (la actual o la propuesta).
+- En todos los casos el técnico recibe un aviso (`RESCHEDULE_ANSWERED`).
+- Requisitos: visita futura en la agenda, cliente con WhatsApp autorizado, sin pedido de
+  reemplazo abierto, horario propuesto libre para el técnico, con al menos 2 h de anticipación y
+  dentro de 60 días. Si no se cumplen, se coordina con administración.
+- Administración puede mover citas a **hoy** desde «Cambiar fecha y hora»: la regla «desde
+  mañana» es solo para los clientes.
 
 ### Horarios ocupados de los técnicos
 

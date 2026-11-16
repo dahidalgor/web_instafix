@@ -22,9 +22,10 @@ const providers = {
   confirm: async () => {},
 };
 
-async function confirmedVisit() {
+async function confirmedVisit(bookedAt = ec('2026-10-20T09:00:00')) {
   return db.appointment.create({
     data: {
+      createdAt: bookedAt,
       title: 'Mantenimiento',
       device: 'Laptop',
       startsAt: VISIT,
@@ -77,6 +78,12 @@ test(
     const [lateReminder] = await jobsOf(late.id);
     assert.equal(lateReminder.kind, 'DAY_BEFORE');
     assert.equal(lateReminder.dueAt.toISOString(), confirmedAt.toISOString());
+
+    // 2b) Agendada el día anterior: el cliente acaba de hacerlo, no hay recordatorio.
+    const bookedLate = await confirmedVisit(ec('2026-10-30T11:00:00'));
+    ids.push(bookedLate.id);
+    await db.$transaction((tx) => queueReminders(tx, bookedLate, ec('2026-10-30T12:00:00')));
+    assert.equal((await jobsOf(bookedLate.id)).length, 0, 'sin recordatorio si se agendó ayer');
 
     // 3) Confirmada el mismo día de la visita: ningún recordatorio.
     const sameDay = await confirmedVisit();

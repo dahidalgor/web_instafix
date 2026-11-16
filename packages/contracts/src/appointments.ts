@@ -147,8 +147,12 @@ export type StaffAppointment = {
   confirmBy?: string | null;
   /** Técnico: motivo por el que no puede confirmar esta cita (horario ocupado u otra visita). */
   busyReason?: string | null;
+  /** Pendiente: quien la ve es la única persona del equipo libre a esa hora. */
+  onlyYouFree?: boolean;
   /** Pedido de reemplazo abierto: el técnico asignado busca quien tome la visita. */
   handover?: { requestedBy: string; reason: string | null; requestedAt: string } | null;
+  /** Propuesta de otro horario esperando la respuesta del cliente por WhatsApp. */
+  proposal?: { startsAt: string; expiresAt: string } | null;
   canManage: boolean;
 };
 
@@ -206,6 +210,11 @@ export type StaffMember = {
 /** Pedido de reemplazo del técnico asignado (motivo opcional, p. ej. «Imprevisto»). */
 export const handoverRequestSchema = z
   .object({ reason: z.string().trim().max(160).optional() })
+  .strict();
+
+/** El técnico propone al cliente otro horario para su visita confirmada (por WhatsApp). */
+export const rescheduleProposalSchema = z
+  .object({ startsAt: z.string().datetime({ offset: true }) })
   .strict();
 
 /** Administración asigna la visita confirmada a otra persona del equipo. */

@@ -11,6 +11,7 @@ import { logEvent, logWorkerFailure } from '../common/log-event';
 import { db } from '../database/client';
 import { receiveDelivery } from './delivery';
 import { receiveCustomerMessage } from './inbound';
+import { answerProposal } from '../staff/reschedule-proposal';
 import { fillLocationArea, fillPendingLocationAreas } from './location-area';
 import { locationFromText } from './maps-link';
 import {
@@ -85,6 +86,21 @@ async function handleEvent(event: WhatsAppWebhookEvent, provider: string) {
     },
     data: { responseDueAt: null },
   });
+  // Botón de una propuesta de otro horario («Sí, me sirve» / «No, mantener»).
+  if (event.type === 'interactive_reply') {
+    await answerProposal({
+      phone: event.phone,
+      text: event.text,
+      inReplyTo: event.inReplyTo,
+    }).catch((error) =>
+      logEvent(
+        'booking.reschedule_proposal_error',
+        { reason: error instanceof Error ? error.message.slice(0, 200) : 'Error inesperado' },
+        'warn',
+      ),
+    );
+    return;
+  }
   // Se lee el tipo real del mensaje. Ubicación nativa de WhatsApp (objeto estructurado de
   // Bird): se usa tal cual, sin interpretar texto. Solo un texto puede traer un enlace de
   // Google/Apple Maps o coordenadas escritas; cualquier otro tipo no aporta ubicación.

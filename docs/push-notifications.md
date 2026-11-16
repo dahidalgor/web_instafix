@@ -62,6 +62,7 @@ Service worker /sw.js                                        apps/web/src/sw/
 | `HANDOVER_REQUESTED`      | Equipo libre en el horario de la visita    | Implementado                   |
 | `HANDOVER_TAKEN`          | El técnico que pidió el reemplazo          | Implementado                   |
 | `HANDOVER_UNCLAIMED`      | Administración (24 h antes, sin tomar)     | Implementado                   |
+| `RESCHEDULE_ANSWERED`     | El técnico que propuso otro horario        | Implementado                   |
 
 Solo cuenta como solicitud nueva el hecho `appointment.created` de una reserva hecha por el
 cliente (estado `PENDING_LOCATION`). Una edición, una reprogramación, una consulta de

@@ -119,13 +119,16 @@ test(
     const jobs = await db.automationJob.findMany({ where: { appointmentId: a.id } });
     assert.deepEqual(
       jobs.map((j) => j.kind).sort(),
-      // Un único recordatorio: el día anterior (no hay recordatorio del mismo día).
-      ['INITIAL', 'CONFIRMED', 'DAY_BEFORE'].sort(),
+      // Un único recordatorio: el día anterior (no hay recordatorio del mismo día). Al llegar la
+      // ubicación: «la recibimos» (una vez) y se anula el aviso «se cancelará».
+      ['INITIAL', 'CONFIRMED', 'DAY_BEFORE', 'LOCATION_RECEIVED', 'LOCATION_REMINDER'].sort(),
     );
+    assert.equal(jobs.find((j) => j.kind === 'LOCATION_REMINDER')?.status, 'CANCELLED');
     assert.equal(jobs.find((j) => j.kind === 'DAY_BEFORE')?.dueAt.getUTCHours(), 13);
     await receiveCalWebhook(event(first, 'BOOKING_CREATED', { status: 'ACCEPTED' }));
     assert.equal((await appointment(first)).status, 'CONFIRMED');
-    assert.equal(await db.automationJob.count({ where: { appointmentId: a.id } }), 3);
+    // El webhook de Cal.com no duplica ningún aviso.
+    assert.equal(await db.automationJob.count({ where: { appointmentId: a.id } }), jobs.length);
     await receiveCalWebhook(event(first, 'BOOKING_CANCELLED'));
     await receiveCalWebhook(event(first));
     assert.equal((await appointment(first)).status, 'CANCELLED');

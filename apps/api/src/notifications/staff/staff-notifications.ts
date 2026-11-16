@@ -57,6 +57,8 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
   HANDOVER_REQUESTED: ['ADMIN', 'TECHNICIAN'],
   HANDOVER_TAKEN: ['ADMIN', 'TECHNICIAN'],
   HANDOVER_UNCLAIMED: ['ADMIN'],
+  // Al técnico que propuso otro horario: respuesta del cliente (o que no respondió).
+  RESCHEDULE_ANSWERED: ['ADMIN', 'TECHNICIAN'],
   // Resumen diario de sus propias visitas (mañana a las 19H00, hoy a las 08H00).
   DAILY_AGENDA: ['ADMIN', 'TECHNICIAN'],
   // Prueba enviada por el propio usuario a sus dispositivos (POST /staff/push/test).
@@ -71,6 +73,7 @@ export const producedStaffNotifications: readonly StaffNotificationType[] = [
   'HANDOVER_REQUESTED',
   'HANDOVER_TAKEN',
   'HANDOVER_UNCLAIMED',
+  'RESCHEDULE_ANSWERED',
   'DAILY_AGENDA',
 ];
 
@@ -117,10 +120,16 @@ async function onlyAvailable<T extends { id: string; role: Role }>(
   users: T[],
   appointment: Appointment,
 ) {
-  if (!users.some((user) => user.role === 'TECHNICIAN')) return users;
-  const free = new Set(await availableTechnicianIds(client, appointment));
-  return users.filter((user) => user.role !== 'TECHNICIAN' || free.has(user.id));
+  const free = await availableTechnicianIds(client, appointment);
+  const freeSet = new Set(free);
+  return users
+    .filter((user) => user.role !== 'TECHNICIAN' || freeSet.has(user.id))
+    .map((user) => ({ ...user, sole: free.length === 1 && free[0] === user.id }));
 }
+
+/** Se añade al aviso de quien es la única persona libre para atender esa cita. */
+const SOLE_NOTE = ' Eres el único técnico disponible en ese horario.';
+const withSoleNote = (body: string, sole: boolean) => (sole ? `${body}${SOLE_NOTE}` : body);
 
 /**
  * Encola el aviso «Nueva solicitud de cita» dentro de la transacción de la cita.
@@ -147,7 +156,12 @@ export async function enqueueAppointmentRequested(
         kind: type,
         appointmentId: appointment.id,
         recipient: user.id,
-        data: { title, body, url: appointmentPanelPath(appointment.id), createdAt: now },
+        data: {
+          title,
+          body: withSoleNote(body, user.sole),
+          url: appointmentPanelPath(appointment.id),
+          createdAt: now,
+        },
       },
     });
     ids.push(row.id);
@@ -233,13 +247,17 @@ export async function scheduleConfirmationReminders(now = new Date()) {
     },
   });
   const ids: string[] = [];
-  const { first, second, every, lastBefore } = confirmationReminderMinutes;
+  const { first, second, every: baseEvery, lastBefore } = confirmationReminderMinutes;
   for (const appointment of pending) {
     const deadline = confirmDeadline(appointment);
     if (!deadline || deadline <= now) continue;
     const since = appointment.holdStartedAt ?? appointment.createdAt;
     const last = deadline.getTime() - now.getTime() <= lastBefore * 60000;
     const elapsed = activeTimeBetween(since, now) / 60000;
+    // Plazos largos (citas lejanas, 24 o 48 h): los avisos se espacian para no saturar; unos 8
+    // en total, nunca más seguido que cada 30 min.
+    const window = activeTimeBetween(since, appointment.holdExpiresAt ?? deadline) / 60000;
+    const every = Math.max(baseEvery, Math.round(window / 8));
     const stage = last
       ? 'LAST'
       : elapsed < first
@@ -276,7 +294,7 @@ export async function scheduleConfirmationReminders(now = new Date()) {
           recipient: user.id,
           data: {
             title,
-            body,
+            body: withSoleNote(body, user.sole),
             url: appointmentPanelPath(appointment.id),
             createdAt: now,
             scheduledFor: now,
@@ -362,6 +380,31 @@ export async function enqueueHandoverTaken(
       appointmentId: appointment.id,
       recipient: previousId,
       data: { title, body, url: DEFAULT_PUSH_URL, createdAt: now },
+    },
+  });
+}
+
+/** Aviso a una persona concreta del equipo sobre una cita (una vez por `key`). */
+export async function enqueueStaffMessage(
+  tx: Prisma.TransactionClient,
+  type: StaffNotificationType,
+  appointment: Appointment,
+  recipientId: string,
+  message: { title: string; body: string },
+  key: string,
+  now = new Date(),
+) {
+  const dedupeKey = staffNotificationKey(type, `${appointment.id}:${key}`, recipientId);
+  await tx.notification.upsert({
+    where: { dedupeKey },
+    update: {},
+    create: {
+      dedupeKey,
+      channel: 'WEB_PUSH',
+      kind: type,
+      appointmentId: appointment.id,
+      recipient: recipientId,
+      data: { ...message, url: appointmentPanelPath(appointment.id), createdAt: now },
     },
   });
 }

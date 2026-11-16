@@ -40,9 +40,9 @@ export async function publishAppointmentEvent(
     if (id) notifications.push(id);
   };
   // WhatsApp solo con consentimiento del cliente; cada aviso tiene su plantilla aprobada.
-  const whatsapp = async (kind: MessageKind) => {
+  const whatsapp = async (kind: MessageKind, variant?: string) => {
     if (appointment.whatsappConsentAt && appointment.contactPhone)
-      await queueJob(tx, appointment, kind, now, appointment.startsAt, origin);
+      await queueJob(tx, appointment, kind, now, appointment.startsAt, origin, variant);
   };
   switch (event.type) {
     case 'appointment.created':
@@ -54,7 +54,14 @@ export async function publishAppointmentEvent(
       break;
     case 'appointment.rescheduled':
       await email('APPOINTMENT_RESCHEDULED', { previousStartsAt: event.previousStartsAt });
-      await whatsapp('RESCHEDULED');
+      // Si sigue confirmada con su técnico (administración lo mantuvo o el cliente aceptó la
+      // propuesta del técnico), el WhatsApp dice «confirmada» con la fecha nueva; «te avisaremos
+      // cuando un técnico la confirme» es solo para la que vuelve a esperar técnico.
+      await whatsapp(
+        appointment.status === 'CONFIRMED' && appointment.assignedTechnicianId
+          ? 'CONFIRMED'
+          : 'RESCHEDULED',
+      );
       break;
     case 'appointment.cancelled':
       await email('APPOINTMENT_CANCELLED');
@@ -69,10 +76,11 @@ export async function publishAppointmentEvent(
       await scheduleCompletionReminders(tx, appointment, now);
       break;
     case 'appointment.reassigned':
-      // Otro técnico tomó la visita confirmada: correo al cliente con el técnico nuevo (por
-      // WhatsApp haría falta otra plantilla aprobada). Los recordatorios de «completar trabajo»
-      // pasan al técnico nuevo; los del anterior se anulan solos al enviarse.
+      // Otro técnico tomó la visita confirmada: correo y WhatsApp al cliente con el técnico
+      // nuevo. Los recordatorios de «completar trabajo» pasan al técnico nuevo; los del
+      // anterior se anulan solos al enviarse.
       await email('APPOINTMENT_REASSIGNED', { technicianName: event.technicianName });
+      await whatsapp('TECHNICIAN_CHANGED', appointment.assignedTechnicianId ?? undefined);
       await scheduleCompletionReminders(tx, appointment, now);
       break;
     case 'appointment.completed':

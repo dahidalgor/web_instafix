@@ -27,6 +27,10 @@ export const WHATSAPP_BUDGET = {
     CANCELLED: 1,
     DAY_BEFORE: 2,
     SAME_DAY: 2,
+    LOCATION_REMINDER: 1,
+    LOCATION_RECEIVED: 1,
+    TECHNICIAN_CHANGED: 3,
+    RESCHEDULE_PROPOSAL: 3,
   } as Record<string, number>,
 } as const;
 
@@ -57,6 +61,14 @@ export function eventTypeOf(kind: string, reconfirmation = false) {
     case 'DAY_BEFORE':
     case 'SAME_DAY':
       return 'APPOINTMENT_REMINDER';
+    case 'LOCATION_REMINDER':
+      return 'APPOINTMENT_LOCATION_REMINDER';
+    case 'LOCATION_RECEIVED':
+      return 'APPOINTMENT_LOCATION_RECEIVED';
+    case 'TECHNICIAN_CHANGED':
+      return 'APPOINTMENT_REASSIGNED';
+    case 'RESCHEDULE_PROPOSAL':
+      return 'APPOINTMENT_RESCHEDULE_PROPOSED';
     default:
       return kind;
   }

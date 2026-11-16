@@ -29,17 +29,21 @@ Permisos de la API key: lectura y envío de WhatsApp, números y plantillas. `wo
 
 ## Plantillas
 
-| Aviso de Instafix                                                 | Plantilla en Bird                | Categoría      |
-| ----------------------------------------------------------------- | -------------------------------- | -------------- |
-| Solicitud recibida (pide ubicación)                               | `appointment_requested`          | Utility        |
-| Técnico confirma la visita                                        | `appointment_confirmed`          | Utility        |
-| Reprogramada                                                      | `appointment_rescheduled`        | Utility        |
-| Cancelada                                                         | `appointment_cancelled`          | Utility        |
-| Recordatorio el día anterior (08:00 Ecuador)                      | `appointment_reminder`           | Utility        |
-| Código de verificación (registro, recuperación, cambio de número) | `bird_otp` (gestionada por Bird) | Authentication |
+| Aviso de Instafix                                                 | Plantilla en Bird                 | Categoría      |
+| ----------------------------------------------------------------- | --------------------------------- | -------------- |
+| Solicitud recibida (pide ubicación)                               | `appointment_requested`           | Utility        |
+| Técnico confirma la visita                                        | `appointment_confirmed`           | Utility        |
+| Reprogramada                                                      | `appointment_rescheduled`         | Utility        |
+| Cancelada                                                         | `appointment_cancelled`           | Utility        |
+| Recordatorio el día anterior (08:00 Ecuador)                      | `appointment_reminder`            | Utility        |
+| Recibimos la ubicación (una vez, si aún espera técnico)           | `appointment_location_received`   | Utility        |
+| Falta la ubicación: se cancela a las {{limite}}                   | `appointment_location_reminder`   | Utility        |
+| Cambió el técnico de la visita                                    | `appointment_technician_changed`  | Utility        |
+| El técnico propone otro horario (botones de respuesta rápida)     | `appointment_reschedule_proposal` | Utility        |
+| Código de verificación (registro, recuperación, cambio de número) | `bird_otp` (gestionada por Bird)  | Authentication |
 
 - **Idioma**: se usa el idioma aprobado de cada plantilla (`es-EC`, `es`…), leído de Bird. No se configura.
-- **Variables con nombre**: Instafix ofrece `{{nombre}}` (primer nombre), `{{servicio}}` (lo que escribió el cliente), `{{fecha}}` («viernes 24 de octubre»), `{{hora}}` («10:00»), `{{tecnico}}` y `{{cuando}}` («mañana»/«hoy» en recordatorios, la fecha en el resto). Cada plantilla usa las que quiera; el proveedor envía solo las que declara su versión aprobada (caché de 10 minutos). Una plantilla con variables posicionales (`{{1}}`) o con nombres distintos **no se envía** y Administración → WhatsApp lo indica.
+- **Variables con nombre**: Instafix ofrece `{{nombre}}` (primer nombre), `{{servicio}}` (lo que escribió el cliente), `{{fecha}}` («viernes 24 de octubre»), `{{hora}}` («10:00»), `{{tecnico}}`, `{{cuando}}` («mañana»/«hoy» en recordatorios, la fecha en el resto), `{{limite}}` (hora en que se cancela la solicitud sin ubicación) y `{{fecha_nueva}}`/`{{hora_nueva}}` (horario que propone el técnico). Cada plantilla usa las que quiera; el proveedor envía solo las que declara su versión aprobada (caché de 10 minutos). Una plantilla con variables posicionales (`{{1}}`) o con nombres distintos **no se envía** y Administración → WhatsApp lo indica.
 - **OTP**: `bird_otp` ya está aprobada por Meta y sale desde un número de Bird (no desde el de Instafix): «Tu código de verificación es _123456_. Por tu seguridad, no lo compartas.» + botón «Copiar código». Si Meta aprueba una plantilla propia, basta con cambiar `BIRD_OTP_TEMPLATE` en `whatsapp/bird/bird.provider.ts`.
 - Se retiraron los avisos «técnico asignado» y «técnico en camino» (sin plantilla). Los trabajos antiguos de esos tipos se cancelan sin enviarse.
 
@@ -121,6 +125,8 @@ No borres el evento viejo mientras tenga citas pendientes; ocúltalo.
 - Cola `AutomationJob` revisada cada 15 s; bandeja de webhooks cada 3 s. Sobreviven reinicios y se coordinan con PostgreSQL.
 - Cancelar o reprogramar invalida los avisos pendientes de la revisión anterior.
 - Hay un único recordatorio: el día anterior a las 08:00 de Ecuador (o al confirmar, si ya pasó esa hora). Caduca a las 00:00 del día de la visita: nunca sale un «mañana» el mismo día. Si la visita se confirma el mismo día, no hay recordatorio. El antiguo recordatorio del mismo día se retiró y los que quedaban encolados se cancelan sin enviarse.
+- No hay recordatorio si la cita se agendó (o se movió a esa fecha) el día anterior o el mismo día.
+- **Respuesta a la propuesta de horario**: el botón llega como `interactive_reply`. Se busca la cita por el mensaje respondido (`in_reply_to_message_id`) o, si WhatsApp no lo informa, por ser la única propuesta abierta de ese número. Tocarlo otra vez, o un botón viejo, no hace nada.
 - Mensajes solo con autorización del cliente (`whatsappConsentAt`).
 
 ## Pruebas

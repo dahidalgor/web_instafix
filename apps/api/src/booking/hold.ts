@@ -11,10 +11,19 @@ import type { Appointment } from '@prisma/client';
  * plazos, no vence ninguna reserva y no salen avisos a técnicos.
  */
 export const HOLD_RULES = {
-  /** Tiempo para que un técnico confirme. */
+  /**
+   * Tiempo activo para que un técnico confirme, según cuántos días faltan para la cita: las de
+   * mañana (o de hoy) 4 h, las de 2 a 3 días 24 h y las de 4 días o más 48 h.
+   */
   confirmHours: 4,
+  confirmHoursByDaysAhead: [
+    { fromDays: 4, hours: 48 },
+    { fromDays: 2, hours: 24 },
+  ],
   /** Tiempo para que el cliente responda al WhatsApp inicial (ubicación o cualquier mensaje). */
-  responseHours: 2,
+  responseHours: 3,
+  /** Aviso al cliente de que la solicitud se cancelará: esta cantidad antes de su plazo. */
+  responseWarningBeforeHours: 1,
   /** La reserva siempre vence al menos estas horas antes de la cita. */
   beforeStartHours: 3,
   /** Un horario que no deja al menos este tiempo para confirmar no se ofrece. */
@@ -82,14 +91,27 @@ export function activeTimeBetween(from: Date, to: Date) {
   return total;
 }
 
+/** Días de calendario (hora de Ecuador) entre `base` y la cita: 0 hoy, 1 mañana… */
+export const daysAhead = (base: Date, startsAt: Date) =>
+  Math.round((dayStart(startsAt) - dayStart(base)) / DAY);
+
+/** Horas activas para confirmar una cita en `startsAt` creada (o movida) en `base`. */
+export function confirmHoursFor(base: Date, startsAt: Date) {
+  const days = daysAhead(base, startsAt);
+  return (
+    HOLD_RULES.confirmHoursByDaysAhead.find((rule) => days >= rule.fromDays)?.hours ??
+    HOLD_RULES.confirmHours
+  );
+}
+
 /**
  * Vencimiento de la reserva provisional creada en `base` para una cita en `startsAt`:
- * 4 h activas para confirmar y, como tarde, 3 h antes de la cita (si eso cae de noche, a las
+ * 4, 24 o 48 h activas para confirmar (según lo lejana que sea, ver `confirmHoursFor`) y, como tarde, 3 h antes de la cita (si eso cae de noche, a las
  * 22H00 anteriores). null si no quedan ni 30 min activos para confirmar: ese horario no se
  * ofrece ni se acepta (se cancelaría antes de que nadie pudiera confirmarlo).
  */
 export function holdDeadline(base: Date, startsAt: Date) {
-  let deadline = addActiveTime(base, HOLD_RULES.confirmHours * HOUR);
+  let deadline = addActiveTime(base, confirmHoursFor(base, startsAt) * HOUR);
   const latest = new Date(startsAt.getTime() - HOLD_RULES.beforeStartHours * HOUR);
   if (latest < deadline) deadline = lastActiveTime(latest);
   return activeTimeBetween(base, deadline) >= HOLD_RULES.minimumMinutes * 60000 ? deadline : null;
@@ -115,6 +137,10 @@ export function holdDeadlineForExisting(base: Date, startsAt: Date) {
 /** Plazo para responder al WhatsApp inicial enviado en `sentAt`. */
 export const responseDeadline = (sentAt: Date) =>
   addActiveTime(sentAt, HOLD_RULES.responseHours * HOUR);
+
+/** Cuándo avisar al cliente que su solicitud se cancelará si no envía la ubicación. */
+export const responseWarningTime = (sentAt: Date) =>
+  addActiveTime(sentAt, (HOLD_RULES.responseHours - HOLD_RULES.responseWarningBeforeHours) * HOUR);
 
 /** Citas que usan la reserva provisional: las de la agenda (web o Cal.com), no las manuales. */
 export const usesHold = (a: Pick<Appointment, 'calUid' | 'source'>) =>

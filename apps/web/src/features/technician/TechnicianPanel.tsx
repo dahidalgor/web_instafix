@@ -253,11 +253,13 @@ export function TechnicianPanel({
                     ? tab === 'pending'
                       ? 'Busca reemplazo'
                       : 'Buscando reemplazo'
-                    : a === nextVisit
-                      ? 'Próxima visita'
-                      : active(a) && new Date(a.endsAt).getTime() < now
-                        ? 'Sin completar'
-                        : undefined
+                    : tab === 'pending' && a.onlyYouFree
+                      ? 'Solo tú estás libre'
+                      : a === nextVisit
+                        ? 'Próxima visita'
+                        : active(a) && new Date(a.endsAt).getTime() < now
+                          ? 'Sin completar'
+                          : undefined
                 }
                 details={
                   <>

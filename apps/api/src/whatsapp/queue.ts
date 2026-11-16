@@ -14,9 +14,11 @@ export async function queueJob(
   dueAt: Date,
   expiresAt = appointment.startsAt,
   origin?: RequestOrigin | null,
+  /** Distingue avisos repetibles del mismo tipo en una misma revisión (p. ej. otro técnico). */
+  variant?: string,
 ) {
   if (appointment.bookingIdentityIssue || appointment.deletedAt || expiresAt <= dueAt) return;
-  const dedupeKey = `${appointment.id}:${appointment.automationRevision}:${kind}`;
+  const dedupeKey = `${appointment.id}:${appointment.automationRevision}:${kind}${variant ? `:${variant}` : ''}`;
   await tx.automationJob.upsert({
     where: { dedupeKey },
     update: {},
@@ -48,8 +50,15 @@ export async function queueReminders(
   // Un único recordatorio: el día anterior a las 08:00 de Ecuador (o al confirmar, si ya pasó
   // esa hora). Caduca a las 00:00 del día de la visita: el mismo día nunca sale un «mañana».
   // No hay recordatorio del mismo día: la plantilla aprobada dice «mañana».
+  // Tampoco si la cita se agendó (o se movió a esta fecha) el día anterior o el mismo día: el
+  // cliente acaba de hacerlo y ya recibió la confirmación.
   const times = reminderTimes(appointment.startsAt);
-  if (now < times.dayStart)
+  const bookedAt = Math.max(
+    appointment.createdAt.getTime(),
+    appointment.holdStartedAt?.getTime() ?? 0,
+  );
+  const bookedDayBefore = bookedAt >= times.dayStart.getTime() - 86400000;
+  if (now < times.dayStart && !bookedDayBefore)
     await queueJob(
       tx,
       appointment,

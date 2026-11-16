@@ -1,5 +1,6 @@
 import {
   handoverRequestSchema,
+  rescheduleProposalSchema,
   addPerformedServiceSchema,
   completeAppointmentSchema,
   technicianNotesSchema,
@@ -53,6 +54,7 @@ function checkId(...ids: string[]) {
  * Panel técnico. Todas las rutas exigen sesión de ADMIN o TECHNICIAN y obtienen la identidad
  * de la sesión: no existe ningún parámetro «technicianId».
  */
+import { proposeReschedule, withdrawProposal } from './reschedule-proposal';
 @Controller('api/v1/staff')
 export class StaffController {
   @Get('me') async me(@Req() req: Request) {
@@ -220,6 +222,26 @@ export class StaffController {
     checkOrigin(req);
     checkId(id);
     return cancelHandover(await authenticatedStaff(req), id);
+  }
+
+  /** El técnico a cargo propone otro horario al cliente (WhatsApp con botones). */
+  @Post('appointments/:id/proposal')
+  @HttpCode(200)
+  @RateLimit('staff')
+  async propose(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    const parsed = rescheduleProposalSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new BadRequestException('Elige la nueva fecha y hora.');
+    return proposeReschedule(await authenticatedStaff(req), id, parsed.data.startsAt);
+  }
+
+  @Delete('appointments/:id/proposal')
+  @RateLimit('staff')
+  async withdrawProposal(@Param('id') id: string, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    return withdrawProposal(await authenticatedStaff(req), id);
   }
 
   /** Tomar la visita de un reemplazo abierto (el primero que la toma se la queda). */

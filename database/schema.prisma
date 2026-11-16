@@ -243,6 +243,11 @@ model Appointment {
   handoverRequestedAt DateTime?
   handoverRequestedById String?
   handoverReason String?
+  /// Propuesta de nuevo horario del técnico, en espera de la respuesta del cliente por WhatsApp.
+  proposedStartsAt DateTime?
+  proposedById String?
+  proposalSentAt DateTime?
+  proposalExpiresAt DateTime?
   automationRevision Int @default(0)
   // INSTAFIX_API: creada por Instafix mediante la API de Cal.com. CAL_EMBED: histórico del iframe.
   source String @default("CAL_EMBED")

@@ -3,7 +3,7 @@ import { logEvent } from '../common/log-event';
 import { normalizePhone } from '@instafix/contracts/src/phone';
 import { db } from '../database/client';
 import { CONSUMED } from './budget';
-import { lockAppointment } from './queue';
+import { lockAppointment, queueJob } from './queue';
 
 /** Estados en los que una cita sigue esperando o puede corregir la ubicación del cliente. */
 export const LOCATION_STATUSES = ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'] as const;
@@ -166,15 +166,24 @@ export async function receiveCustomerMessage(message: {
               automationIssue: null,
             },
           });
+          // Ya no hace falta pedirla ni avisar que la solicitud se cancelará.
           await tx.automationJob.updateMany({
             where: {
               appointmentId: updated.id,
-              kind: 'INITIAL',
+              kind: { in: ['INITIAL', 'LOCATION_REMINDER'] },
               status: { in: ['PENDING', 'RETRY'] },
             },
             data: { status: 'CANCELLED' },
           });
-          // La ubicación solo informa al técnico; no genera ningún WhatsApp de respuesta.
+          // Primera ubicación de una cita que aún espera técnico: «¡Listo! Recibimos tu
+          // ubicación». Una corrección posterior no lo repite (y el presupuesto permite uno).
+          if (
+            !current.locationReceivedAt &&
+            updated.status === 'PENDING_LOCATION' &&
+            !updated.assignedTechnicianId &&
+            updated.whatsappConsentAt
+          )
+            await queueJob(tx, updated, 'LOCATION_RECEIVED', new Date());
           outcome = current.locationReceivedAt ? 'LOCATION_UPDATED' : 'LOCATION_ACCEPTED';
           located = updated.id;
         } else outcome = 'STALE_LOCATION';

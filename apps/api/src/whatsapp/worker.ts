@@ -6,11 +6,12 @@ import { whatsappConfiguration, calConfiguration } from './config';
 import { isMessageKind, reminderTimes, type MessageKind } from './messages';
 import { confirmCalBooking } from '../integrations/cal-client';
 import { ProviderError } from '../integrations/provider-error';
+import { WhatsAppProviderError } from './provider';
 import { WhatsAppService } from './whatsapp.service';
 import { lockAppointment, queueJob, queueReminders } from './queue';
 import { deliveryState } from './delivery';
 import { budgetVerdict, logSuppressed } from './budget';
-import { responseDeadline, usesHold } from '../booking/hold';
+import { responseDeadline, responseWarningTime, usesHold } from '../booking/hold';
 
 type Providers = {
   send: (
@@ -39,6 +40,31 @@ export function kindStillValid(kind: string, appointment: Appointment) {
     case 'CONFIRMED':
     case 'DAY_BEFORE':
       return appointment.status === 'CONFIRMED';
+    case 'LOCATION_REMINDER':
+      // Solo mientras el cliente siga sin responder y la solicitud siga esperando.
+      return (
+        appointment.status === 'PENDING_LOCATION' &&
+        !appointment.assignedTechnicianId &&
+        !appointment.locationReceivedAt &&
+        !!appointment.responseDueAt &&
+        appointment.responseDueAt > new Date()
+      );
+    case 'LOCATION_RECEIVED':
+      // «Apenas un técnico confirme…»: ya no aplica si un técnico la confirmó.
+      return (
+        appointment.status === 'PENDING_LOCATION' &&
+        !appointment.assignedTechnicianId &&
+        !!appointment.locationReceivedAt
+      );
+    case 'TECHNICIAN_CHANGED':
+      return appointment.status === 'CONFIRMED' && !!appointment.assignedTechnicianId;
+    case 'RESCHEDULE_PROPOSAL':
+      return (
+        appointment.status === 'CONFIRMED' &&
+        !!appointment.proposedStartsAt &&
+        !!appointment.proposalExpiresAt &&
+        appointment.proposalExpiresAt > new Date()
+      );
     case 'SAME_DAY':
       // Retirado: decía «mañana» el día de la visita. Los ya encolados se cancelan sin enviar.
       return false;
@@ -124,19 +150,37 @@ export async function processJob(id: string, providers: Providers, now = new Dat
               !appointment.assignedTechnicianId &&
               !appointment.locationReceivedAt &&
               usesHold(appointment)
-            )
-              await tx.appointment.update({
+            ) {
+              const updated = await tx.appointment.update({
                 where: { id: appointment.id },
                 data: { responseDueAt: responseDeadline(now) },
               });
+              // Una hora antes, si sigue sin responder: «envíanos la ubicación o se cancela».
+              await queueJob(
+                tx,
+                updated,
+                'LOCATION_REMINDER',
+                responseWarningTime(now),
+                updated.responseDueAt!,
+              );
+            }
           }
         } catch (error) {
           const failure =
             error instanceof ProviderError
               ? error
               : new ProviderError('Resultado incierto: revisión necesaria', 'REVIEW');
-          const status =
-            failure.disposition === 'RETRY' && job.attempts >= 5 ? 'FAILED' : failure.disposition;
+          // «Ubicación recibida» solo sale con su plantilla aprobada: sin ella no se manda otra
+          // ni se reintenta (horas después ya no tendría sentido).
+          const notApprovedYet =
+            job.kind === 'LOCATION_RECEIVED' &&
+            failure instanceof WhatsAppProviderError &&
+            failure.code === 'TEMPLATE_NOT_APPROVED';
+          const status = notApprovedYet
+            ? 'CANCELLED'
+            : failure.disposition === 'RETRY' && job.attempts >= 5
+              ? 'FAILED'
+              : failure.disposition;
           await tx.automationJob.update({
             where: { id },
             data: {
