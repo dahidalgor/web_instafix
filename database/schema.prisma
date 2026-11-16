@@ -351,6 +351,8 @@ model AutomationJob {
   // Motivo de un aviso no enviado a propósito (SUPPRESSED_*): nunca se reintenta.
   suppressedReason String?
   lastError String?
+  // Desde cuándo espera que Meta apruebe su plantilla; pasado el límite se descarta.
+  templateWaitSince DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([status, dueAt])
