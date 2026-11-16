@@ -12,6 +12,10 @@ export const whatsappTemplates = [
   'appointment_rescheduled',
   'appointment_cancelled',
   'appointment_reminder',
+  'appointment_location_reminder',
+  'appointment_location_received',
+  'appointment_technician_changed',
+  'appointment_reschedule_proposal',
 ] as const;
 export type WhatsAppTemplate = (typeof whatsappTemplates)[number];
 
@@ -19,9 +23,20 @@ export type WhatsAppTemplate = (typeof whatsappTemplates)[number];
  * Variables con nombre que Instafix ofrece en cada aviso. Una plantilla puede usar cualquiera de
  * ellas ({{nombre}}, {{fecha}}…); si declara una que Instafix no ofrece, el envío se rechaza.
  */
-export type TemplateVariables = Partial<
-  Record<'nombre' | 'servicio' | 'fecha' | 'hora' | 'tecnico' | 'cuando', string>
->;
+export const templateVariableNames = [
+  'nombre',
+  'servicio',
+  'fecha',
+  'hora',
+  'tecnico',
+  'cuando',
+  /** Hora en que se cancela la solicitud si el cliente no envía la ubicación. */
+  'limite',
+  /** Horario que propone el técnico. */
+  'fecha_nueva',
+  'hora_nueva',
+] as const;
+export type TemplateVariables = Partial<Record<(typeof templateVariableNames)[number], string>>;
 
 export type SentMessage = {
   /** Id del mensaje en el proveedor (p. ej. wam_… en Bird). */

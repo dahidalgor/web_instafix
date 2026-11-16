@@ -22,7 +22,7 @@ import {
 import { ProviderError } from '../integrations/provider-error';
 import { logEvent } from '../common/log-event';
 import { exclusiveWait } from '../security/idempotency';
-import { createAgendaBooking } from '../booking/booking.service';
+import { clearProposal, createAgendaBooking } from '../booking/booking.service';
 import { confirmDeadline } from '../booking/hold';
 import { openGiveaway } from '../giveaways/giveaways';
 import {
@@ -98,6 +98,13 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
             requestedBy: a.assignedTechnician?.name ?? 'Un técnico',
             reason: a.handoverReason,
             requestedAt: a.handoverRequestedAt.toISOString(),
+          }
+        : null,
+    proposal:
+      manage && a.status === 'CONFIRMED' && a.proposedStartsAt && a.proposalExpiresAt
+        ? {
+            startsAt: a.proposedStartsAt.toISOString(),
+            expiresAt: a.proposalExpiresAt.toISOString(),
           }
         : null,
     services: a.services.map((s) => ({
@@ -195,15 +202,30 @@ export async function pendingAppointments(user: StaffUser, now = new Date()) {
     orderBy: { startsAt: 'asc' },
     include,
   });
-  // Un técnico solo ve las solicitudes de los horarios en que está libre.
-  if (user.role !== 'TECHNICIAN' || !items.length) return items.map((a) => serializeStaff(user, a));
-  const [me] = await technicianAgenda(
+  if (!items.length) return [];
+  // La agenda de todo el equipo en ese rango: quién está libre para cada cita.
+  const team = await technicianAgenda(
     db,
     items[0].startsAt,
     new Date(Math.max(...items.map((a) => a.endsAt.getTime()))),
-    user.id,
   );
-  return items.filter((a) => !me || !busyReason(me, a)).map((a) => serializeStaff(user, a));
+  const me = team.find((t) => t.id === user.id);
+  return (
+    items
+      // Un técnico solo ve las solicitudes de los horarios en que está libre.
+      .filter((a) => user.role !== 'TECHNICIAN' || !me || !busyReason(me, a))
+      .map((a) => ({ ...serializeStaff(user, a), onlyYouFree: onlyYouFree(team, user.id, a) }))
+  );
+}
+
+/** Esta persona es la única del equipo libre a esa hora (el resto está ocupado). */
+function onlyYouFree(
+  team: Awaited<ReturnType<typeof technicianAgenda>>,
+  userId: string,
+  a: { id: string; startsAt: Date; endsAt: Date },
+) {
+  const free = team.filter((t) => !busyReason(t, a));
+  return team.length > 1 && free.length === 1 && free[0].id === userId;
 }
 
 export async function staffAppointment(user: StaffUser, id: string) {
@@ -213,11 +235,15 @@ export async function staffAppointment(user: StaffUser, id: string) {
     throw new NotFoundException(
       'Esta cita ya no está disponible: otro técnico la confirmó, se canceló o ya pasó.',
     );
+  const open = isClaimable(a) || isOffered(a, user);
   const busy =
-    user.role === 'TECHNICIAN' && (isClaimable(a) || isOffered(a, user))
-      ? await technicianBusyReason(db, user.id, a)
-      : null;
-  return { ...serializeStaff(user, a), busyReason: busy };
+    user.role === 'TECHNICIAN' && open ? await technicianBusyReason(db, user.id, a) : null;
+  const team = open ? await technicianAgenda(db, a.startsAt, a.endsAt) : [];
+  return {
+    ...serializeStaff(user, a),
+    busyReason: busy,
+    onlyYouFree: open && onlyYouFree(team, user.id, a),
+  };
 }
 
 /** Mensaje para un técnico que intenta confirmar en un horario en que no está libre. */
@@ -705,7 +731,8 @@ async function transfer(
   const previousId = a.assignedTechnicianId!;
   const moved = await tx.appointment.updateMany({
     where: { id: a.id, status: 'CONFIRMED', assignedTechnicianId: previousId },
-    data: { assignedTechnicianId: to.id, technician: to.name, ...clearHandover },
+    // Una propuesta de horario del técnico anterior ya no aplica.
+    data: { assignedTechnicianId: to.id, technician: to.name, ...clearHandover, ...clearProposal },
   });
   if (!moved.count)
     throw new ConflictException('La visita cambió mientras tanto. Vuelve a abrirla.');

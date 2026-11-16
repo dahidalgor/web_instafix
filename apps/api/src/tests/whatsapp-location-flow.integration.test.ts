@@ -152,8 +152,13 @@ test(
     assert.equal(kept.locationLatitude, -0.2105);
     assert.equal(kept.locationLongitude, -78.4891);
     assert.equal(kept.locationSource, 'WHATSAPP');
-    // Recibir la ubicación no genera ningún WhatsApp saliente.
-    assert.equal(await outbound(a.id), jobsBefore);
+    // Recibir la ubicación genera un solo WhatsApp («la recibimos»); los textos, la imagen y
+    // el sticker no generan ninguno.
+    assert.equal(await outbound(a.id), jobsBefore + 1);
+    assert.equal(
+      await db.automationJob.count({ where: { appointmentId: a.id, kind: 'LOCATION_RECEIVED' } }),
+      1,
+    );
     // Y sobrevive: Mi cuenta (otra lectura, como tras un refresh) la sigue devolviendo.
     const user = await db.user.create({
       data: { name: 'Dueño', phone: contact, passwordHash: 'x', phoneVerifiedAt: new Date() },
@@ -211,7 +216,8 @@ test('case 5: a duplicated Bird webhook is processed once', { skip: !enabled }, 
     1,
   );
   assert.equal((await reload(a.id)).locationReceivedAt?.getTime(), at?.getTime());
-  assert.equal(await outbound(a.id), 0);
+  // Un solo «ubicación recibida», aunque el webhook llegue dos veces.
+  assert.equal(await outbound(a.id), 1);
 });
 
 test(

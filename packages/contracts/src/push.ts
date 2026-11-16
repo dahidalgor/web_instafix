@@ -20,6 +20,8 @@ export const staffNotificationTypes = [
   'HANDOVER_TAKEN',
   /** A administración: 24 h antes de la visita nadie tomó el reemplazo. */
   'HANDOVER_UNCLAIMED',
+  /** Al técnico que propuso otro horario: el cliente aceptó, lo rechazó o no respondió. */
+  'RESCHEDULE_ANSWERED',
   /** Al técnico: sus trabajos de mañana (19H00) y de hoy (08H00). */
   'DAILY_AGENDA',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */
@@ -298,6 +300,39 @@ export function handoverUnclaimedMessage(input: VisitInput, requester: string) {
     title: 'Nadie tomó un reemplazo',
     body: `${requester} pidió reemplazo para ${visitText(input)}. Reasígnala desde Citas o confirma con ${requester}.`,
   };
+}
+
+/** Respuesta del cliente a la propuesta de otro horario (al técnico que la hizo). */
+export function rescheduleAnsweredMessage(
+  input: VisitInput,
+  outcome: 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'FAILED',
+  proposed: Date,
+) {
+  const who = customerFirstName(input.contactName) ?? 'El cliente';
+  const { day, time } = formatAppointmentMoment(proposed, input.timeZone);
+  const proposedText = `el ${lowerFirst(day)} a las ${time}`;
+  switch (outcome) {
+    case 'ACCEPTED':
+      return {
+        title: `${who} aceptó el cambio`,
+        body: `La visita ahora es ${proposedText}. Ya se movió en la agenda.`,
+      };
+    case 'DECLINED':
+      return {
+        title: `${who} prefiere mantener el horario`,
+        body: `No aceptó moverla a ${proposedText}: ${visitText(input)} sigue igual. Si no puedes ir, pide un reemplazo.`,
+      };
+    case 'EXPIRED':
+      return {
+        title: `${who} no respondió a tu propuesta`,
+        body: `${capitalizeFirst(visitText(input))} sigue en su horario. Si no puedes ir, pide un reemplazo.`,
+      };
+    default:
+      return {
+        title: `${who} aceptó, pero no se pudo mover`,
+        body: `El horario ${proposedText} ya no está libre o la agenda no respondió: ${visitText(input)} sigue igual. Coordina con administración.`,
+      };
+  }
 }
 
 const capitalizeFirst = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;

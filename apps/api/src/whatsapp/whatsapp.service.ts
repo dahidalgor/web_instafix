@@ -5,7 +5,7 @@ import { db } from '../database/client';
 import { ProviderError } from '../integrations/provider-error';
 import { whatsappConfiguration } from './config';
 import { whatsappSendingEnabled } from './budget';
-import { messageVariables, templateFor, type MessageKind } from './messages';
+import { fallbackTemplateFor, messageVariables, templateFor, type MessageKind } from './messages';
 import {
   WHATSAPP_PROVIDER,
   WhatsAppProviderError,
@@ -29,13 +29,24 @@ export class WhatsAppService {
       throw new ProviderError('Envíos de WhatsApp desactivados', 'FAILED');
     if (!appointment.whatsappConsentAt)
       throw new ProviderError('Falta autorización del cliente', 'FAILED');
-    const template = templateFor(kind);
+    let template = templateFor(kind);
     try {
-      const sent = await this.provider.sendTemplate({
-        to: appointment.contactPhone,
-        template,
-        variables: messageVariables(kind, appointment),
-      });
+      const variables = messageVariables(kind, appointment);
+      const sent = await this.provider
+        .sendTemplate({ to: appointment.contactPhone, template, variables })
+        .catch((error) => {
+          // Plantilla nueva aún en revisión de Meta: sale con la aprobada equivalente.
+          const fallback = fallbackTemplateFor(kind);
+          if (
+            !fallback ||
+            !(error instanceof WhatsAppProviderError) ||
+            error.code !== 'TEMPLATE_NOT_APPROVED'
+          )
+            throw error;
+          logEvent('whatsapp.template_fallback', { operation: template, fallback });
+          template = fallback;
+          return this.provider.sendTemplate({ to: appointment.contactPhone, template, variables });
+        });
       await db.whatsAppMessage.upsert({
         where: {
           accountId_providerMessageId: {

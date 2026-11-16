@@ -3,6 +3,7 @@ import type { Appointment, Prisma } from '@prisma/client';
 import { maskRecipient } from '../communications/log';
 import { retryCalConfirmations } from '../staff/staff-appointments.service';
 import { sweepBookingHolds } from '../booking/hold-sweeper';
+import { sweepExpiredProposals } from '../staff/reschedule-proposal';
 import { db } from '../database/client';
 import {
   configuredStaffChannels,
@@ -201,6 +202,9 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
       this.holdsCheckedAt = Date.now();
       await sweepBookingHolds().catch(() =>
         console.error('No se pudieron revisar las reservas provisionales'),
+      );
+      await sweepExpiredProposals().catch(() =>
+        console.error('No se pudieron revisar las propuestas de horario'),
       );
     }
     // Confirmaciones de técnicos que Cal.com aún no reflejó: independiente del correo.

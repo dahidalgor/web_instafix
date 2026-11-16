@@ -9,6 +9,14 @@ export const messageKinds = [
   'SAME_DAY',
   'RESCHEDULED',
   'CANCELLED',
+  /** El cliente no envió la ubicación: la solicitud se cancela a la hora `limite`. */
+  'LOCATION_REMINDER',
+  /** Recibimos la ubicación (la primera); se avisará cuando un técnico confirme. */
+  'LOCATION_RECEIVED',
+  /** Otro técnico atenderá la visita confirmada (misma fecha y hora). */
+  'TECHNICIAN_CHANGED',
+  /** El técnico propone otro horario; el cliente responde con los botones del mensaje. */
+  'RESCHEDULE_PROPOSAL',
 ] as const;
 export type MessageKind = (typeof messageKinds)[number];
 export const isMessageKind = (kind: string): kind is MessageKind =>
@@ -21,8 +29,19 @@ const templates: Record<MessageKind, WhatsAppTemplate> = {
   SAME_DAY: 'appointment_reminder',
   RESCHEDULED: 'appointment_rescheduled',
   CANCELLED: 'appointment_cancelled',
+  LOCATION_REMINDER: 'appointment_location_reminder',
+  LOCATION_RECEIVED: 'appointment_location_received',
+  TECHNICIAN_CHANGED: 'appointment_technician_changed',
+  RESCHEDULE_PROPOSAL: 'appointment_reschedule_proposal',
 };
 export const templateFor = (kind: MessageKind): WhatsAppTemplate => templates[kind];
+
+/**
+ * Mientras Meta revisa una plantilla nueva, el aviso sale con una ya aprobada que sirve igual:
+ * «cita confirmada, te atenderá {{tecnico}}» cuenta el cambio de técnico.
+ */
+export const fallbackTemplateFor = (kind: MessageKind): WhatsAppTemplate | null =>
+  kind === 'TECHNICIAN_CHANGED' ? 'appointment_confirmed' : null;
 
 /**
  * Valores que Instafix ofrece a cualquier plantilla. Cada plantilla usa los que necesite;
@@ -31,24 +50,30 @@ export const templateFor = (kind: MessageKind): WhatsAppTemplate => templates[ki
 export function messageVariables(
   kind: MessageKind,
   appointment: Pick<Appointment, 'contactName' | 'title' | 'startsAt' | 'timeZone'> &
-    Partial<Pick<Appointment, 'technician'>>,
+    Partial<Pick<Appointment, 'technician' | 'responseDueAt' | 'proposedStartsAt'>>,
 ): TemplateVariables {
   const zone = { timeZone: appointment.timeZone };
-  const fecha = new Intl.DateTimeFormat('es-EC', {
-    ...zone,
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
-    .format(appointment.startsAt)
-    .replace(',', '');
-  const hora = new Intl.DateTimeFormat('es-EC', {
-    ...zone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(appointment.startsAt);
+  const dateOf = (at: Date) =>
+    new Intl.DateTimeFormat('es-EC', { ...zone, weekday: 'long', day: 'numeric', month: 'long' })
+      .format(at)
+      .replace(',', '');
+  const timeOf = (at: Date) =>
+    new Intl.DateTimeFormat('es-EC', {
+      ...zone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(at);
+  const fecha = dateOf(appointment.startsAt);
+  const hora = timeOf(appointment.startsAt);
   return {
+    ...(appointment.responseDueAt ? { limite: timeOf(appointment.responseDueAt) } : {}),
+    ...(appointment.proposedStartsAt
+      ? {
+          fecha_nueva: dateOf(appointment.proposedStartsAt),
+          hora_nueva: timeOf(appointment.proposedStartsAt),
+        }
+      : {}),
     nombre: appointment.contactName.trim().split(/\s+/)[0] || appointment.contactName,
     servicio: appointment.title.slice(0, 120),
     fecha,

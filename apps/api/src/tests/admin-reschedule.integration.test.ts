@@ -164,8 +164,8 @@ test(
       where: { appointmentId: kept.id, status: 'PENDING' },
     });
     assert.ok(
-      jobs.some((j) => j.kind === 'RESCHEDULED'),
-      'WhatsApp «reprogramada»',
+      jobs.some((j) => j.kind === 'CONFIRMED') && !jobs.some((j) => j.kind === 'RESCHEDULED'),
+      'WhatsApp «confirmada» con la fecha nueva (no «cuando un técnico la confirme»)',
     );
     assert.ok(
       jobs.some((j) => j.kind === 'DAY_BEFORE'),

@@ -24,6 +24,7 @@ import {
   type WhatsAppWebhookEvent,
   WebhookSignatureError,
   WhatsAppProviderError,
+  templateVariableNames,
   whatsappTemplates,
 } from '../provider';
 import { BirdConfigError, birdClient, birdWebhookReceiver } from './bird.client';
@@ -38,6 +39,10 @@ const BIRD_TEMPLATES: Record<WhatsAppTemplate, string> = {
   appointment_rescheduled: 'appointment_rescheduled',
   appointment_cancelled: 'appointment_cancelled',
   appointment_reminder: 'appointment_reminder',
+  appointment_location_reminder: 'appointment_location_reminder',
+  appointment_location_received: 'appointment_location_received',
+  appointment_technician_changed: 'appointment_technician_changed',
+  appointment_reschedule_proposal: 'appointment_reschedule_proposal',
 };
 /**
  * Código de verificación: plantilla de autenticación gestionada por Bird (ya aprobada, sale desde
@@ -204,7 +209,7 @@ export class BirdWhatsAppProvider implements WhatsAppProvider {
         if (component.variables.some((name) => /^\d+$/.test(name)) || missing.length)
           throw new WhatsAppProviderError(
             'TEMPLATE',
-            `La plantilla «${slug}» usa variables que Instafix no ofrece (${(missing.length ? missing : component.variables).join(', ')}). Usa solo {{nombre}}, {{servicio}}, {{fecha}}, {{hora}}, {{tecnico}} o {{cuando}}.`,
+            `La plantilla «${slug}» usa variables que Instafix no ofrece (${(missing.length ? missing : component.variables).join(', ')}). Usa solo ${templateVariableNames.map((v) => `{{${v}}}`).join(', ')}.`,
             'FAILED',
           );
         if (component.variables.length)
@@ -276,7 +281,7 @@ export class BirdWhatsAppProvider implements WhatsAppProvider {
         const slug = BIRD_TEMPLATES[name];
         try {
           const t = await this.template(slug, true);
-          const offered = ['nombre', 'servicio', 'fecha', 'hora', 'tecnico', 'cuando'];
+          const offered: readonly string[] = templateVariableNames;
           const unknown = t.components
             .flatMap((c) => c.variables)
             .filter((v) => !offered.includes(v));

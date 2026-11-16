@@ -92,7 +92,13 @@ export function calEventTypeId() {
 }
 
 /** Horarios disponibles agrupados por día (YYYY-MM-DD) en la zona indicada. */
-export async function getCalSlots(start: string, end: string, timeZone: string) {
+export async function getCalSlots(
+  start: string,
+  end: string,
+  timeZone: string,
+  /** Administración puede mover citas a hoy: no se recortan los horarios anteriores a mañana. */
+  { anyDay = false }: { anyDay?: boolean } = {},
+) {
   const query = new URLSearchParams({
     eventTypeId: String(calEventTypeId()),
     start,
@@ -104,7 +110,7 @@ export async function getCalSlots(start: string, end: string, timeZone: string) 
     .record(z.array(z.object({ start: z.string().datetime({ offset: true }) }).passthrough()))
     .safeParse(body?.data);
   if (!data.success) throw new ProviderError('Cal.com devolvió horarios no reconocibles', 'RETRY');
-  const first = firstBookableDay(new Date(), timeZone);
+  const first = anyDay ? dayIn(new Date(), timeZone) : firstBookableDay(new Date(), timeZone);
   return Object.fromEntries(
     Object.entries(data.data)
       .map(([day, slots]): [string, string[]] => [
@@ -254,9 +260,13 @@ export function firstBookableDay(now = new Date(), timeZone = 'America/Guayaquil
  * Revalida un horario contra la disponibilidad actual de Cal.com (sin caché). Compara
  * instantes, no textos: «16:45-05:00» y «21:45:00.000Z» son el mismo horario.
  */
-export async function isCalSlotAvailable(start: Date, timeZone = 'America/Guayaquil') {
+export async function isCalSlotAvailable(
+  start: Date,
+  timeZone = 'America/Guayaquil',
+  options: { anyDay?: boolean } = {},
+) {
   const day = dayIn(start, timeZone);
-  const days = await getCalSlots(day, day, timeZone);
+  const days = await getCalSlots(day, day, timeZone, options);
   const offered = Object.values(days).flat();
   return {
     available: offered.some((slot) => new Date(slot).getTime() === start.getTime()),
