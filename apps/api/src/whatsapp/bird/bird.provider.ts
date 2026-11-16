@@ -175,9 +175,13 @@ export class BirdWhatsAppProvider implements WhatsAppProvider {
             variables: [...component.text.matchAll(variablePattern)].map((m) => m[1]),
           });
     }
+    // Bird solo envía los idiomas de `available_languages`. Mientras Meta revisa una versión
+    // nueva de una plantilla ya aprobada, esa lista queda vacía y la aprobada tampoco sale.
+    const available = (template as { available_languages?: string[] }).available_languages;
+    const sendable = !Array.isArray(available) || available.includes(language);
     const entry: Catalog = {
       slug,
-      status: template.live_version_id ? template.status : 'pending',
+      status: !template.live_version_id ? 'pending' : sendable ? template.status : 'in_review',
       language,
       components,
       fetchedAt: Date.now(),
@@ -196,10 +200,13 @@ export class BirdWhatsAppProvider implements WhatsAppProvider {
     try {
       const template = await this.template(slug);
       if (template.status !== 'active')
+        // Se reintenta: en cuanto Meta la apruebe (o termine de revisar una versión nueva) sale.
         throw new WhatsAppProviderError(
           'TEMPLATE_NOT_APPROVED',
-          `La plantilla «${slug}» no está aprobada en Bird (${template.status})`,
-          'FAILED',
+          template.status === 'in_review'
+            ? `La plantilla «${slug}» está en revisión de Meta y Bird no la envía mientras tanto`
+            : `La plantilla «${slug}» no está aprobada en Bird (${template.status})`,
+          'RETRY',
         );
       const values = input.variables as Record<string, string | undefined>;
       const components = [];

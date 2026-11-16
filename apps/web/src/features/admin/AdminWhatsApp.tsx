@@ -106,6 +106,7 @@ const numberStatuses: Record<string, string> = {
 const templateStatuses: Record<string, string> = {
   active: 'Aprobada',
   pending: 'En revisión',
+  in_review: 'Versión nueva en revisión de Meta: no se envía hasta que responda',
   draft: 'Borrador',
   rejected: 'Rechazada',
   inactive: 'Inactiva',

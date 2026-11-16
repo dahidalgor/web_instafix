@@ -49,6 +49,8 @@ Permisos de la API key: lectura y envío de WhatsApp, números y plantillas. `wo
 
 Editar el texto de una plantilla en Bird no requiere cambiar código mientras use esas variables.
 
+**Cuidado al editar una plantilla ya aprobada.** Mientras Meta revisa la versión nueva, Bird deja de enviar también la aprobada (`available_languages` queda vacío) hasta que Meta responda. Pasó el 16-11-2026: al enviar a revisión las versiones nuevas de las 5 plantillas, esos avisos dejaron de salir. Desde entonces, un aviso cuya plantilla no se puede enviar queda en espera (`RETRY`) y se reintenta cada 15 min hasta que caduca, en lugar de quedar `FAILED`. Administración → WhatsApp marca la plantilla como «Versión nueva en revisión de Meta». Si es posible, edita las plantillas de noche o cuando no haya citas en curso.
+
 ## Webhook de Bird
 
 1. **Bird → Developers → Webhooks → Crear**: URL `https://instafix.ec/api/v1/webhooks/bird` (el dominio de `PUBLIC_HOST`: Caddy sirve la API en `/api/*` de ese dominio; no existe un subdominio `api.`).

@@ -24,7 +24,10 @@ const bodies: Record<string, string> = {
     'Tu visita del {{fecha}} a las {{hora}} está confirmada. Te atenderá {{tecnico}}.',
   appointment_requested: 'Hola {{nombre}}, envíanos tu ubicación para {{servicio}}.',
   appointment_reminder: 'Hola {{1}}, tu visita es {{2}}.',
+  // Aprobada, pero con una versión nueva en revisión de Meta: Bird no la envía.
+  appointment_rescheduled: 'Hola {{nombre}}, tu visita es el {{fecha}}.',
 };
+const inReview = new Set(['appointment_rescheduled']);
 function fakeBird(overrides: { send?: (params: any) => Promise<any> } = {}) {
   const sends: any[] = [];
   const templateGets: string[] = [];
@@ -43,6 +46,9 @@ function fakeBird(overrides: { send?: (params: any) => Promise<any> } = {}) {
             status: bodies[slug] || slug === 'bird_otp' ? 'active' : 'rejected',
             default_language: slug === 'appointment_requested' ? 'es' : 'es-EC',
             live_version_id: bodies[slug] ? 'wtv_1' : null,
+            available_languages: inReview.has(slug)
+              ? []
+              : [slug === 'appointment_requested' ? 'es' : 'es-EC'],
           };
         },
         versions: {
@@ -158,7 +164,20 @@ test('Bird templates: named variables, real language, sender number; no Bird pay
     (e: unknown) =>
       e instanceof WhatsAppProviderError &&
       e.code === 'TEMPLATE_NOT_APPROVED' &&
-      e.disposition === 'FAILED',
+      e.disposition === 'RETRY',
+  );
+  // Aprobada con una versión nueva en revisión: no se llama a Bird y se reintentará.
+  await assert.rejects(
+    provider.sendTemplate({
+      to: '+593998686244',
+      template: 'appointment_rescheduled',
+      variables: { nombre: 'Ana', fecha: 'lunes 16 de noviembre' },
+    }),
+    (e: unknown) =>
+      e instanceof WhatsAppProviderError &&
+      e.code === 'TEMPLATE_NOT_APPROVED' &&
+      e.disposition === 'RETRY' &&
+      /revisión de Meta/.test(e.message),
   );
   assert.equal(sends.length, 3);
 });
