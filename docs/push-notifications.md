@@ -75,10 +75,11 @@ desactiva los avisos de ese dispositivo.
 
 **Recordatorio para completar el trabajo** (`COMPLETION_REMINDER`). Al confirmar una cita (un técnico la toma, o administración la reprograma conservando al técnico) se programan dos avisos para el técnico asignado, en la bandeja con `dueAt`:
 
-| Cuándo                       | Título                              | Texto                                                                                                         |
-| ---------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 2 h después del fin previsto | «¿Terminaste la visita de Saúl?»    | «Marca como completado el trabajo de las 10H00 y registra los servicios realizados.»                          |
-| 2 h después del primero      | «Falta completar la visita de Saúl» | «El trabajo de las 10H00 sigue sin completar. Márcalo para cerrar la cita y activar la garantía del cliente.» |
+| Cuándo                       | Título                              | Texto                                                                                                                                                   |
+| ---------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2 h después del fin previsto | «¿Terminaste la visita de Saúl?»    | «Marca como completado el trabajo de las 10H00 y registra los servicios realizados.»                                                                    |
+| 2 h después del primero      | «Falta completar la visita de Saúl» | «El trabajo de las 10H00 sigue sin completar. Márcalo para cerrar la cita y activar la garantía del cliente.»                                           |
+| Mañana siguiente, 09H00      | «Sigue abierta la visita de Saúl»   | «La visita del domingo 15 de noviembre a las 10H00 no se marcó como completada. Si se hizo, complétala; si no se pudo, propón otro horario al cliente.» |
 
 Al tocarlo se abre la cita en el panel técnico. Antes de enviar cada uno se comprueba que el trabajo siga abierto (confirmado o en servicio), con el mismo técnico y el mismo horario: si ya se completó, se canceló, se reasignó o se reprogramó, no se envía (queda `CANCELLED` con el motivo). Si se confirma tarde, el primero sale al confirmar y el segundo 2 h después. Caducan 24 h después de su hora prevista.
 

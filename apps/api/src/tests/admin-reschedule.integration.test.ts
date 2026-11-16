@@ -125,6 +125,21 @@ test(
           },
         });
       }
+      // Reserva nueva (visita que ya pasó: Cal.com no deja mover la vieja).
+      if (/\/bookings$/.test(call.url) && call.method === 'POST') {
+        const start = new Date(call.body.start);
+        return Response.json({
+          status: 'success',
+          data: {
+            uid: `adm-move-new-${randomUUID()}`,
+            status: 'pending',
+            start: start.toISOString(),
+            end: new Date(start.getTime() + 7200000).toISOString(),
+          },
+        });
+      }
+      // Cal.com no deja cancelar ni mover una reserva pasada.
+      if (call.url.includes('adm-move-past-')) return Response.json({}, { status: 403 });
       const confirm = call.url.match(/\/bookings\/([^/]+)\/confirm$/);
       if (confirm) {
         confirmed.add(decodeURIComponent(confirm[1]));
@@ -190,6 +205,42 @@ test(
       admin.req,
     );
     assert.equal(again.unchanged, true);
+
+    // 1b) La visita fue ayer y no se pudo hacer: se reagenda con el mismo técnico creando una
+    //     reserva nueva en Cal.com (la vieja no se puede mover).
+    const yesterday = at(-1, 15);
+    const missed = await visit({
+      calUid: `adm-move-past-${randomUUID()}`,
+      startsAt: yesterday,
+      endsAt: new Date(yesterday.getTime() + 7200000),
+    });
+    const retry = at(6, 16);
+    const missedResult = await controller.rescheduleAppointment(
+      missed.id,
+      { startsAt: retry.toISOString(), keepTechnician: true },
+      admin.req,
+    );
+    assert.equal(missedResult.kept, true);
+    const moved = await db.appointment.findUniqueOrThrow({ where: { id: missed.id } });
+    assert.equal(moved.startsAt.getTime(), retry.getTime());
+    assert.match(moved.calUid ?? '', /^adm-move-new-/);
+    assert.equal(moved.status, 'CONFIRMED');
+    assert.equal(moved.assignedTechnicianId, tech.user.id);
+    assert.ok(confirmed.has(moved.calUid!), 'la reserva nueva queda aceptada');
+    // Y también sin conservar al técnico: no queda una incidencia por la reserva vieja.
+    const missedFree = await visit({
+      calUid: `adm-move-past-${randomUUID()}`,
+      startsAt: yesterday,
+      endsAt: new Date(yesterday.getTime() + 7200000),
+    });
+    await controller.rescheduleAppointment(
+      missedFree.id,
+      { startsAt: at(6, 20).toISOString(), keepTechnician: false },
+      admin.req,
+    );
+    const freedMissed = await db.appointment.findUniqueOrThrow({ where: { id: missedFree.id } });
+    assert.equal(freedMissed.status, 'PENDING_LOCATION');
+    assert.equal(freedMissed.automationIssue, null);
 
     // 2) Sin conservar al técnico: vuelve a pendiente para que otro la tome.
     const freed = await visit({ calUid: `adm-move-${randomUUID()}` });

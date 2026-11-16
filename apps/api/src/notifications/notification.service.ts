@@ -11,6 +11,7 @@ import {
   scheduleConfirmationReminders,
   scheduleDailyAgendas,
   scheduleHandoverAlerts,
+  scheduleMissedCompletionReminders,
 } from './staff/staff-notifications';
 import {
   appointmentEmailsEnabled,
@@ -205,6 +206,9 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
       );
       await sweepExpiredProposals().catch(() =>
         console.error('No se pudieron revisar las propuestas de horario'),
+      );
+      await scheduleMissedCompletionReminders().catch(() =>
+        console.error('No se pudieron revisar las visitas sin completar'),
       );
     }
     // Confirmaciones de técnicos que Cal.com aún no reflejó: independiente del correo.
