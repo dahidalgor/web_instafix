@@ -21,6 +21,23 @@ type Providers = {
   confirm: (uid: string) => Promise<void>;
 };
 
+/** Lo más que un aviso espera a que Meta apruebe su plantilla antes de descartarse. */
+export const TEMPLATE_WAIT_MS = 2 * 3600000;
+const TOO_LATE_MESSAGE = `No salió: la plantilla siguió en revisión de Meta más de ${TEMPLATE_WAIT_MS / 3600000} h y el aviso ya no era oportuno`;
+
+/**
+ * Desde cuándo un aviso espera la aprobación de su plantilla. Los que quedaron esperando con la
+ * versión anterior (sin la marca) cuentan desde que se crearon.
+ */
+function templateWaitStart(job: {
+  templateWaitSince: Date | null;
+  lastError: string | null;
+  createdAt: Date;
+}) {
+  if (job.templateWaitSince) return job.templateWaitSince;
+  return job.lastError?.includes('revisión de Meta') ? job.createdAt : null;
+}
+
 /** Cada aviso solo es pertinente en ciertos estados; los obsoletos se cancelan sin enviar. */
 export function kindStillValid(kind: string, appointment: Appointment) {
   switch (kind) {
@@ -105,6 +122,16 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           await tx.automationJob.update({ where: { id }, data: { status: 'CANCELLED' } });
           return;
         }
+        // Esperó demasiado a que Meta aprobara su plantilla: ya no es oportuno, aunque ahora se
+        // pudiera enviar (no salen todos tarde y de golpe).
+        const waitedSince = templateWaitStart(job);
+        if (waitedSince && now.getTime() - waitedSince.getTime() >= TEMPLATE_WAIT_MS) {
+          await tx.automationJob.update({
+            where: { id },
+            data: { status: 'CANCELLED', lastError: TOO_LATE_MESSAGE },
+          });
+          return;
+        }
         try {
           if (isConfirm) {
             if (!appointment.calUid) throw new ProviderError('Falta reserva Cal', 'FAILED');
@@ -176,29 +203,35 @@ export async function processJob(id: string, providers: Providers, now = new Dat
             job.kind === 'LOCATION_RECEIVED' &&
             failure instanceof WhatsAppProviderError &&
             failure.code === 'TEMPLATE_NOT_APPROVED';
-          // Plantilla en revisión de Meta: espera sin agotar los reintentos (cada 15 min hasta
-          // que caduque el aviso), así sale sola en cuanto Meta la apruebe.
-          const waitingReview =
+          // Plantilla en revisión de Meta: espera (reintento cada 15 min) y sale sola si Meta
+          // aprueba a tiempo.
+          // Solo mientras siga siendo oportuno: si Meta tarda más de TEMPLATE_WAIT_MS se
+          // descarta, para que no salgan todos de golpe y tarde cuando Meta apruebe.
+          const inReview =
             !notApprovedYet &&
             failure instanceof WhatsAppProviderError &&
             failure.code === 'TEMPLATE_NOT_APPROVED';
-          const status = notApprovedYet
-            ? 'CANCELLED'
-            : waitingReview
-              ? 'RETRY'
-              : failure.disposition === 'RETRY' && job.attempts >= 5
-                ? 'FAILED'
-                : failure.disposition;
+          const waitSince = templateWaitStart(job) ?? now;
+          const tooLate = inReview && now.getTime() - waitSince.getTime() >= TEMPLATE_WAIT_MS;
+          const waitingReview = inReview && !tooLate;
+          const status =
+            notApprovedYet || tooLate
+              ? 'CANCELLED'
+              : waitingReview
+                ? 'RETRY'
+                : failure.disposition === 'RETRY' && job.attempts >= 5
+                  ? 'FAILED'
+                  : failure.disposition;
           await tx.automationJob.update({
             where: { id },
             data: {
               status,
-              lastError: failure.message,
+              lastError: tooLate ? TOO_LATE_MESSAGE : failure.message,
               dueAt: new Date(
                 now.getTime() +
                   (waitingReview ? 15 * 60000 : Math.min(3600000, 60000 * 2 ** job.attempts)),
               ),
-              ...(waitingReview ? { attempts: 0 } : {}),
+              ...(inReview ? { attempts: 0, templateWaitSince: waitSince } : {}),
             },
           });
           if (isConfirm)

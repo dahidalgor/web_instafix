@@ -385,6 +385,49 @@ test(
     const waiting = await db.automationJob.findUniqueOrThrow({ where: { id: confirmedJob.id } });
     assert.equal(waiting.status, 'RETRY');
     assert.ok(waiting.dueAt.getTime() > Date.now() + 10 * 60000, 'reintenta en ~15 min');
+    assert.ok(waiting.templateWaitSince, 'anota desde cuándo espera');
+
+    // 7c) Meta aprueba a tiempo (menos de 2 h esperando): sale.
+    let sentNow = 0;
+    const okProvider = {
+      send: async () => {
+        sentNow++;
+        return { providerMessageId: `wam_${randomUUID()}`, provider: 'BIRD' };
+      },
+      confirm: async () => {},
+    };
+    await db.automationJob.update({
+      where: { id: confirmedJob.id },
+      data: { dueAt: new Date(), templateWaitSince: new Date(Date.now() - HOUR) },
+    });
+    Object.assign(process.env, { WHATSAPP_ENABLED: 'true', WHATSAPP_SENDING_ENABLED: 'true' });
+    await processJob(confirmedJob.id, okProvider);
+    assert.equal(sentNow, 1);
+    assert.equal(
+      (await db.automationJob.findUniqueOrThrow({ where: { id: confirmedJob.id } })).status,
+      'SENT',
+    );
+
+    // 7d) Esperó más de 2 h: aunque Meta ya aprobó, no sale (ya no es oportuno).
+    const lateJob = await db.automationJob.create({
+      data: {
+        dedupeKey: `${request.id}:0:CANCELLED`,
+        appointmentId: request.id,
+        revision: request.automationRevision,
+        kind: 'RESCHEDULED',
+        status: 'RETRY',
+        dueAt: new Date(),
+        expiresAt: request.startsAt,
+        recipient: request.contactPhone,
+        templateWaitSince: new Date(Date.now() - 3 * HOUR),
+      },
+    });
+    await processJob(lateJob.id, okProvider);
+    process.env = envSaved;
+    assert.equal(sentNow, 1, 'no se envía');
+    const late = await db.automationJob.findUniqueOrThrow({ where: { id: lateJob.id } });
+    assert.equal(late.status, 'CANCELLED');
+    assert.match(late.lastError ?? '', /ya no era oportuno/);
 
     // 8) La visita fue ayer y no se pudo hacer: Carlos recibe a la mañana siguiente «sigue
     //    abierta» y aún puede proponer otro horario.
