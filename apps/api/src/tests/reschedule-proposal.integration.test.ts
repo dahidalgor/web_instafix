@@ -361,6 +361,31 @@ test(
       'CANCELLED',
     );
 
+    // 7b) Cualquier otro aviso con su plantilla en revisión: espera y se reintenta (no falla).
+    const confirmedJob = await db.automationJob.create({
+      data: {
+        dedupeKey: `${request.id}:0:RESCHEDULED`,
+        appointmentId: request.id,
+        revision: request.automationRevision,
+        kind: 'RESCHEDULED',
+        dueAt: new Date(),
+        expiresAt: request.startsAt,
+        recipient: request.contactPhone,
+        attempts: 6,
+      },
+    });
+    Object.assign(process.env, { WHATSAPP_ENABLED: 'true', WHATSAPP_SENDING_ENABLED: 'true' });
+    await processJob(confirmedJob.id, {
+      send: async () => {
+        throw new WhatsAppProviderError('TEMPLATE_NOT_APPROVED', 'En revisión', 'RETRY');
+      },
+      confirm: async () => {},
+    });
+    process.env = envSaved;
+    const waiting = await db.automationJob.findUniqueOrThrow({ where: { id: confirmedJob.id } });
+    assert.equal(waiting.status, 'RETRY');
+    assert.ok(waiting.dueAt.getTime() > Date.now() + 10 * 60000, 'reintenta en ~15 min');
+
     // 8) La visita fue ayer y no se pudo hacer: Carlos recibe a la mañana siguiente «sigue
     //    abierta» y aún puede proponer otro horario.
     const yesterday = new Date(Date.now() - 26 * HOUR);

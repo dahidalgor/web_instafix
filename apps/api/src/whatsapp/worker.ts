@@ -176,17 +176,29 @@ export async function processJob(id: string, providers: Providers, now = new Dat
             job.kind === 'LOCATION_RECEIVED' &&
             failure instanceof WhatsAppProviderError &&
             failure.code === 'TEMPLATE_NOT_APPROVED';
+          // Plantilla en revisión de Meta: espera sin agotar los reintentos (cada 15 min hasta
+          // que caduque el aviso), así sale sola en cuanto Meta la apruebe.
+          const waitingReview =
+            !notApprovedYet &&
+            failure instanceof WhatsAppProviderError &&
+            failure.code === 'TEMPLATE_NOT_APPROVED';
           const status = notApprovedYet
             ? 'CANCELLED'
-            : failure.disposition === 'RETRY' && job.attempts >= 5
-              ? 'FAILED'
-              : failure.disposition;
+            : waitingReview
+              ? 'RETRY'
+              : failure.disposition === 'RETRY' && job.attempts >= 5
+                ? 'FAILED'
+                : failure.disposition;
           await tx.automationJob.update({
             where: { id },
             data: {
               status,
               lastError: failure.message,
-              dueAt: new Date(now.getTime() + Math.min(3600000, 60000 * 2 ** job.attempts)),
+              dueAt: new Date(
+                now.getTime() +
+                  (waitingReview ? 15 * 60000 : Math.min(3600000, 60000 * 2 ** job.attempts)),
+              ),
+              ...(waitingReview ? { attempts: 0 } : {}),
             },
           });
           if (isConfirm)
