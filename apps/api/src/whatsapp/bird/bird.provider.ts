@@ -33,6 +33,11 @@ import { BirdConfigError, birdClient, birdWebhookReceiver } from './bird.client'
  * Plantillas lógicas de Instafix → plantillas de Bird. Los slugs se crean en Bird con estos
  * mismos nombres; el idioma y las variables se leen de la versión aprobada.
  */
+/**
+ * Slug de Bird de cada aviso. Nunca se edita una plantilla en uso (Bird deja de enviarla mientras
+ * Meta revisa la versión nueva): se crea `<nombre>_v2`, `_v3`…, y cuando Meta la aprueba se cambia
+ * aquí el slug. Ver «Regla» en docs/whatsapp-setup.md.
+ */
 const BIRD_TEMPLATES: Record<WhatsAppTemplate, string> = {
   appointment_requested: 'appointment_requested',
   appointment_confirmed: 'appointment_confirmed',

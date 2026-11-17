@@ -47,9 +47,21 @@ Permisos de la API key: lectura y envío de WhatsApp, números y plantillas. `wo
 - **OTP**: `bird_otp` ya está aprobada por Meta y sale desde un número de Bird (no desde el de Instafix): «Tu código de verificación es _123456_. Por tu seguridad, no lo compartas.» + botón «Copiar código». Si Meta aprueba una plantilla propia, basta con cambiar `BIRD_OTP_TEMPLATE` en `whatsapp/bird/bird.provider.ts`.
 - Se retiraron los avisos «técnico asignado» y «técnico en camino» (sin plantilla). Los trabajos antiguos de esos tipos se cancelan sin enviarse.
 
-Editar el texto de una plantilla en Bird no requiere cambiar código mientras use esas variables.
+### Regla: nunca editar una plantilla en uso, se crea otra con `_v2`, `_v3`…
 
-**Cuidado al editar una plantilla ya aprobada.** Mientras Meta revisa la versión nueva, Bird deja de enviar también la aprobada (`available_languages` queda vacío) hasta que Meta responda. Pasó el 16-11-2026: al enviar a revisión las versiones nuevas de las 5 plantillas, esos avisos dejaron de salir. Desde entonces, un aviso cuya plantilla no se puede enviar queda en espera (`RETRY`) y se reintenta cada 15 min, en lugar de quedar `FAILED`. Si Meta aprueba **dentro de 2 h** (`TEMPLATE_WAIT_MS`), el aviso sale; si tarda más, se descarta (`CANCELLED`, «ya no era oportuno»), aunque después Meta apruebe: así no salen todos juntos y tarde. Los que fallaron antes de este cambio quedan `FAILED` y solo salen si alguien pulsa «Reintentar». Administración → WhatsApp marca la plantilla como «Versión nueva en revisión de Meta». Si es posible, edita las plantillas de noche o cuando no haya citas en curso.
+Para cambiar el texto (o cualquier cosa) de una plantilla que ya se está enviando, **no se crea una versión nueva de esa plantilla**: se crea una plantilla **nueva** con el mismo nombre más la etiqueta de versión siguiente. Así la actual sigue saliendo mientras Meta revisa la nueva y producción no se corta.
+
+1. En Bird, crear la plantilla nueva con el siguiente sufijo libre: `appointment_requested` → `appointment_requested_v2` → `appointment_requested_v3`… Misma categoría (Utility), mismas variables con nombre (o un subconjunto de las que ofrece Instafix) y los mismos botones si los tenía.
+2. Enviarla a revisión de Meta y **esperar a que quede aprobada** (puede tardar hasta 2 días). La plantilla anterior no se toca.
+3. Ya aprobada, cambiar en `BIRD_TEMPLATES` (`apps/api/src/whatsapp/bird/bird.provider.ts`) el slug de ese aviso por el nuevo, actualizar la tabla de arriba, commit y desplegar.
+4. Comprobar en Administración → WhatsApp que la plantilla aparece aprobada y que el siguiente aviso de ese tipo sale bien.
+5. Solo después, si se quiere, archivar la plantilla anterior en Bird.
+
+Si la plantilla aún no se usa (nunca se ha enviado o su aviso todavía no está en producción), se puede editar directamente.
+
+Editar el texto de una plantilla en Bird no requiere cambiar código mientras use esas variables, pero **solo se hace así con plantillas que no están en uso** (ver la regla anterior).
+
+**Por qué existe la regla: cuidado al editar una plantilla ya aprobada.** Mientras Meta revisa la versión nueva, Bird deja de enviar también la aprobada (`available_languages` queda vacío) hasta que Meta responda. Pasó el 16-11-2026: al enviar a revisión las versiones nuevas de las 5 plantillas, esos avisos dejaron de salir. Desde entonces, un aviso cuya plantilla no se puede enviar queda en espera (`RETRY`) y se reintenta cada 15 min, en lugar de quedar `FAILED`. Si Meta aprueba **dentro de 2 h** (`TEMPLATE_WAIT_MS`), el aviso sale; si tarda más, se descarta (`CANCELLED`, «ya no era oportuno»), aunque después Meta apruebe: así no salen todos juntos y tarde. Los que fallaron antes de este cambio quedan `FAILED` y solo salen si alguien pulsa «Reintentar». Administración → WhatsApp marca la plantilla como «Versión nueva en revisión de Meta». Si es posible, edita las plantillas de noche o cuando no haya citas en curso.
 
 ## Webhook de Bird
 
