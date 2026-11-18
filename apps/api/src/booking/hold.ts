@@ -20,7 +20,10 @@ export const HOLD_RULES = {
     { fromDays: 4, hours: 48 },
     { fromDays: 2, hours: 24 },
   ],
-  /** Tiempo para que el cliente responda al WhatsApp inicial (ubicación o cualquier mensaje). */
+  /**
+   * Tiempo para que el cliente envíe la ubicación tras el WhatsApp inicial. Solo la ubicación
+   * detiene el plazo (un texto o una pregunta no).
+   */
   responseHours: 3,
   /** Aviso al cliente de que la solicitud se cancelará: esta cantidad antes de su plazo. */
   responseWarningBeforeHours: 1,
@@ -148,7 +151,7 @@ export const usesHold = (a: Pick<Appointment, 'calUid' | 'source'>) =>
 
 /**
  * Momento en que la cita pendiente se cancela si nadie la confirma: el primero de los dos
- * plazos. El del cliente deja de contar en cuanto envía la ubicación o un mensaje.
+ * plazos. El del cliente deja de contar en cuanto envía la ubicación.
  */
 export function confirmDeadline(
   a: Pick<
@@ -170,7 +173,7 @@ export function confirmDeadline(
 /** Motivos que ven administración y el historial. */
 export const AUTO_CANCEL_REASONS = {
   NO_RESPONSE:
-    'Cancelada automáticamente: el cliente no respondió por WhatsApp (ubicación o mensaje) a tiempo.',
+    'Cancelada automáticamente: el cliente no respondió con la ubicación por WhatsApp a tiempo.',
   NOT_CONFIRMED: 'Cancelada automáticamente: ningún técnico la confirmó a tiempo.',
 } as const;
 

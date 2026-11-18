@@ -60,10 +60,10 @@ El horario de una cita que nadie confirmó se guarda solo en Instafix (`holdStar
 `holdExpiresAt`, `responseDueAt`; ver `apps/api/src/booking/hold.ts`). La web descuenta esas
 reservas de los horarios de Cal.com, y dos clientes no pueden tomar el mismo horario.
 
-| Plazo                                            | Duración                                                                                                                                                 | Si vence        |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| Técnico confirma                                 | Horas activas desde que se agenda: 4 h si la cita es mañana (u hoy), 24 h si es en 2–3 días, 48 h si es en 4 días o más; como tarde 3 h antes de la cita | Se cancela sola |
-| Cliente responde (ubicación o cualquier mensaje) | 3 h activas desde que sale el WhatsApp inicial; 1 h antes recibe «envía la ubicación o se cancelará»                                                     | Se cancela sola |
+| Plazo                                           | Duración                                                                                                                                                 | Si vence        |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Técnico confirma                                | Horas activas desde que se agenda: 4 h si la cita es mañana (u hoy), 24 h si es en 2–3 días, 48 h si es en 4 días o más; como tarde 3 h antes de la cita | Se cancela sola |
+| Cliente envía la ubicación (un texto no cuenta) | 3 h activas desde que sale el WhatsApp inicial; 1 h antes recibe «envía la ubicación o se cancelará»                                                     | Se cancela sola |
 
 - **Horas activas**: 07H00–22H00 de Ecuador. De noche no corren los plazos ni salen avisos.
 - Un horario que no deja al menos 30 min activos para confirmar no se ofrece ni se acepta.

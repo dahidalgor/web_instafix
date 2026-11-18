@@ -162,9 +162,16 @@ test(
     assert.equal(row.status, 'CANCELLED');
     assert.match(row.autoCancelReason ?? '', /no respondió/);
 
-    // 3) El cliente escribe (cualquier mensaje): su plazo deja de correr y no se cancela.
+    // 3) El cliente escribe un texto (p. ej. pregunta precios) pero no envía la ubicación: su
+    //    plazo sigue corriendo, el recordatorio sigue en pie y al vencer se cancela.
     const answered = await book('15:00');
-    await expire(answered.id, { responseDueAt: new Date(Date.now() + 3600000) });
+    const answeredInitial = await db.automationJob.findFirstOrThrow({
+      where: { appointmentId: answered.id, kind: 'INITIAL' },
+    });
+    await processJob(answeredInitial.id, providers);
+    const due = (await db.appointment.findUniqueOrThrow({ where: { id: answered.id } }))
+      .responseDueAt;
+    assert.ok(due, 'plazo del cliente desde el envío');
     const provider = {
       name: 'TEST',
       parseWebhook: () => ({
@@ -189,12 +196,19 @@ test(
     });
     await processWhatsAppWebhook(inbox.id);
     row = await db.appointment.findUniqueOrThrow({ where: { id: answered.id } });
-    assert.equal(row.responseDueAt, null);
-    await sweepBookingHolds();
-    assert.equal(
-      (await db.appointment.findUniqueOrThrow({ where: { id: answered.id } })).status,
-      'PENDING_LOCATION',
+    assert.equal(row.responseDueAt?.getTime(), due.getTime(), 'un texto no detiene el plazo');
+    assert.equal(row.status, 'PENDING_LOCATION');
+    assert.ok(
+      await db.automationJob.findFirst({
+        where: { appointmentId: answered.id, kind: 'LOCATION_REMINDER', status: 'PENDING' },
+      }),
+      'el recordatorio «envía la ubicación o se cancela» sigue programado',
     );
+    await expire(answered.id, { responseDueAt: past });
+    await sweepBookingHolds();
+    row = await db.appointment.findUniqueOrThrow({ where: { id: answered.id } });
+    assert.equal(row.status, 'CANCELLED');
+    assert.match(row.autoCancelReason ?? '', /ubicación/);
 
     // 4) Un técnico la confirma: ya no vence aunque el plazo del cliente haya pasado.
     const saved = await book('18:00');
