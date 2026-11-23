@@ -60,6 +60,8 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
   HANDOVER_UNCLAIMED: ['ADMIN'],
   // Al técnico que propuso otro horario: respuesta del cliente (o que no respondió).
   RESCHEDULE_ANSWERED: ['ADMIN', 'TECHNICIAN'],
+  // Número mal escrito o sin WhatsApp: administración llama o corrige el teléfono.
+  WHATSAPP_UNDELIVERABLE: ['ADMIN'],
   // Resumen diario de sus propias visitas (mañana a las 19H00, hoy a las 08H00).
   DAILY_AGENDA: ['ADMIN', 'TECHNICIAN'],
   // Prueba enviada por el propio usuario a sus dispositivos (POST /staff/push/test).
@@ -75,6 +77,7 @@ export const producedStaffNotifications: readonly StaffNotificationType[] = [
   'HANDOVER_TAKEN',
   'HANDOVER_UNCLAIMED',
   'RESCHEDULE_ANSWERED',
+  'WHATSAPP_UNDELIVERABLE',
   'DAILY_AGENDA',
 ];
 

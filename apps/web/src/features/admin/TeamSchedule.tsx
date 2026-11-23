@@ -20,7 +20,14 @@ type Member = {
   name: string;
   role: 'ADMIN' | 'TECHNICIAN';
   blocks: BusyBlock[];
-  visits: { id: string; startsAt: string; endsAt: string; contactName: string; title: string }[];
+  visits: {
+    id: string;
+    startsAt: string;
+    endsAt: string;
+    contactName: string;
+    title: string;
+    status?: string;
+  }[];
 };
 
 /** Un color por persona, legible en claro y oscuro. */
@@ -91,7 +98,7 @@ function memberItems(
             ...span,
             id: `${m.id}:${visit.id}:${span.day}`,
             title: team ? who : `Visita · ${customerFirstName(visit.contactName) ?? 'cliente'}`,
-            detail: `Visita de ${customerFirstName(visit.contactName) ?? 'un cliente'} (${visit.title}) · ${m.name}`,
+            detail: `Visita de ${customerFirstName(visit.contactName) ?? 'un cliente'} (${visit.title}) · ${m.name}${visit.status === 'COMPLETED' ? ' · completada' : ''}`,
             kind: 'visit' as const,
             color,
           })),

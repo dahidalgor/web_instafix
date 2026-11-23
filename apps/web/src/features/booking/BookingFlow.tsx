@@ -217,6 +217,12 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
         <p className="done-status">
           Recibimos tu solicitud. Te avisaremos cuando un técnico confirme tu visita.
         </p>
+        {!user && consent && guestPhone() && (
+          <p className="done-status">
+            En unos minutos te escribiremos por WhatsApp al {guestPhone()} para pedirte la
+            ubicación.
+          </p>
+        )}
         {result.email.maskedEmail && result.email.status !== 'NONE' && (
           <p className="done-status">
             {result.email.status === 'SENT'
@@ -433,9 +439,14 @@ export function BookingFlow({ user }: { user: AccountUser | null }) {
               </dd>
             </div>
           </dl>
-          {user && (
+          {user ? (
             <p className="step-help">
               Usamos el WhatsApp verificado de tu cuenta. Puedes cambiarlo en Mi cuenta → Seguridad.
+            </p>
+          ) : (
+            <p className="step-help">
+              Revisa que tu número de WhatsApp esté bien escrito: por ahí te pediremos la ubicación
+              y te confirmaremos la visita. Si está mal, vuelve al paso anterior y corrígelo.
             </p>
           )}
           <label className="check">

@@ -32,6 +32,7 @@ import { cancelCalBooking, dayIn } from '../integrations/cal-client';
 import { usesHold } from '../booking/hold';
 import { busyReason, technicianAgenda } from '../staff/availability';
 import { auditAdmin } from '../security/admin-audit';
+import { UNDELIVERABLE_ISSUE } from '../whatsapp/undeliverable';
 import { isConsentIssue } from '../whatsapp/consent';
 import { deliverNotification } from '../notifications/notification.service';
 import { restoreBookingFlow } from './whatsapp-consent';
@@ -389,6 +390,10 @@ export class AppointmentsController {
                 ...(moved ? { rescheduleCount: { increment: 1 } } : {}),
                 ...(phoneChanged
                   ? {
+                      // Número corregido: la marca de «número sin WhatsApp» ya no aplica.
+                      ...(existing.automationIssue === UNDELIVERABLE_ISSUE
+                        ? { automationIssue: null }
+                        : {}),
                       locationRequestedAt: new Date(),
                       locationReceivedAt: null,
                       locationLatitude: null,

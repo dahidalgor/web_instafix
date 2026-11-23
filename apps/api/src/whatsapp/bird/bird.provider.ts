@@ -39,12 +39,12 @@ import { BirdConfigError, birdClient, birdWebhookReceiver } from './bird.client'
  * aquí el slug. Ver «Regla» en docs/whatsapp-setup.md.
  */
 const BIRD_TEMPLATES: Record<WhatsAppTemplate, string> = {
-  appointment_requested: 'appointment_requested',
+  appointment_requested: 'appointment_requested_v2',
   appointment_confirmed: 'appointment_confirmed',
   appointment_rescheduled: 'appointment_rescheduled',
   appointment_cancelled: 'appointment_cancelled',
-  appointment_reminder: 'appointment_reminder',
-  appointment_location_reminder: 'appointment_location_reminder',
+  appointment_reminder: 'appointment_reminder_v2',
+  appointment_location_reminder: 'appointment_location_reminder_v2',
   appointment_location_received: 'appointment_location_received',
   appointment_technician_changed: 'appointment_technician_changed',
   appointment_reschedule_proposal: 'appointment_reschedule_proposal',

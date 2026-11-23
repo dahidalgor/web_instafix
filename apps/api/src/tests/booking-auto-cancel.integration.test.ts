@@ -16,6 +16,8 @@ import { endpointHash, setPushSender } from '../notifications/staff/web-push.cha
 import { confirmAppointment } from '../staff/staff-appointments.service';
 import { processJob } from '../whatsapp/worker';
 import { processWhatsAppWebhook, receiveWhatsAppWebhook } from '../whatsapp/webhook-inbox';
+import { receiveDelivery } from '../whatsapp/delivery';
+import { UNDELIVERABLE_ISSUE, flagUndeliverableNumbers } from '../whatsapp/undeliverable';
 
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 const vapid = webpush.generateVAPIDKeys();
@@ -228,6 +230,54 @@ test(
 );
 
 test(
+  'sin ubicación, de punta a punta: sale la advertencia 1 h antes, se cancela al plazo y sale «cancelada»',
+  { skip: !enabled },
+  async (t) => {
+    const controller = new BookingController();
+    const contact = phone();
+    t.after(() => db.appointment.deleteMany({ where: { contactPhone: contact } }));
+    const sent: string[] = [];
+    const recording = {
+      send: async (_a: unknown, kind: string) => {
+        sent.push(kind);
+        return { providerMessageId: `flow-bird-${randomUUID()}`, provider: 'BIRD' };
+      },
+      confirm: async () => {},
+    };
+    const { appointmentId } = await controller.create(
+      {
+        start: ec(farDay(), '16:00').toISOString(),
+        name: 'Pavel Bedoya',
+        phone: contact,
+        request: 'Mantenimiento PS5',
+        whatsappConsent: true,
+      },
+      req(),
+    );
+    const jobOf = (kind: string) =>
+      db.automationJob.findFirstOrThrow({ where: { appointmentId, kind } });
+    // 1) Sale la solicitud: arranca el plazo y queda programada la advertencia.
+    await processJob((await jobOf('INITIAL')).id, recording);
+    let row = await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
+    assert.ok(row.responseDueAt);
+    const reminder = await jobOf('LOCATION_REMINDER');
+    assert.equal(reminder.dueAt.getTime(), row.responseDueAt.getTime() - 3600000);
+    // 2) Llega la hora de la advertencia: sale «envía la ubicación o se cancela».
+    await processJob(reminder.id, recording, new Date(reminder.dueAt.getTime() + 1000));
+    assert.equal((await jobOf('LOCATION_REMINDER')).status, 'SENT');
+    // 3) Vence el plazo sin ubicación: se cancela sola y sale «cita cancelada».
+    const after = new Date(row.responseDueAt.getTime() + 60000);
+    await sweepBookingHolds(after);
+    row = await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
+    assert.equal(row.status, 'CANCELLED');
+    assert.match(row.autoCancelReason ?? '', /ubicación/);
+    await processJob((await jobOf('CANCELLED')).id, recording, after);
+    assert.equal((await jobOf('CANCELLED')).status, 'SENT');
+    assert.deepEqual(sent, ['INITIAL', 'LOCATION_REMINDER', 'CANCELLED']);
+  },
+);
+
+test(
   'reserva hecha directo en Cal.com: recibe plazo y, al vencer, se cancela también en Cal.com',
   { skip: !enabled },
   async (t) => {
@@ -370,5 +420,67 @@ test(
       data: { data: { ...(last.data as object), scheduledFor: new Date() } },
     });
     assert.equal(await deliverNotification(last.id), 'CANCELLED');
+  },
+);
+
+test(
+  'número sin WhatsApp: se marca la cita, se avisa a administración y no se cancela por falta de ubicación',
+  { skip: !enabled },
+  async (t) => {
+    const controller = new BookingController();
+    const contact = phone();
+    const admin = await staff('ADMIN');
+    t.after(async () => {
+      await db.appointment.deleteMany({ where: { contactPhone: contact } });
+      await db.user.delete({ where: { id: admin.id } });
+    });
+    const { appointmentId } = await controller.create(
+      {
+        start: ec(farDay(), '11:00').toISOString(),
+        name: 'Rene Mal Escrito',
+        phone: contact,
+        request: 'Limpieza PS5',
+        whatsappConsent: true,
+      },
+      req(),
+    );
+    const initial = await db.automationJob.findFirstOrThrow({
+      where: { appointmentId, kind: 'INITIAL' },
+    });
+    await processJob(initial.id, providers);
+    const sent = await db.automationJob.findUniqueOrThrow({ where: { id: initial.id } });
+    // Meta responde «Message Undeliverable» (131026).
+    await receiveDelivery({
+      providerMessageId: sent.providerMessageId!,
+      status: 'FAILED',
+      occurredAt: new Date(),
+      error: { code: 'undeliverable', metaCode: '131026' },
+    });
+    assert.ok((await flagUndeliverableNumbers()).includes(appointmentId));
+    const row = await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
+    assert.equal(row.automationIssue, UNDELIVERABLE_ISSUE);
+    assert.equal(row.responseDueAt, null, 'su plazo no corre: nunca recibió la solicitud');
+    assert.equal(
+      (
+        await db.automationJob.findFirstOrThrow({
+          where: { appointmentId, kind: 'LOCATION_REMINDER' },
+        })
+      ).status,
+      'CANCELLED',
+    );
+    assert.ok(
+      await db.notification.findFirst({
+        where: { appointmentId, kind: 'WHATSAPP_UNDELIVERABLE', recipient: admin.id },
+      }),
+      'aviso a administración',
+    );
+    // Una sola vez.
+    assert.ok(!(await flagUndeliverableNumbers()).includes(appointmentId));
+    // No se cancela por falta de ubicación.
+    await sweepBookingHolds();
+    assert.equal(
+      (await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } })).status,
+      'PENDING_LOCATION',
+    );
   },
 );

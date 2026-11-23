@@ -81,7 +81,7 @@ export function TechnicianSchedule() {
       })),
     );
     for (const visit of visits) {
-      if (!['CONFIRMED', 'IN_PROGRESS'].includes(visit.status)) continue;
+      if (!['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(visit.status)) continue;
       for (const span of localSpans(new Date(visit.startsAt), new Date(visit.endsAt)))
         if (days.includes(span.day))
           items.push({

@@ -22,8 +22,8 @@ const env = {
 const bodies: Record<string, string> = {
   appointment_confirmed:
     'Tu visita del {{fecha}} a las {{hora}} está confirmada. Te atenderá {{tecnico}}.',
-  appointment_requested: 'Hola {{nombre}}, envíanos tu ubicación para {{servicio}}.',
-  appointment_reminder: 'Hola {{1}}, tu visita es {{2}}.',
+  appointment_requested_v2: 'Hola {{nombre}}, envíanos tu ubicación para {{servicio}}.',
+  appointment_reminder_v2: 'Hola {{1}}, tu visita es {{2}}.',
   // Aprobada, pero con una versión nueva en revisión de Meta: Bird no la envía.
   appointment_rescheduled: 'Hola {{nombre}}, tu visita es el {{fecha}}.',
 };
@@ -44,11 +44,11 @@ function fakeBird(overrides: { send?: (params: any) => Promise<any> } = {}) {
           return {
             slug,
             status: bodies[slug] || slug === 'bird_otp' ? 'active' : 'rejected',
-            default_language: slug === 'appointment_requested' ? 'es' : 'es-EC',
+            default_language: slug === 'appointment_requested_v2' ? 'es' : 'es-EC',
             live_version_id: bodies[slug] ? 'wtv_1' : null,
             available_languages: inReview.has(slug)
               ? []
-              : [slug === 'appointment_requested' ? 'es' : 'es-EC'],
+              : [slug === 'appointment_requested_v2' ? 'es' : 'es-EC'],
           };
         },
         versions: {
@@ -272,7 +272,7 @@ test('account status reports the Instafix number, Coexistence and template probl
   const byName = Object.fromEntries(status.templates.map((tpl) => [tpl.name, tpl]));
   assert.equal(byName.appointment_confirmed.status, 'active');
   assert.equal(byName.appointment_confirmed.problem, null);
-  assert.match(byName.appointment_reminder.problem!, /1, 2/);
+  assert.match(byName.appointment_reminder_v2.problem!, /1, 2/);
   assert.equal(byName.appointment_cancelled.status, 'pending');
   assert.deepEqual(status.authenticationTemplate, { name: 'bird_otp', status: 'active' });
 });

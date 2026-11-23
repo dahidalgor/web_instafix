@@ -3,6 +3,7 @@ import type { Appointment, Prisma } from '@prisma/client';
 import { maskRecipient } from '../communications/log';
 import { retryCalConfirmations } from '../staff/staff-appointments.service';
 import { sweepBookingHolds } from '../booking/hold-sweeper';
+import { flagUndeliverableNumbers } from '../whatsapp/undeliverable';
 import { sweepExpiredProposals } from '../staff/reschedule-proposal';
 import { db } from '../database/client';
 import {
@@ -209,6 +210,9 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
       );
       await scheduleMissedCompletionReminders().catch(() =>
         console.error('No se pudieron revisar las visitas sin completar'),
+      );
+      await flagUndeliverableNumbers().catch(() =>
+        console.error('No se pudieron revisar los números sin WhatsApp'),
       );
     }
     // Confirmaciones de técnicos que Cal.com aún no reflejó: independiente del correo.

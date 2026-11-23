@@ -22,6 +22,8 @@ export const staffNotificationTypes = [
   'HANDOVER_UNCLAIMED',
   /** Al técnico que propuso otro horario: el cliente aceptó, lo rechazó o no respondió. */
   'RESCHEDULE_ANSWERED',
+  /** A administración: WhatsApp no pudo entregar los mensajes al número del cliente. */
+  'WHATSAPP_UNDELIVERABLE',
   /** Al técnico: sus trabajos de mañana (19H00) y de hoy (08H00). */
   'DAILY_AGENDA',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */

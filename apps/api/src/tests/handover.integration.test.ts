@@ -12,6 +12,9 @@ import { deliverNotification } from '../notifications/notification.service';
 import { scheduleHandoverAlerts } from '../notifications/staff/staff-notifications';
 import { endpointHash, setPushSender } from '../notifications/staff/web-push.channel';
 import { StaffController } from '../staff/staff.controller';
+import { teamWeek } from '../staff/availability';
+import { dayIn } from '../integrations/cal-client';
+import { weekStartOf } from '@instafix/contracts';
 
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 const vapid = webpush.generateVAPIDKeys();
@@ -201,6 +204,14 @@ test(
       (await db.appointment.findUniqueOrThrow({ where: { id: visit.id } })).assignedTechnicianId,
       carlos.user.id,
     );
+    // El horario del equipo la muestra con Carlos (y ya no con Ana), en ambas vistas.
+    const visitRow = await db.appointment.findUniqueOrThrow({ where: { id: visit.id } });
+    const week = weekStartOf(dayIn(visitRow.startsAt));
+    const holders = (members: Awaited<ReturnType<typeof teamWeek>>) =>
+      members.filter((m) => m.visits.some((v) => v.id === visit.id)).map((m) => m.id);
+    assert.deepEqual(holders(await teamWeek(week, { blocks: false })), [carlos.user.id]);
+    assert.deepEqual(holders(await teamWeek(week, { userId: carlos.user.id })), [carlos.user.id]);
+    assert.deepEqual(holders(await teamWeek(week, { userId: ana.user.id })), []);
     assert.equal(
       (
         await db.notification.findMany({

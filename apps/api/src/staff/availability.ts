@@ -153,15 +153,23 @@ export async function teamWeek(
       role: true,
       // Sin horarios ocupados cuando no se van a mostrar (Administración → Horarios).
       busyBlocks: blocks ? { orderBy: { startMinute: 'asc' } } : { take: 0 },
+      // También las ya completadas: una visita hecha no desaparece del horario de la semana.
       assignedAppointments: {
         where: {
-          status: { in: ['CONFIRMED', 'IN_PROGRESS'] },
+          status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] },
           deletedAt: null,
           startsAt: { lt: to },
           endsAt: { gt: from },
         },
         orderBy: { startsAt: 'asc' },
-        select: { id: true, startsAt: true, endsAt: true, contactName: true, title: true },
+        select: {
+          id: true,
+          startsAt: true,
+          endsAt: true,
+          contactName: true,
+          title: true,
+          status: true,
+        },
       },
     },
   });
