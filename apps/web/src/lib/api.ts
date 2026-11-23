@@ -11,6 +11,7 @@ export class ApiError extends Error {
     return typeof this.body?.code === 'string' ? this.body.code : undefined;
   }
 }
+export const SESSION_EXPIRED_EVENT = 'instafix:session-expired';
 const sessionPaths = [
   'auth/login',
   'auth/phone/verify',
@@ -40,6 +41,10 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   // El encabezado se sincroniza tras cambios de sesión y sesiones caducadas.
   if ((response.ok && sessionPaths.includes(path)) || response.status === 401)
     window.dispatchEvent(new Event('instafix:session-change'));
+  // La sesión caducó mientras se usaba la página: los paneles vuelven al inicio de sesión en
+  // lugar de mostrar un error con «Reintentar» en cada sección.
+  if (response.status === 401 && !path.startsWith('auth/'))
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     const structured = body && typeof body === 'object' && typeof body.message === 'string';

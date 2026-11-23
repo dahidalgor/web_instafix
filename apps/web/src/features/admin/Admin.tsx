@@ -9,7 +9,7 @@ import {
   type ServiceCategory,
 } from '@instafix/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, SESSION_EXPIRED_EVENT } from '../../lib/api';
 import { Login } from '../account/Login';
 import { emptyService, type ServiceDraft } from './admin.types';
 import { AdminAppointments } from './AdminAppointments';
@@ -102,6 +102,20 @@ export default function Admin() {
       .finally(() => setChecking(false));
   };
   useEffect(checkSession, []);
+  // La sesión caducó (o se cerró en otro dispositivo) mientras se usaba el panel: directo al
+  // inicio de sesión, en lugar de dejar cada sección con un error y «Reintentar».
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    const onExpired = () => {
+      setUser((current) => {
+        if (current) setExpired(true);
+        return null;
+      });
+      setSessionError('');
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
   useEffect(() => {
     if (user?.role !== 'ADMIN' && user?.role !== 'TECHNICIAN') return;
     // Renueva en silencio la suscripción push de este dispositivo (nunca pide permiso).
@@ -231,7 +245,18 @@ export default function Admin() {
   if (!user)
     return (
       <main>
-        <Login admin onLogin={setUser} />
+        {expired && (
+          <p className="admin-message" role="status">
+            Tu sesión se cerró. Inicia sesión de nuevo para seguir.
+          </p>
+        )}
+        <Login
+          admin
+          onLogin={(next) => {
+            setExpired(false);
+            setUser(next);
+          }}
+        />
       </main>
     );
   const logout = () =>
