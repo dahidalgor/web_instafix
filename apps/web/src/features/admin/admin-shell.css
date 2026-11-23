@@ -620,3 +620,14 @@ main.admin-main {
   text-align: center;
   color: var(--muted);
 }
+
+/*
+ * Mientras se escribe en el teléfono, la barra inferior se oculta: con el teclado abierto
+ * sube encima de él y tapa el campo.
+ */
+@media (max-width: 959px) and (pointer: coarse) {
+  .admin-shell:has(input:focus, select:focus, textarea:focus) .admin-tabbar,
+  .admin-shell:has(input:focus, select:focus, textarea:focus) .tech-tabs {
+    display: none;
+  }
+}

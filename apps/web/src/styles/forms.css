@@ -160,3 +160,16 @@ input[type='checkbox'] {
   width: 20px;
   height: 20px;
 }
+
+/*
+ * Pantallas táctiles: los campos nunca bajan de 16 px. Con menos, iOS amplía la página al
+ * tocarlos y no la devuelve; ampliada, las barras fijas de abajo (panel del equipo) quedan a
+ * media pantalla al hacer scroll. Los campos heredan el tamaño de su <label> (12 px).
+ */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='range']),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
