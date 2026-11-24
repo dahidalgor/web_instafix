@@ -29,18 +29,18 @@ Permisos de la API key: lectura y envío de WhatsApp, números y plantillas. `wo
 
 ## Plantillas
 
-| Aviso de Instafix                                                 | Plantilla en Bird                  | Categoría      |
-| ----------------------------------------------------------------- | ---------------------------------- | -------------- |
-| Solicitud recibida (pide ubicación)                               | `appointment_requested_v2`         | Utility        |
-| Técnico confirma la visita                                        | `appointment_confirmed`            | Utility        |
-| Reprogramada                                                      | `appointment_rescheduled`          | Utility        |
-| Cancelada                                                         | `appointment_cancelled`            | Utility        |
-| Recordatorio el día anterior (08:00 Ecuador)                      | `appointment_reminder_v2`          | Utility        |
-| Recibimos la ubicación (una vez, si aún espera técnico)           | `appointment_location_received`    | Utility        |
-| Falta la ubicación: se cancela a las {{limite}}                   | `appointment_location_reminder_v2` | Utility        |
-| Cambió el técnico de la visita                                    | `appointment_technician_changed`   | Utility        |
-| El técnico propone otro horario (botones de respuesta rápida)     | `appointment_reschedule_proposal`  | Utility        |
-| Código de verificación (registro, recuperación, cambio de número) | `bird_otp` (gestionada por Bird)   | Authentication |
+| Aviso de Instafix                                                 | Plantilla en Bird                   | Categoría      |
+| ----------------------------------------------------------------- | ----------------------------------- | -------------- |
+| Solicitud recibida (pide ubicación)                               | `appointment_requested_v2`          | Utility        |
+| Técnico confirma la visita                                        | `appointment_confirmed`             | Utility        |
+| Reprogramada                                                      | `appointment_rescheduled`           | Utility        |
+| Cancelada                                                         | `appointment_cancelled`             | Utility        |
+| Recordatorio el día anterior (08:00 Ecuador)                      | `appointment_reminder_v2`           | Utility        |
+| Recibimos la ubicación (una vez, si aún espera técnico)           | `appointment_location_received_v2`  | Utility        |
+| Falta la ubicación: se cancela a las {{limite}}                   | `appointment_location_reminder_v3`  | Utility        |
+| Cambió el técnico de la visita                                    | `appointment_technician_changed_v2` | Utility        |
+| El técnico propone otro horario (botones de respuesta rápida)     | `appointment_reschedule_proposal`   | Utility        |
+| Código de verificación (registro, recuperación, cambio de número) | `bird_otp` (gestionada por Bird)    | Authentication |
 
 - **Idioma**: se usa el idioma aprobado de cada plantilla (`es-EC`, `es`…), leído de Bird. No se configura.
 - **Variables con nombre**: Instafix ofrece `{{nombre}}` (primer nombre), `{{servicio}}` (lo que escribió el cliente), `{{fecha}}` («viernes 24 de octubre»), `{{hora}}` («10:00»), `{{tecnico}}`, `{{cuando}}` («mañana»/«hoy» en recordatorios, la fecha en el resto), `{{limite}}` (hora en que se cancela la solicitud sin ubicación) y `{{fecha_nueva}}`/`{{hora_nueva}}` (horario que propone el técnico). Cada plantilla usa las que quiera; el proveedor envía solo las que declara su versión aprobada (caché de 10 minutos). Una plantilla con variables posicionales (`{{1}}`) o con nombres distintos **no se envía** y Administración → WhatsApp lo indica.

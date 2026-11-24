@@ -44,9 +44,9 @@ const BIRD_TEMPLATES: Record<WhatsAppTemplate, string> = {
   appointment_rescheduled: 'appointment_rescheduled',
   appointment_cancelled: 'appointment_cancelled',
   appointment_reminder: 'appointment_reminder_v2',
-  appointment_location_reminder: 'appointment_location_reminder_v2',
-  appointment_location_received: 'appointment_location_received',
-  appointment_technician_changed: 'appointment_technician_changed',
+  appointment_location_reminder: 'appointment_location_reminder_v3',
+  appointment_location_received: 'appointment_location_received_v2',
+  appointment_technician_changed: 'appointment_technician_changed_v2',
   appointment_reschedule_proposal: 'appointment_reschedule_proposal',
 };
 /**
