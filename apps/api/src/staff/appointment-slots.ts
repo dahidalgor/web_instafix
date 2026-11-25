@@ -47,7 +47,8 @@ export async function appointmentSlots(
         ? query.technicianId
         : null;
 
-  const offered = await getCalSlots(from, to, TIME_ZONE, { anyDay: true });
+  // Con la reserva de esta visita descontada: sus propias horas cuentan como libres.
+  const offered = await getCalSlots(from, to, TIME_ZONE, { anyDay: true, rescheduleUid: a.calUid });
   const length = (await calEventLengthMinutes()) * 60000;
   const all = Object.values(offered).flat();
   if (!all.length) return { timeZone: TIME_ZONE, days: {} };

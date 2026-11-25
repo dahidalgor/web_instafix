@@ -283,9 +283,19 @@ export async function bookableSlots(days: Record<string, string[]>, now = new Da
  * El horario está libre de verdad: Cal.com lo ofrece (sin caché) y ninguna reserva provisional
  * de Instafix lo ocupa.
  */
-export async function assertSlotFree(start: Date, end: Date, exceptId?: string, byAdmin = false) {
+export async function assertSlotFree(
+  start: Date,
+  end: Date,
+  exceptId?: string,
+  byAdmin = false,
+  /** Reserva de Cal.com que se mueve: su propio horario cuenta como libre. */
+  rescheduleUid?: string | null,
+) {
   // Administración puede mover una cita a hoy (el «desde mañana» es solo para clientes).
-  const recheck = await isCalSlotAvailable(start, undefined, { anyDay: byAdmin }).catch(() => null);
+  const recheck = await isCalSlotAvailable(start, undefined, {
+    anyDay: byAdmin,
+    rescheduleUid,
+  }).catch(() => null);
   logEvent('booking.revalidated', {
     start: start.toISOString(),
     local: localTime(start),
@@ -579,7 +589,7 @@ async function moveToHold(
 ) {
   const now = new Date();
   const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
-  await assertSlotFree(start, end, appointment.id, Boolean(options.adminId));
+  await assertSlotFree(start, end, appointment.id, Boolean(options.adminId), appointment.calUid);
   const previousUid = appointment.calUid;
   const notifications = await db.$transaction(async (tx) => {
     await calLock(tx);

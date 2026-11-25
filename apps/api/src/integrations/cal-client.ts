@@ -96,8 +96,18 @@ export async function getCalSlots(
   start: string,
   end: string,
   timeZone: string,
-  /** Administración puede mover citas a hoy: no se recortan los horarios anteriores a mañana. */
-  { anyDay = false }: { anyDay?: boolean } = {},
+  {
+    anyDay = false,
+    rescheduleUid,
+  }: {
+    /** Administración puede mover citas a hoy: no se recortan los horarios anteriores a mañana. */
+    anyDay?: boolean;
+    /**
+     * Reserva que se está moviendo: Cal.com no cuenta su tiempo como ocupado (así se puede
+     * mover la visita 1 o 2 horas más tarde, sobre su propio horario).
+     */
+    rescheduleUid?: string | null;
+  } = {},
 ) {
   const query = new URLSearchParams({
     eventTypeId: String(calEventTypeId()),
@@ -105,6 +115,7 @@ export async function getCalSlots(
     end,
     timeZone,
   });
+  if (rescheduleUid) query.set('bookingUidToReschedule', rescheduleUid);
   const body = await call(`/slots?${query}`, slotsVersion());
   const data = z
     .record(z.array(z.object({ start: z.string().datetime({ offset: true }) }).passthrough()))
@@ -263,7 +274,7 @@ export function firstBookableDay(now = new Date(), timeZone = 'America/Guayaquil
 export async function isCalSlotAvailable(
   start: Date,
   timeZone = 'America/Guayaquil',
-  options: { anyDay?: boolean } = {},
+  options: { anyDay?: boolean; rescheduleUid?: string | null } = {},
 ) {
   const day = dayIn(start, timeZone);
   const days = await getCalSlots(day, day, timeZone, options);

@@ -120,7 +120,7 @@ export async function proposeReschedule(
       );
     const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
     // El horario propuesto debe estar libre en la agenda y para el técnico.
-    await assertSlotFree(start, end, a.id, true);
+    await assertSlotFree(start, end, a.id, true, a.calUid);
     const busy = await technicianBusyReason(db, user.id, {
       id: a.id,
       startsAt: start,
@@ -287,7 +287,7 @@ export async function answerProposal(input: {
     let outcome: Outcome = 'ACCEPTED';
     try {
       // Se vuelve a comprobar: el horario pudo ocuparse mientras el cliente decidía.
-      await assertSlotFree(start, end, a.id, true);
+      await assertSlotFree(start, end, a.id, true, a.calUid);
       if (
         await technicianBusyReason(db, a.assignedTechnicianId!, {
           id: a.id,

@@ -13,6 +13,7 @@ const HOUR = 3600000;
 // Un día propio, dentro de los 60 días en que se puede proponer.
 const day = new Date(Date.now() + randomInt(10, 40) * 24 * HOUR).toISOString().slice(0, 10);
 const at = (hhmm: string) => new Date(`${day}T${hhmm}:00-05:00`);
+const visitUid = `slots-${randomUUID()}`;
 const offered = ['09:00', '11:00', '13:00', '15:00', '17:00'].map((h) => at(h).toISOString());
 
 // Cal.com simulado: ofrece cinco horarios ese día; la visita dura 2 h.
@@ -20,11 +21,16 @@ const original = globalThis.fetch;
 globalThis.fetch = (async (input: any, init?: RequestInit) => {
   const url = String(input);
   if (!url.startsWith('https://api.cal.com/')) return original(input, init);
-  if (url.includes('/slots?'))
+  if (url.includes('/slots?')) {
+    // Las 16:00 se cruzan con la visita de las 15:00: Cal.com solo las ofrece si se le dice que
+    // esa reserva es la que se mueve.
+    const own = new URL(url).searchParams.get('bookingUidToReschedule') === visitUid;
+    const starts = own ? [...offered, at('16:00').toISOString()].sort() : offered;
     return Response.json({
       status: 'success',
-      data: { [day]: offered.map((start) => ({ start })) },
+      data: { [day]: starts.map((start) => ({ start })) },
     });
+  }
   if (url.includes('/event-types/'))
     return Response.json({ status: 'success', data: { lengthInMinutes: 120 } });
   return Response.json({}, { status: 404 });
@@ -75,7 +81,7 @@ test(
         whatsappConsentAt: new Date(),
         status: 'CONFIRMED',
         source: 'INSTAFIX_API',
-        calUid: `slots-${randomUUID()}`,
+        calUid: visitUid,
         calStatus: 'accepted',
         assignedTechnicianId: carlos.id,
         technician: carlos.name,
@@ -118,10 +124,10 @@ test(
       to: day,
       purpose: 'proposal',
     });
-    assert.deepEqual(times(proposal), ['13:00', '17:00']);
+    assert.deepEqual(times(proposal), ['13:00', '16:00', '17:00']);
     // Administración: cualquier horario libre en la agenda…
     const move = await appointmentSlots(ada, visit.id, { from: day, to: day, purpose: 'move' });
-    assert.deepEqual(times(move), ['09:00', '13:00', '17:00']);
+    assert.deepEqual(times(move), ['09:00', '13:00', '16:00', '17:00']);
     // …y manteniendo a Carlos, también libre para él.
     const keep = await appointmentSlots(ada, visit.id, {
       from: day,
@@ -129,7 +135,7 @@ test(
       purpose: 'move',
       technicianId: carlos.id,
     });
-    assert.deepEqual(times(keep), ['13:00', '17:00']);
+    assert.deepEqual(times(keep), ['13:00', '16:00', '17:00']);
     // Un técnico no ve el calendario de administración ni el de una visita ajena.
     await assert.rejects(appointmentSlots(tech, visit.id, { from: day, to: day, purpose: 'move' }));
     await assert.rejects(
@@ -137,8 +143,10 @@ test(
     );
 
     // Lo que ofrece el calendario se acepta al guardar.
-    await proposeReschedule(tech, visit.id, proposal.days[day][0]);
+    // Una hora más tarde, sobre su propio horario: se acepta al guardar.
+    const later = at('16:00').toISOString();
+    await proposeReschedule(tech, visit.id, later);
     const row = await db.appointment.findUniqueOrThrow({ where: { id: visit.id } });
-    assert.equal(row.proposedStartsAt?.toISOString(), proposal.days[day][0]);
+    assert.equal(row.proposedStartsAt?.toISOString(), later);
   },
 );
