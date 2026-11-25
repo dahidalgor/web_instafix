@@ -51,6 +51,9 @@ export function AppointmentSheet({
   // Propuesta de otro horario al cliente (fecha y hora de Ecuador, «YYYY-MM-DDTHH:mm»).
   const [proposing, setProposing] = useState(false);
   const [proposedAt, setProposedAt] = useState('');
+  // Reemplazo en otro horario (quien ve el pedido de otro técnico).
+  const [offerProposing, setOfferProposing] = useState(false);
+  const [offerAt, setOfferAt] = useState('');
   // Sorteo abierto (si hay): se marca solo al registrar un servicio que cuenta en él (una
   // participación por unidad). Si el técnico cambia la casilla o el número, se respeta.
   const [giveaway, setGiveaway] = useState<Giveaway | null>(null);
@@ -614,94 +617,105 @@ export function AppointmentSheet({
                   )}
                 </div>
               )}
-              {mine && item.status === 'CONFIRMED' && upcoming && !item.proposal && (
-                <div className="tech-handover">
-                  {item.handover ? (
-                    <>
-                      <p>
-                        <strong>Pediste un reemplazo</strong>
-                        {item.handover.reason ? ` (${item.handover.reason})` : ''}. Sigues a cargo
-                        hasta que alguien libre la tome; te avisaremos.
-                      </p>
-                      <BusyButton
+              {mine &&
+                item.status === 'CONFIRMED' &&
+                upcoming &&
+                !(item.proposal && !item.proposal.handover) && (
+                  <div className="tech-handover">
+                    {item.handover ? (
+                      <>
+                        <p>
+                          <strong>Pediste un reemplazo</strong>
+                          {item.handover.reason ? ` (${item.handover.reason})` : ''}. Sigues a cargo
+                          hasta que alguien libre la tome; te avisaremos.
+                        </p>
+                        {item.proposal?.handover && (
+                          <p className="small" role="note">
+                            Otro técnico propuso tomarla moviéndola al{' '}
+                            {visitDay(item.proposal.startsAt, item.timeZone).toLowerCase()} a las{' '}
+                            {visitTime(item.proposal.startsAt, item.timeZone)}. Si el cliente
+                            acepta, pasa a esa persona; si no, sigue a tu cargo.
+                          </p>
+                        )}
+                        <BusyButton
+                          type="button"
+                          className="btn btn-ghost btn-block"
+                          disabled={busy}
+                          busyLabel="Retirando…"
+                          onClick={() =>
+                            act(
+                              '/handover',
+                              { method: 'DELETE' },
+                              'Retiraste el pedido: la visita sigue a tu cargo.',
+                            )
+                          }
+                        >
+                          Sí puedo ir: retirar pedido
+                        </BusyButton>
+                      </>
+                    ) : askingHandover ? (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const ok = await act(
+                            '/handover',
+                            {
+                              method: 'POST',
+                              body: JSON.stringify(
+                                handoverReason.trim() ? { reason: handoverReason.trim() } : {},
+                              ),
+                            },
+                            'Pedido enviado: avisamos a quienes están libres a esa hora.',
+                          );
+                          if (ok) setAskingHandover(false);
+                        }}
+                      >
+                        <label>
+                          Motivo (opcional)
+                          <input
+                            maxLength={160}
+                            placeholder="Imprevisto, la acepté por error…"
+                            value={handoverReason}
+                            onChange={(e) => setHandoverReason(e.target.value)}
+                          />
+                        </label>
+                        <p className="small">
+                          Sigues a cargo hasta que otra persona libre la tome. El cliente recibe un
+                          correo y un WhatsApp con el técnico nuevo.
+                        </p>
+                        <div className="tech-actions-row">
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => setAskingHandover(false)}
+                          >
+                            Cancelar
+                          </button>
+                          <BusyButton
+                            type="submit"
+                            className="btn btn-primary"
+                            disabled={busy}
+                            busyLabel="Enviando…"
+                          >
+                            Pedir reemplazo
+                          </BusyButton>
+                        </div>
+                      </form>
+                    ) : (
+                      <button
                         type="button"
                         className="btn btn-ghost btn-block"
                         disabled={busy}
-                        busyLabel="Retirando…"
-                        onClick={() =>
-                          act(
-                            '/handover',
-                            { method: 'DELETE' },
-                            'Retiraste el pedido: la visita sigue a tu cargo.',
-                          )
-                        }
+                        onClick={() => {
+                          setProposing(false);
+                          setAskingHandover(true);
+                        }}
                       >
-                        Sí puedo ir: retirar pedido
-                      </BusyButton>
-                    </>
-                  ) : askingHandover ? (
-                    <form
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        const ok = await act(
-                          '/handover',
-                          {
-                            method: 'POST',
-                            body: JSON.stringify(
-                              handoverReason.trim() ? { reason: handoverReason.trim() } : {},
-                            ),
-                          },
-                          'Pedido enviado: avisamos a quienes están libres a esa hora.',
-                        );
-                        if (ok) setAskingHandover(false);
-                      }}
-                    >
-                      <label>
-                        Motivo (opcional)
-                        <input
-                          maxLength={160}
-                          placeholder="Imprevisto, la acepté por error…"
-                          value={handoverReason}
-                          onChange={(e) => setHandoverReason(e.target.value)}
-                        />
-                      </label>
-                      <p className="small">
-                        Sigues a cargo hasta que otra persona libre la tome. El cliente recibe un
-                        correo y un WhatsApp con el técnico nuevo.
-                      </p>
-                      <div className="tech-actions-row">
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={() => setAskingHandover(false)}
-                        >
-                          Cancelar
-                        </button>
-                        <BusyButton
-                          type="submit"
-                          className="btn btn-primary"
-                          disabled={busy}
-                          busyLabel="Enviando…"
-                        >
-                          Pedir reemplazo
-                        </BusyButton>
-                      </div>
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-block"
-                      disabled={busy}
-                      onClick={() => {
-                        setProposing(false);
-                        setAskingHandover(true);
-                      }}
-                    >
-                      No puedo ir: pedir reemplazo
-                    </button>
-                  )}
-                </div>
-              )}
+                        No puedo ir: pedir reemplazo
+                      </button>
+                    )}
+                  </div>
+                )}
               {offered && (
                 <div className="tech-handover">
                   <p>
@@ -727,6 +741,90 @@ export function AppointmentSheet({
                   >
                     Tomar visita
                   </BusyButton>
+                  {/* Reemplazo en otro horario: el cliente decide por WhatsApp. */}
+                  {item.proposal?.mine ? (
+                    <>
+                      <p>
+                        <strong>Propusiste tomarla</strong> el{' '}
+                        {visitDay(item.proposal.startsAt, item.timeZone).toLowerCase()} a las{' '}
+                        {visitTime(item.proposal.startsAt, item.timeZone)}. Esperamos la respuesta
+                        del cliente hasta el{' '}
+                        {visitDay(item.proposal.expiresAt, item.timeZone).toLowerCase()} a las{' '}
+                        {visitTime(item.proposal.expiresAt, item.timeZone)}. Si acepta, la visita
+                        pasa a ti; te avisaremos.
+                      </p>
+                      <BusyButton
+                        type="button"
+                        className="btn btn-ghost btn-block"
+                        disabled={busy}
+                        busyLabel="Retirando…"
+                        onClick={() =>
+                          act('/proposal', { method: 'DELETE' }, 'Retiraste tu propuesta.')
+                        }
+                      >
+                        Retirar propuesta
+                      </BusyButton>
+                    </>
+                  ) : item.proposal ? (
+                    <p className="small" role="note">
+                      Otro técnico ya propuso un horario y esperamos al cliente. Puedes tomarla en
+                      su horario actual.
+                    </p>
+                  ) : offerProposing ? (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!offerAt) return;
+                        const ok = await act(
+                          '/handover-proposal',
+                          { method: 'POST', body: JSON.stringify({ startsAt: offerAt }) },
+                          'Propuesta enviada: si el cliente acepta, la visita pasa a ti.',
+                        );
+                        if (ok) setOfferProposing(false);
+                      }}
+                    >
+                      <p className="small">
+                        Elige un horario libre en la agenda y para ti. Al cliente le llega un
+                        WhatsApp con tu nombre y los botones «Sí, me sirve» / «No, mantener». Si
+                        acepta, la visita se mueve y pasa a ti.
+                      </p>
+                      <VisitSlotPicker
+                        appointmentId={item.id}
+                        purpose="handover"
+                        value={offerAt || null}
+                        onChange={(start) => setOfferAt(start ?? '')}
+                      />
+                      <div className="tech-actions-row">
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setOfferProposing(false)}
+                        >
+                          Cancelar
+                        </button>
+                        <BusyButton
+                          type="submit"
+                          className="btn btn-primary"
+                          disabled={busy || !offerAt}
+                          busyLabel="Enviando…"
+                        >
+                          Proponer al cliente
+                        </BusyButton>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-block"
+                      disabled={busy}
+                      onClick={() => {
+                        setOfferAt('');
+                        setOfferProposing(true);
+                      }}
+                    >
+                      Puedo, pero en otro horario
+                    </button>
+                  )}
                 </div>
               )}
               {item.status === 'COMPLETED' && <p className="tech-done">✓ Visita completada</p>}

@@ -54,7 +54,7 @@ function checkId(...ids: string[]) {
  * Panel técnico. Todas las rutas exigen sesión de ADMIN o TECHNICIAN y obtienen la identidad
  * de la sesión: no existe ningún parámetro «technicianId».
  */
-import { proposeReschedule, withdrawProposal } from './reschedule-proposal';
+import { proposeHandover, proposeReschedule, withdrawProposal } from './reschedule-proposal';
 import { appointmentSlots } from './appointment-slots';
 @Controller('api/v1/staff')
 export class StaffController {
@@ -262,6 +262,18 @@ export class StaffController {
     checkOrigin(req);
     checkId(id);
     return withdrawProposal(await authenticatedStaff(req), id);
+  }
+
+  /** Reemplazo en otro horario: «Puedo, en este horario» (el cliente decide por WhatsApp). */
+  @Post('appointments/:id/handover-proposal')
+  @HttpCode(200)
+  @RateLimit('staff')
+  async proposeHandover(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    checkId(id);
+    const parsed = rescheduleProposalSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new BadRequestException('Elige la nueva fecha y hora.');
+    return proposeHandover(await authenticatedStaff(req), id, parsed.data.startsAt);
   }
 
   /** Tomar la visita de un reemplazo abierto (el primero que la toma se la queda). */

@@ -15,7 +15,7 @@ export function VisitSlotPicker({
   onChange,
 }: {
   appointmentId: string;
-  purpose: 'proposal' | 'move';
+  purpose: 'proposal' | 'handover' | 'move';
   /** Cambio de fecha manteniendo al técnico: también debe estar libre para él. */
   technicianId?: string | null;
   /** Inicio elegido (ISO) o null. */

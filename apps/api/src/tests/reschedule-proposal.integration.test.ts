@@ -455,5 +455,84 @@ test(
     const retry = new Date(Date.now() + 3 * 24 * HOUR).toISOString();
     const missedProposal = await staff.propose(missed.id, { startsAt: retry }, carlos.req);
     assert.equal(missedProposal.proposal?.startsAt, retry);
+
+    // 9) Reemplazo en otro horario: Carlos pide reemplazo y Ana responde «Puedo, en este
+    //    horario». Si el cliente dice que no, el reemplazo sigue abierto y sigue con Carlos.
+    const swap = await visit();
+    const swapAt = new Date(startsAt.getTime() + 26 * HOUR).toISOString();
+    await staff.handover(swap.id, { reason: 'Imprevisto' }, carlos.req);
+    // Carlos no puede «tomar» su propia visita en otro horario.
+    assert.equal(
+      await status(staff.proposeHandover(swap.id, { startsAt: swapAt }, carlos.req)),
+      409,
+    );
+    const offered = await staff.proposeHandover(swap.id, { startsAt: swapAt }, ana.req);
+    assert.equal(offered.proposal?.startsAt, swapAt);
+    assert.equal(offered.proposal?.mine, true);
+    assert.equal(offered.proposal?.handover, true);
+    // Otra persona no puede proponer otro horario mientras esperamos al cliente.
+    assert.equal(
+      await status(staff.proposeHandover(swap.id, { startsAt: swapAt }, david.req)),
+      409,
+    );
+    assert.equal(
+      await answerProposal({ phone: swap.contactPhone, text: 'No, mantener', inReplyTo: null }),
+      'DECLINED',
+    );
+    row = await db.appointment.findUniqueOrThrow({ where: { id: swap.id } });
+    assert.equal(row.assignedTechnicianId, carlos.user.id);
+    assert.ok(row.handoverRequestedAt, 'el reemplazo sigue abierto');
+    const anaAnswers = () =>
+      db.notification.findMany({
+        where: { appointmentId: swap.id, kind: 'RESCHEDULE_ANSWERED', recipient: ana.user.id },
+        orderBy: { createdAt: 'asc' },
+      });
+    assert.match(((await anaAnswers()).at(-1)!.data as { body: string }).body, /no pasa a ti/);
+
+    //    Propone otra vez y el cliente acepta: la visita se mueve y pasa a Ana; Carlos se entera.
+    await staff.proposeHandover(swap.id, { startsAt: swapAt }, ana.req);
+    assert.equal(
+      await answerProposal({ phone: swap.contactPhone, text: 'Sí, me sirve', inReplyTo: null }),
+      'ACCEPTED',
+    );
+    row = await db.appointment.findUniqueOrThrow({ where: { id: swap.id } });
+    assert.equal(row.startsAt.toISOString(), swapAt);
+    assert.equal(row.assignedTechnicianId, ana.user.id);
+    assert.equal(row.technician, ana.user.name);
+    assert.equal(row.handoverRequestedAt, null);
+    assert.equal(row.proposedStartsAt, null);
+    assert.match(
+      ((await anaAnswers()).at(-1)!.data as { title: string }).title,
+      /la visita es tuya/,
+    );
+    assert.ok(
+      await db.notification.findFirst({
+        where: { appointmentId: swap.id, kind: 'HANDOVER_TAKEN', recipient: carlos.user.id },
+      }),
+      'Carlos sabe que la tomó Ana',
+    );
+    const swapJobs = await db.automationJob.findMany({
+      where: { appointmentId: swap.id, revision: row.automationRevision },
+    });
+    assert.ok(
+      swapJobs.some((j) => j.kind === 'CONFIRMED'),
+      '«confirmada» con la fecha nueva',
+    );
+    assert.ok(!swapJobs.some((j) => j.kind === 'TECHNICIAN_CHANGED'), 'sin un segundo mensaje');
+
+    //    Si Carlos retira su pedido mientras Ana espera respuesta, la propuesta de Ana se anula.
+    const back = await visit();
+    await staff.handover(back.id, {}, carlos.req);
+    const backAt = new Date(startsAt.getTime() + 50 * HOUR).toISOString();
+    await staff.proposeHandover(back.id, { startsAt: backAt }, ana.req);
+    await staff.cancelHandover(back.id, carlos.req);
+    row = await db.appointment.findUniqueOrThrow({ where: { id: back.id } });
+    assert.equal(row.proposedStartsAt, null);
+    assert.equal(
+      await db.automationJob.count({
+        where: { appointmentId: back.id, kind: 'RESCHEDULE_PROPOSAL', status: 'PENDING' },
+      }),
+      0,
+    );
   },
 );

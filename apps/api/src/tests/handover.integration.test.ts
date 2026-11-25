@@ -139,20 +139,27 @@ test(
     const asked = await staff.handover(visit.id, { reason: 'Imprevisto' }, carlos.req);
     assert.equal(asked.handover?.reason, 'Imprevisto');
     assert.equal(asked.assignedTechnician?.id, carlos.user.id, 'sigue a cargo mientras tanto');
-    // El aviso llega a quienes están libres a esa hora: Ana y administración; no a Luis ni a Carlos.
-    const offered = (await pushes('HANDOVER_REQUESTED')).map((n) => n.recipient).sort();
-    assert.deepEqual(offered, [ana.user.id, david.user.id].sort());
-    const offer = (await pushes('HANDOVER_REQUESTED'))[0];
+    // El aviso llega a todo el equipo menos a Carlos. Luis está en clases a esa hora: su aviso le
+    // dice que puede proponer otro horario al cliente.
+    const offers = await pushes('HANDOVER_REQUESTED');
+    assert.deepEqual(
+      offers.map((n) => n.recipient).sort(),
+      [ana.user.id, david.user.id, luis.user.id].sort(),
+    );
+    const bodyOf = (id: string) =>
+      (offers.find((n) => n.recipient === id)!.data as { body: string }).body;
     assert.match(
-      (offer.data as { body: string }).body,
+      bodyOf(ana.user.id),
       /Carlos Reemplazo necesita un reemplazo para la visita de Saúl/,
     );
+    assert.doesNotMatch(bodyOf(ana.user.id), /otro horario/);
+    assert.match(bodyOf(luis.user.id), /puedes proponerle otro horario al cliente/);
 
-    // Ana la ve en Pendientes (sin el contacto del cliente); Luis no (está en clases).
+    // Ana y Luis la ven en Pendientes (sin el contacto del cliente); Luis no puede tomarla.
     const forAna = (await staff.pending(ana.req)).find((a) => a.id === visit.id);
     assert.ok(forAna?.handover);
     assert.equal(forAna.contactPhone, '', 'el contacto llega al tomarla');
-    assert.ok(!(await staff.pending(luis.req)).some((a) => a.id === visit.id));
+    assert.ok((await staff.pending(luis.req)).some((a) => a.id === visit.id));
     assert.equal(await status(staff.take(visit.id, luis.req)), 409);
 
     // Ana la toma: queda a su cargo, el cliente recibe el correo y Carlos el aviso.

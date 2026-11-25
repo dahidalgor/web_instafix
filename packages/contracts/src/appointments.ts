@@ -152,7 +152,11 @@ export type StaffAppointment = {
   /** Pedido de reemplazo abierto: el técnico asignado busca quien tome la visita. */
   handover?: { requestedBy: string; reason: string | null; requestedAt: string } | null;
   /** Propuesta de otro horario esperando la respuesta del cliente por WhatsApp. */
-  proposal?: { startsAt: string; expiresAt: string } | null;
+  /**
+   * Propuesta de otro horario esperando la respuesta del cliente. `mine`: la hizo quien mira.
+   * `handover`: la hizo otro técnico para tomar la visita (reemplazo en otro horario).
+   */
+  proposal?: { startsAt: string; expiresAt: string; mine?: boolean; handover?: boolean } | null;
   canManage: boolean;
 };
 

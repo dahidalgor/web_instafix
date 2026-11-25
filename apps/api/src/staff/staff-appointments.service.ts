@@ -28,6 +28,7 @@ import { openGiveaway } from '../giveaways/giveaways';
 import {
   enqueueHandoverRequested,
   enqueueHandoverTaken,
+  scheduleCompletionReminders,
 } from '../notifications/staff/staff-notifications';
 import { busyReason, OTHER_VISIT, technicianAgenda, technicianBusyReason } from './availability';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
@@ -100,11 +101,18 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
             requestedAt: a.handoverRequestedAt.toISOString(),
           }
         : null,
+    // La propuesta la ven quien atiende la visita, quien la hizo y, si es de un reemplazo, quien
+    // ve el reemplazo (para no proponer dos horarios a la vez).
     proposal:
-      manage && a.status === 'CONFIRMED' && a.proposedStartsAt && a.proposalExpiresAt
+      a.status === 'CONFIRMED' &&
+      a.proposedStartsAt &&
+      a.proposalExpiresAt &&
+      (manage || a.proposedById === user.id || a.proposedById !== a.assignedTechnicianId)
         ? {
             startsAt: a.proposedStartsAt.toISOString(),
             expiresAt: a.proposalExpiresAt.toISOString(),
+            mine: a.proposedById === user.id,
+            handover: !!a.proposedById && a.proposedById !== a.assignedTechnicianId,
           }
         : null,
     services: a.services.map((s) => ({
@@ -212,8 +220,11 @@ export async function pendingAppointments(user: StaffUser, now = new Date()) {
   const me = team.find((t) => t.id === user.id);
   return (
     items
-      // Un técnico solo ve las solicitudes de los horarios en que está libre.
-      .filter((a) => user.role !== 'TECHNICIAN' || !me || !busyReason(me, a))
+      // Un técnico solo ve las solicitudes de los horarios en que está libre. Los reemplazos sí
+      // los ve aunque esté ocupado: puede proponer otro horario al cliente.
+      .filter(
+        (a) => user.role !== 'TECHNICIAN' || !me || isOffered(a, user, now) || !busyReason(me, a),
+      )
       .map((a) => ({ ...serializeStaff(user, a), onlyYouFree: onlyYouFree(team, user.id, a) }))
   );
 }
@@ -653,7 +664,7 @@ export async function completeAppointment(
 }
 
 /** Reemplazo abierto que otra persona del equipo puede tomar (visita confirmada y futura). */
-const isOffered = (a: Appointment, user: StaffUser, now = new Date()) =>
+export const isOffered = (a: Appointment, user: StaffUser, now = new Date()) =>
   a.status === 'CONFIRMED' &&
   Boolean(a.handoverRequestedAt) &&
   a.assignedTechnicianId !== user.id &&
@@ -710,7 +721,21 @@ export async function cancelHandover(user: StaffUser, id: string) {
     if (a.assignedTechnicianId !== user.id && !isAdmin(user))
       throw new ForbiddenException('Solo el técnico asignado puede retirar el pedido.');
     if (!a.handoverRequestedAt) return;
-    await tx.appointment.update({ where: { id }, data: clearHandover });
+    // Si otro técnico había propuesto tomarla en otro horario, esa propuesta ya no aplica.
+    const otherProposal = !!a.proposedById && a.proposedById !== a.assignedTechnicianId;
+    await tx.appointment.update({
+      where: { id },
+      data: { ...clearHandover, ...(otherProposal ? clearProposal : {}) },
+    });
+    if (otherProposal)
+      await tx.automationJob.updateMany({
+        where: {
+          appointmentId: id,
+          kind: 'RESCHEDULE_PROPOSAL',
+          status: { in: ['PENDING', 'RETRY'] },
+        },
+        data: { status: 'CANCELLED' },
+      });
     await activity(tx, id, user.id, 'HANDOVER_CANCELLED');
   });
   return staffAppointment(user, id);
@@ -750,6 +775,42 @@ async function transfer(
   );
   if (previousId !== actorId) await enqueueHandoverTaken(tx, updated, previousId, to.name, now);
   return notifications;
+}
+
+/**
+ * El cliente aceptó el horario que propuso otro técnico en un reemplazo: la visita (ya movida)
+ * pasa a ese técnico. Al cliente no se le escribe aparte: el «confirmada» de la fecha nueva ya
+ * sale con el nombre del técnico nuevo. El anterior recibe el aviso de que la tomaron.
+ */
+export async function takeOverAfterProposal(
+  a: Appointment,
+  to: { id: string; name: string },
+  now = new Date(),
+) {
+  return db.$transaction(async (tx) => {
+    await lockAppointment(tx, a.id);
+    const previousId = a.assignedTechnicianId!;
+    const moved = await tx.appointment.updateMany({
+      where: { id: a.id, status: 'CONFIRMED', assignedTechnicianId: previousId },
+      data: { assignedTechnicianId: to.id, technician: to.name, ...clearHandover },
+    });
+    if (!moved.count) return [] as string[];
+    const updated = await tx.appointment.findUniqueOrThrow({ where: { id: a.id } });
+    await activity(tx, a.id, to.id, 'REASSIGNED', {
+      from: previousId,
+      to: to.id,
+      handover: true,
+      proposal: true,
+    });
+    await scheduleCompletionReminders(tx, updated, now);
+    await enqueueHandoverTaken(tx, updated, previousId, to.name, now);
+    return tx.notification
+      .findMany({
+        where: { appointmentId: a.id, status: 'PENDING', kind: 'HANDOVER_TAKEN' },
+        select: { id: true },
+      })
+      .then((rows) => rows.map((r) => r.id));
+  });
 }
 
 /** Otra persona libre toma la visita de un reemplazo abierto (el primero que la toma). */

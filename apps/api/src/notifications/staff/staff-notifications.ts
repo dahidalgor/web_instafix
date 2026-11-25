@@ -341,8 +341,9 @@ export async function scheduleConfirmationReminders(now = new Date()) {
 }
 
 /**
- * Reemplazo pedido: aviso a quienes están libres en el horario de la visita (técnicos y
- * administradores, sin horario ocupado ni otra visita), nunca al que lo pidió.
+ * Reemplazo pedido: aviso a todo el equipo (técnicos y administradores), nunca al que lo pidió.
+ * Quien está libre a esa hora puede tomarla; quien está ocupado puede proponer otro horario al
+ * cliente (si acepta, la visita pasa a esa persona).
  */
 export async function enqueueHandoverRequested(
   tx: Prisma.TransactionClient,
@@ -354,16 +355,17 @@ export async function enqueueHandoverRequested(
   const type: StaffNotificationType = 'HANDOVER_REQUESTED';
   const free = new Set(await availableTechnicianIds(tx, appointment));
   const users = (await recipients(tx, type)).filter(
-    (user) => user.id !== appointment.assignedTechnicianId && free.has(user.id),
+    (user) => user.id !== appointment.assignedTechnicianId,
   );
   const requestedAt = appointment.handoverRequestedAt.toISOString();
-  const { title, body } = handoverRequestedMessage(
-    appointment,
-    requesterName,
-    appointment.handoverReason,
-  );
   const ids: string[] = [];
   for (const user of users) {
+    const { title, body } = handoverRequestedMessage(
+      appointment,
+      requesterName,
+      appointment.handoverReason,
+      !free.has(user.id),
+    );
     const dedupeKey = staffNotificationKey(type, `${appointment.id}:${requestedAt}`, user.id);
     const row = await tx.notification.upsert({
       where: { dedupeKey },
@@ -633,10 +635,8 @@ export async function deliverStaffNotification(row: Row, now = new Date()) {
       a.handoverRequestedAt?.toISOString() === (meta as { requestedAt?: string }).requestedAt;
     const reason = !open
       ? 'El reemplazo ya se resolvió o se retiró'
-      : type === 'HANDOVER_REQUESTED' &&
-          (a.assignedTechnicianId === row.recipient ||
-            (await technicianBusyReason(db, row.recipient, a)))
-        ? 'La persona ya no está libre en ese horario'
+      : type === 'HANDOVER_REQUESTED' && a.assignedTechnicianId === row.recipient
+        ? 'La visita ya es de esa persona'
         : null;
     if (reason) {
       await finish('CANCELLED', reason);

@@ -17,6 +17,24 @@ import {
  * Avisos de citas por WhatsApp. Decide qué plantilla y qué datos; el proveedor decide cómo
  * se envían. Nunca construye payloads de un proveedor concreto.
  */
+/**
+ * Propuesta de otro horario hecha por otro técnico (reemplazo): el cliente lee el nombre de
+ * quien lo atendería si acepta.
+ */
+async function withProposer(kind: MessageKind, appointment: Appointment) {
+  if (
+    kind !== 'RESCHEDULE_PROPOSAL' ||
+    !appointment.proposedById ||
+    appointment.proposedById === appointment.assignedTechnicianId
+  )
+    return appointment;
+  const proposer = await db.user.findUnique({
+    where: { id: appointment.proposedById },
+    select: { name: true },
+  });
+  return proposer ? { ...appointment, technician: proposer.name } : appointment;
+}
+
 @Injectable()
 export class WhatsAppService {
   constructor(@Inject(WHATSAPP_PROVIDER) private readonly provider: WhatsAppProvider) {}
@@ -31,7 +49,7 @@ export class WhatsAppService {
       throw new ProviderError('Falta autorización del cliente', 'FAILED');
     let template = templateFor(kind);
     try {
-      const variables = messageVariables(kind, appointment);
+      const variables = messageVariables(kind, await withProposer(kind, appointment));
       const sent = await this.provider
         .sendTemplate({ to: appointment.contactPhone, template, variables })
         .catch((error) => {

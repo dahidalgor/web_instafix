@@ -145,9 +145,17 @@ Si el técnico asignado no puede ir (la aceptó por error o tuvo un imprevisto):
 
 1. En la cita pulsa **«No puedo ir: pedir reemplazo»** (motivo opcional). **Sigue a cargo** hasta
    que alguien la tome; puede **retirar el pedido** si al final sí puede ir.
-2. Les llega un aviso («¿Puedes tomar esta visita?») a quienes están **libres a esa hora**
-   (técnicos y administradores sin horario ocupado ni otra visita). La ven en **Pendientes** con
-   «Busca reemplazo» y **«Tomar visita»**; el primero que la toma se la queda.
+2. Les llega un aviso a **todo el equipo** (técnicos y administradores). Quien está **libre a
+   esa hora** recibe «¿Puedes tomar esta visita?» y la ve en **Pendientes** con «Busca reemplazo»
+   y **«Tomar visita»**: el primero que la toma se la queda. Quien está **ocupado** recibe «¿Puedes
+   tomar esta visita en otro horario?» y solo puede proponer otro horario (paso siguiente).
+   - **«Puedo, pero en otro horario»**: elige un horario en el calendario (libre en la agenda y
+     para él). Al cliente le llega la propuesta por WhatsApp **con el nombre de ese técnico** y
+     los botones «Sí, me sirve» / «No, mantener». Si **acepta**, la visita se mueve y **pasa a
+     ese técnico** (el cliente recibe «confirmada» con la fecha nueva y su nombre; el anterior,
+     «X tomó tu visita»). Si **rechaza** o no responde, nada cambia y el reemplazo sigue abierto.
+   - Solo hay una propuesta a la vez. Si alguien toma la visita en su horario, o el técnico
+     retira su pedido, la propuesta se anula.
 3. Al tomarla: pasa a su cargo (ve contacto y ubicación exacta), el anterior recibe «X tomó tu
    visita», el cliente recibe el correo **«Cambió el técnico de tu visita»** y los recordatorios
    de completar el trabajo pasan al nuevo. La reserva de Cal.com no cambia (mismo horario).
@@ -157,8 +165,9 @@ Si el técnico asignado no puede ir (la aceptó por error o tuvo un imprevisto):
    administración recibe «Nadie tomó un reemplazo» (una vez; de noche, a la mañana).
 
 API: `POST/DELETE /api/v1/staff/appointments/:id/handover`, `POST …/:id/take`,
+`POST …/:id/handover-proposal` (otro horario; horarios en `GET …/:id/slots?purpose=handover`),
 `GET /api/v1/admin/appointments/:id/team`, `POST /api/v1/admin/appointments/:id/reassign`.
-Auditoría: `HANDOVER_REQUESTED`, `HANDOVER_CANCELLED`, `REASSIGNED`.
+Auditoría: `HANDOVER_REQUESTED`, `HANDOVER_CANCELLED`, `HANDOVER_PROPOSED`, `REASSIGNED`.
 
 **Avisos para confirmar** (`CONFIRMATION_REMINDER`, push): a los 10 min, a los 30 min y luego cada
 30 min de tiempo activo, a los técnicos libres en ese horario con dispositivo. A 30 min del vencimiento,

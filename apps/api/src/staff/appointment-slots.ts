@@ -5,6 +5,7 @@ import { db } from '../database/client';
 import { calEventLengthMinutes, getCalSlots } from '../integrations/cal-client';
 import { busyReason, technicianAgenda } from './availability';
 import { PROPOSAL_RULES, proposalDeadline } from './reschedule-proposal';
+import { isOffered } from './staff-appointments.service';
 
 const day = /^\d{4}-\d{2}-\d{2}$/;
 const HOUR = 3600000;
@@ -16,6 +17,8 @@ const TIME_ZONE = 'America/Guayaquil';
  *  - `proposal`: el técnico a cargo propone otro horario. Libre en Cal.com, sin reserva
  *    provisional de otro cliente, libre para ese técnico (horarios ocupados y otras visitas),
  *    con 2 h de anticipación, dentro de 60 días y con tiempo para que el cliente responda.
+ *  - `handover`: otro técnico que ve el pedido de reemplazo propone tomarla en otro horario;
+ *    mismas reglas que `proposal`, con la disponibilidad de quien propone.
  *  - `move`: administración cambia la fecha. Libre en Cal.com (admite hoy) y sin reserva
  *    provisional de otro cliente. Con `technicianId` (mantener al técnico) también libre para él.
  */
@@ -32,20 +35,23 @@ export async function appointmentSlots(
   const rangeEnd = new Date(`${to}T23:59:59-05:00`);
   if (rangeEnd <= rangeStart || rangeEnd.getTime() - rangeStart.getTime() > 35 * 86400000)
     throw new BadRequestException('El rango máximo es de 35 días');
-  const purpose = query.purpose === 'move' ? 'move' : 'proposal';
+  const purpose =
+    query.purpose === 'move' ? 'move' : query.purpose === 'handover' ? 'handover' : 'proposal';
   const a = await db.appointment.findUnique({ where: { id } });
   if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
   if (purpose === 'move' && user.role !== 'ADMIN')
     throw new ForbiddenException('Solo administración cambia la fecha de una cita.');
   if (purpose === 'proposal' && a.assignedTechnicianId !== user.id)
     throw new ForbiddenException('Solo el técnico a cargo puede proponer otro horario.');
+  if (purpose === 'handover' && !isOffered(a, user, now))
+    throw new ForbiddenException('Este reemplazo ya no está disponible.');
   // De quién se revisa la disponibilidad: el técnico que propone, o el que se mantiene.
-  const technicianId =
-    purpose === 'proposal'
-      ? user.id
-      : query.technicianId && query.technicianId === a.assignedTechnicianId
-        ? query.technicianId
-        : null;
+  const proposing = purpose !== 'move';
+  const technicianId = proposing
+    ? user.id
+    : query.technicianId && query.technicianId === a.assignedTechnicianId
+      ? query.technicianId
+      : null;
 
   // Con la reserva de esta visita descontada: sus propias horas cuentan como libres.
   const offered = await getCalSlots(from, to, TIME_ZONE, { anyDay: true, rescheduleUid: a.calUid });
@@ -60,16 +66,14 @@ export async function appointmentSlots(
     technicianId ? technicianAgenda(db, windowFrom, windowTo, technicianId) : Promise.resolve([]),
   ]);
   const tech = agenda[0];
-  const minStart =
-    now.getTime() + (purpose === 'proposal' ? PROPOSAL_RULES.minLeadHours * HOUR : 5 * 60000);
-  const maxStart =
-    purpose === 'proposal' ? now.getTime() + PROPOSAL_RULES.maxDaysAhead * 24 * HOUR : Infinity;
+  const minStart = now.getTime() + (proposing ? PROPOSAL_RULES.minLeadHours * HOUR : 5 * 60000);
+  const maxStart = proposing ? now.getTime() + PROPOSAL_RULES.maxDaysAhead * 24 * HOUR : Infinity;
   const free = (slot: string) => {
     const start = new Date(slot);
     const end = new Date(start.getTime() + length);
     if (start.getTime() === a.startsAt.getTime()) return false;
     if (start.getTime() < minStart || start.getTime() > maxStart) return false;
-    if (purpose === 'proposal' && !proposalDeadline(now, a.startsAt, start)) return false;
+    if (proposing && !proposalDeadline(now, a.startsAt, start)) return false;
     if (holds.some((h) => h.startsAt < end && h.endsAt > start)) return false;
     if (tech && busyReason(tech, { id: a.id, startsAt: start, endsAt: end })) return false;
     return true;

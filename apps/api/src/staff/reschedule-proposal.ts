@@ -18,7 +18,12 @@ import { enqueueStaffMessage } from '../notifications/staff/staff-notifications'
 import { exclusive, exclusiveWait } from '../security/idempotency';
 import { lockAppointment, queueJob } from '../whatsapp/queue';
 import { OTHER_VISIT, technicianBusyReason } from './availability';
-import { staffAppointment, syncCalConfirmation } from './staff-appointments.service';
+import {
+  isOffered,
+  staffAppointment,
+  syncCalConfirmation,
+  takeOverAfterProposal,
+} from './staff-appointments.service';
 
 /**
  * Propuesta de otro horario del técnico al cliente.
@@ -80,7 +85,6 @@ export async function proposeReschedule(
   startsAtValue: string,
   now = new Date(),
 ) {
-  const start = new Date(startsAtValue);
   await exclusiveWait(`appointment:${id}`, async () => {
     const a = await db.appointment.findUnique({ where: { id } });
     if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
@@ -91,72 +95,106 @@ export async function proposeReschedule(
       throw new BadRequestException(
         'Solo se puede proponer otro horario para una visita confirmada y sin completar.',
       );
-    if (!usesHold(a) || !a.calUid)
-      throw new BadRequestException(
-        'Esta visita no está en la agenda: pide a administración que cambie la fecha.',
-      );
-    if (!a.whatsappConsentAt || !a.contactPhone)
-      throw new BadRequestException(
-        'El cliente no autorizó avisos por WhatsApp: coordina el cambio con administración.',
-      );
     if (a.handoverRequestedAt)
       throw new BadRequestException(
         'Tienes un pedido de reemplazo abierto. Retíralo antes de proponer otro horario.',
       );
-    if (!Number.isFinite(start.getTime()))
-      throw new BadRequestException('Elige la nueva fecha y hora.');
-    if (start.getTime() === a.startsAt.getTime())
-      throw new BadRequestException('Ese ya es el horario de la visita.');
-    if (start.getTime() < now.getTime() + PROPOSAL_RULES.minLeadHours * HOUR)
-      throw new BadRequestException(
-        `Propón un horario con al menos ${PROPOSAL_RULES.minLeadHours} h de anticipación.`,
-      );
-    if (start.getTime() > now.getTime() + PROPOSAL_RULES.maxDaysAhead * 24 * HOUR)
-      throw new BadRequestException('Propón un horario dentro de los próximos 60 días.');
-    const expiresAt = proposalDeadline(now, a.startsAt, start);
-    if (!expiresAt)
-      throw new BadRequestException(
-        'La visita está muy cerca para esperar la respuesta del cliente. Coordina con administración.',
-      );
-    const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
-    // El horario propuesto debe estar libre en la agenda y para el técnico.
-    await assertSlotFree(start, end, a.id, true, a.calUid);
-    const busy = await technicianBusyReason(db, user.id, {
-      id: a.id,
-      startsAt: start,
-      endsAt: end,
-    });
-    if (busy)
-      throw new ConflictException(
-        busy === OTHER_VISIT
-          ? 'Ya tienes otra visita a esa hora.'
-          : `Tienes ese horario marcado como ocupado («${busy}»).`,
-      );
-    await db.$transaction(async (tx) => {
-      await lockAppointment(tx, a.id);
-      const updated = await tx.appointment.update({
-        where: { id: a.id },
-        data: {
-          proposedStartsAt: start,
-          proposedById: user.id,
-          proposalSentAt: now,
-          proposalExpiresAt: expiresAt,
-        },
-      });
-      await tx.appointmentActivity.create({
-        data: {
-          appointmentId: a.id,
-          actorId: user.id,
-          action: 'RESCHEDULE_PROPOSED',
-          detail: { from: a.startsAt.toISOString(), to: start.toISOString() },
-        },
-      });
-      // Una propuesta nueva reemplaza a la anterior: su propio envío (clave por momento).
-      await queueJob(tx, updated, 'RESCHEDULE_PROPOSAL', now, expiresAt, null, now.toISOString());
-    });
-    logEvent('booking.reschedule_proposed', { appointmentId: a.id });
+    await sendProposal(user, a, new Date(startsAtValue), now, false);
   });
   return staffAppointment(user, id);
+}
+
+/**
+ * Reemplazo en otro horario: un técnico que ve el pedido de reemplazo responde «Puedo, en este
+ * horario». El cliente recibe la propuesta (con el nombre de ese técnico); si acepta, la visita
+ * se mueve y pasa a ese técnico. Si la rechaza o no responde, el reemplazo sigue abierto.
+ */
+export async function proposeHandover(
+  user: StaffUser,
+  id: string,
+  startsAtValue: string,
+  now = new Date(),
+) {
+  await exclusiveWait(`appointment:${id}`, async () => {
+    const a = await db.appointment.findUnique({ where: { id } });
+    if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
+    if (!isOffered(a, user, now))
+      throw new ConflictException(
+        'Este reemplazo ya no está disponible: alguien la tomó o se retiró.',
+      );
+    if (hasOpenProposal(a, now))
+      throw new ConflictException(
+        'Ya hay una propuesta de horario esperando la respuesta del cliente.',
+      );
+    await sendProposal(user, a, new Date(startsAtValue), now, true);
+  });
+  return staffAppointment(user, id);
+}
+
+/** Valida el horario propuesto por `user` (libre en la agenda y para él) y envía el WhatsApp. */
+async function sendProposal(
+  user: StaffUser,
+  a: Appointment,
+  start: Date,
+  now: Date,
+  handover: boolean,
+) {
+  if (!usesHold(a) || !a.calUid)
+    throw new BadRequestException(
+      'Esta visita no está en la agenda: pide a administración que cambie la fecha.',
+    );
+  if (!a.whatsappConsentAt || !a.contactPhone)
+    throw new BadRequestException(
+      'El cliente no autorizó avisos por WhatsApp: coordina el cambio con administración.',
+    );
+  if (!Number.isFinite(start.getTime()))
+    throw new BadRequestException('Elige la nueva fecha y hora.');
+  if (start.getTime() === a.startsAt.getTime())
+    throw new BadRequestException('Ese ya es el horario de la visita.');
+  if (start.getTime() < now.getTime() + PROPOSAL_RULES.minLeadHours * HOUR)
+    throw new BadRequestException(
+      `Propón un horario con al menos ${PROPOSAL_RULES.minLeadHours} h de anticipación.`,
+    );
+  if (start.getTime() > now.getTime() + PROPOSAL_RULES.maxDaysAhead * 24 * HOUR)
+    throw new BadRequestException('Propón un horario dentro de los próximos 60 días.');
+  const expiresAt = proposalDeadline(now, a.startsAt, start);
+  if (!expiresAt)
+    throw new BadRequestException(
+      'La visita está muy cerca para esperar la respuesta del cliente. Coordina con administración.',
+    );
+  const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
+  // El horario propuesto debe estar libre en la agenda y para quien propone.
+  await assertSlotFree(start, end, a.id, true, a.calUid);
+  const busy = await technicianBusyReason(db, user.id, { id: a.id, startsAt: start, endsAt: end });
+  if (busy)
+    throw new ConflictException(
+      busy === OTHER_VISIT
+        ? 'Ya tienes otra visita a esa hora.'
+        : `Tienes ese horario marcado como ocupado («${busy}»).`,
+    );
+  await db.$transaction(async (tx) => {
+    await lockAppointment(tx, a.id);
+    const updated = await tx.appointment.update({
+      where: { id: a.id },
+      data: {
+        proposedStartsAt: start,
+        proposedById: user.id,
+        proposalSentAt: now,
+        proposalExpiresAt: expiresAt,
+      },
+    });
+    await tx.appointmentActivity.create({
+      data: {
+        appointmentId: a.id,
+        actorId: user.id,
+        action: handover ? 'HANDOVER_PROPOSED' : 'RESCHEDULE_PROPOSED',
+        detail: { from: a.startsAt.toISOString(), to: start.toISOString() },
+      },
+    });
+    // Una propuesta nueva reemplaza a la anterior: su propio envío (clave por momento).
+    await queueJob(tx, updated, 'RESCHEDULE_PROPOSAL', now, expiresAt, null, now.toISOString());
+  });
+  logEvent('booking.reschedule_proposed', { appointmentId: a.id, handover });
 }
 
 /** El técnico retira su propuesta antes de que el cliente responda. */
@@ -164,9 +202,9 @@ export async function withdrawProposal(user: StaffUser, id: string) {
   await exclusiveWait(`appointment:${id}`, async () => {
     const a = await db.appointment.findUnique({ where: { id } });
     if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
-    if (a.assignedTechnicianId !== user.id)
-      throw new ForbiddenException('Solo el técnico a cargo puede retirar la propuesta.');
     if (!a.proposedStartsAt) return;
+    if (a.assignedTechnicianId !== user.id && a.proposedById !== user.id)
+      throw new ForbiddenException('Solo quien hizo la propuesta puede retirarla.');
     await db.$transaction(async (tx) => {
       await lockAppointment(tx, a.id);
       await tx.appointment.update({ where: { id: a.id }, data: clearProposal });
@@ -212,7 +250,12 @@ async function closeProposal(
     'RESCHEDULE_ANSWERED',
     a,
     a.proposedById,
-    rescheduleAnsweredMessage(a, outcome, a.proposedStartsAt),
+    rescheduleAnsweredMessage(
+      a,
+      outcome,
+      a.proposedStartsAt,
+      a.proposedById !== a.assignedTechnicianId,
+    ),
     `${a.proposalSentAt?.toISOString() ?? ''}:${outcome}`,
     now,
   );
@@ -288,8 +331,23 @@ export async function answerProposal(input: {
     try {
       // Se vuelve a comprobar: el horario pudo ocuparse mientras el cliente decidía.
       await assertSlotFree(start, end, a.id, true, a.calUid);
+      // Reemplazo en otro horario: la visita pasa a quien la propuso.
+      const taker =
+        a.proposedById && a.proposedById !== a.assignedTechnicianId
+          ? await db.user.findFirst({
+              where: {
+                id: a.proposedById,
+                role: { in: ['TECHNICIAN', 'ADMIN'] },
+                active: true,
+                deletedAt: null,
+              },
+              select: { id: true, name: true },
+            })
+          : null;
+      if (a.proposedById && a.proposedById !== a.assignedTechnicianId && !taker)
+        throw new ConflictException('El técnico que propuso el horario ya no está activo.');
       if (
-        await technicianBusyReason(db, a.assignedTechnicianId!, {
+        await technicianBusyReason(db, taker?.id ?? a.assignedTechnicianId!, {
           id: a.id,
           startsAt: start,
           endsAt: end,
@@ -299,6 +357,10 @@ export async function answerProposal(input: {
       const notifications = await moveConfirmedVisit(a, start, {
         acceptedProposalOf: a.proposedById ?? undefined,
       });
+      if (taker) {
+        const moved = await db.appointment.findUniqueOrThrow({ where: { id: a.id } });
+        notifications.push(...(await takeOverAfterProposal(moved, taker, now)));
+      }
       await deliverNow(notifications);
       // La reserva nueva de Cal.com queda aceptada (si falla, se reintenta sola).
       await syncCalConfirmation(a.id);

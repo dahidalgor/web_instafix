@@ -285,14 +285,22 @@ export function handoverRequestedMessage(
   input: VisitInput,
   requester: string,
   reason: string | null | undefined,
+  /** Quien lo recibe está ocupado a esa hora: solo puede proponer otro horario al cliente. */
+  busy = false,
 ) {
-  return {
-    title: '¿Puedes tomar esta visita?',
-    body: `${requester} necesita un reemplazo para ${visitText(input)}.${reason ? ` Motivo: ${reason}.` : ''}`.slice(
-      0,
-      300,
-    ),
-  };
+  const why = reason ? ` Motivo: ${reason}.` : '';
+  return busy
+    ? {
+        title: '¿Puedes tomar esta visita en otro horario?',
+        body: `${requester} necesita un reemplazo para ${visitText(input)}.${why} Estás ocupado a esa hora, pero puedes proponerle otro horario al cliente.`.slice(
+          0,
+          300,
+        ),
+      }
+    : {
+        title: '¿Puedes tomar esta visita?',
+        body: `${requester} necesita un reemplazo para ${visitText(input)}.${why}`.slice(0, 300),
+      };
 }
 
 /** Reemplazo: alguien tomó la visita (al técnico que lo pidió). */
@@ -316,10 +324,35 @@ export function rescheduleAnsweredMessage(
   input: VisitInput,
   outcome: 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'FAILED',
   proposed: Date,
+  /** La propuso otro técnico para tomar la visita (reemplazo en otro horario). */
+  handover = false,
 ) {
   const who = customerFirstName(input.contactName) ?? 'El cliente';
   const { day, time } = formatAppointmentMoment(proposed, input.timeZone);
   const proposedText = `el ${lowerFirst(day)} a las ${time}`;
+  if (handover)
+    switch (outcome) {
+      case 'ACCEPTED':
+        return {
+          title: `${who} aceptó: la visita es tuya`,
+          body: `Ahora la atiendes tú, ${proposedText}. Ya se movió en la agenda.`,
+        };
+      case 'DECLINED':
+        return {
+          title: `${who} prefiere mantener el horario`,
+          body: `No aceptó moverla a ${proposedText}, así que no pasa a ti. El reemplazo sigue abierto si puedes en su horario.`,
+        };
+      case 'EXPIRED':
+        return {
+          title: `${who} no respondió a tu propuesta`,
+          body: `La visita no pasa a ti. El reemplazo sigue abierto si puedes en su horario.`,
+        };
+      default:
+        return {
+          title: `${who} aceptó, pero no se pudo mover`,
+          body: `El horario ${proposedText} ya no está libre o la agenda no respondió: la visita no pasa a ti. Coordina con administración.`,
+        };
+    }
   switch (outcome) {
     case 'ACCEPTED':
       return {
