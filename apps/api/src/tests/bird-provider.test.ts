@@ -20,14 +20,14 @@ const env = {
   WHATSAPP_BUSINESS_PHONE: '+593984703819',
 };
 const bodies: Record<string, string> = {
-  appointment_confirmed:
+  appointment_confirmed_v2:
     'Tu visita del {{fecha}} a las {{hora}} está confirmada. Te atenderá {{tecnico}}.',
   appointment_requested_v2: 'Hola {{nombre}}, envíanos tu ubicación para {{servicio}}.',
   appointment_reminder_v2: 'Hola {{1}}, tu visita es {{2}}.',
   // Aprobada, pero con una versión nueva en revisión de Meta: Bird no la envía.
-  appointment_rescheduled: 'Hola {{nombre}}, tu visita es el {{fecha}}.',
+  appointment_rescheduled_v2: 'Hola {{nombre}}, tu visita es el {{fecha}}.',
 };
-const inReview = new Set(['appointment_rescheduled']);
+const inReview = new Set(['appointment_rescheduled_v2']);
 function fakeBird(overrides: { send?: (params: any) => Promise<any> } = {}) {
   const sends: any[] = [];
   const templateGets: string[] = [];
@@ -111,7 +111,7 @@ test('Bird templates: named variables, real language, sender number; no Bird pay
     to: '+593998686244',
     from: '+593984703819',
     template: {
-      slug: 'appointment_confirmed',
+      slug: 'appointment_confirmed_v2',
       language: 'es-EC',
       components: [
         {
@@ -143,7 +143,7 @@ test('Bird templates: named variables, real language, sender number; no Bird pay
     template: 'appointment_confirmed',
     variables: { fecha: 'x', hora: 'y', tecnico: 'z' },
   });
-  assert.equal(templateGets.filter((s) => s === 'appointment_confirmed').length, 1);
+  assert.equal(templateGets.filter((s) => s === 'appointment_confirmed_v2').length, 1);
 
   // Variables posicionales o que Instafix no ofrece: no se envía nada.
   await assert.rejects(
@@ -270,10 +270,10 @@ test('account status reports the Instafix number, Coexistence and template probl
     messagingLimit: 'tier_250',
   });
   const byName = Object.fromEntries(status.templates.map((tpl) => [tpl.name, tpl]));
-  assert.equal(byName.appointment_confirmed.status, 'active');
-  assert.equal(byName.appointment_confirmed.problem, null);
+  assert.equal(byName.appointment_confirmed_v2.status, 'active');
+  assert.equal(byName.appointment_confirmed_v2.problem, null);
   assert.match(byName.appointment_reminder_v2.problem!, /1, 2/);
-  assert.equal(byName.appointment_cancelled.status, 'pending');
+  assert.equal(byName.appointment_cancelled_v2.status, 'pending');
   assert.deepEqual(status.authenticationTemplate, { name: 'bird_otp', status: 'active' });
 });
 

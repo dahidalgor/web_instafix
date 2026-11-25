@@ -40,14 +40,14 @@ import { BirdConfigError, birdClient, birdWebhookReceiver } from './bird.client'
  */
 const BIRD_TEMPLATES: Record<WhatsAppTemplate, string> = {
   appointment_requested: 'appointment_requested_v2',
-  appointment_confirmed: 'appointment_confirmed',
-  appointment_rescheduled: 'appointment_rescheduled',
-  appointment_cancelled: 'appointment_cancelled',
+  appointment_confirmed: 'appointment_confirmed_v2',
+  appointment_rescheduled: 'appointment_rescheduled_v2',
+  appointment_cancelled: 'appointment_cancelled_v2',
   appointment_reminder: 'appointment_reminder_v2',
   appointment_location_reminder: 'appointment_location_reminder_v3',
   appointment_location_received: 'appointment_location_received_v2',
   appointment_technician_changed: 'appointment_technician_changed_v2',
-  appointment_reschedule_proposal: 'appointment_reschedule_proposal',
+  appointment_reschedule_proposal: 'appointment_reschedule_proposal_v2',
 };
 /**
  * Código de verificación: plantilla de autenticación gestionada por Bird (ya aprobada, sale desde
