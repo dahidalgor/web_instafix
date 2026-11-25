@@ -55,6 +55,7 @@ function checkId(...ids: string[]) {
  * de la sesión: no existe ningún parámetro «technicianId».
  */
 import { proposeReschedule, withdrawProposal } from './reschedule-proposal';
+import { appointmentSlots } from './appointment-slots';
 @Controller('api/v1/staff')
 export class StaffController {
   @Get('me') async me(@Req() req: Request) {
@@ -222,6 +223,25 @@ export class StaffController {
     checkOrigin(req);
     checkId(id);
     return cancelHandover(await authenticatedStaff(req), id);
+  }
+
+  /**
+   * Horarios a los que se puede mover la visita (propuesta del técnico o cambio de fecha de
+   * administración), con las mismas reglas que se validan al guardar.
+   */
+  @Get('appointments/:id/slots')
+  @Header('Cache-Control', 'no-store')
+  @RateLimit('staff')
+  async slots(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('purpose') purpose?: string,
+    @Query('technicianId') technicianId?: string,
+  ) {
+    checkId(id);
+    return appointmentSlots(await authenticatedStaff(req), id, { from, to, purpose, technicianId });
   }
 
   /** El técnico a cargo propone otro horario al cliente (WhatsApp con botones). */

@@ -1,3 +1,4 @@
+import { VisitSlotPicker } from '../../components/staff/VisitSlotPicker';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { BusyLabel } from '../../components/ui/BusyLabel';
 import { TextSkeleton } from '../../components/ui/Skeleton';
@@ -560,23 +561,20 @@ export function AppointmentSheet({
                           '/proposal',
                           {
                             method: 'POST',
-                            // Hora de Ecuador (UTC-5 todo el año).
-                            body: JSON.stringify({ startsAt: `${proposedAt}:00-05:00` }),
+                            body: JSON.stringify({ startsAt: proposedAt }),
                           },
                           'Propuesta enviada: el cliente responde con un botón en WhatsApp.',
                         );
                         if (ok) setProposing(false);
                       }}
                     >
-                      <label>
-                        Nueva fecha y hora
-                        <input
-                          type="datetime-local"
-                          required
-                          value={proposedAt}
-                          onChange={(e) => setProposedAt(e.target.value)}
-                        />
-                      </label>
+                      <p className="small">Elige un horario libre en la agenda y para ti:</p>
+                      <VisitSlotPicker
+                        appointmentId={item.id}
+                        purpose="proposal"
+                        value={proposedAt || null}
+                        onChange={(start) => setProposedAt(start ?? '')}
+                      />
                       <p className="small">
                         Al cliente le llega un WhatsApp con «Sí, me sirve» y «No, mantener». Si
                         acepta, la visita se mueve y sigue contigo; si no responde, se queda como
@@ -607,6 +605,7 @@ export function AppointmentSheet({
                       disabled={busy}
                       onClick={() => {
                         setAskingHandover(false);
+                        setProposedAt('');
                         setProposing(true);
                       }}
                     >

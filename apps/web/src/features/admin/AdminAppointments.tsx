@@ -21,6 +21,7 @@ import { LoadMore } from '../../components/ui/LoadMore';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { ListSkeleton } from '../../components/ui/Skeleton';
+import { VisitSlotPicker } from '../../components/staff/VisitSlotPicker';
 import { api } from '../../lib/api';
 type AdminAppointment = Appointment & {
   offeringId?: string | null;
@@ -231,7 +232,7 @@ export function AdminAppointments({
       }),
     );
     setId(item.id);
-    setMove({ startsAt: localDate(item.startsAt), keepTechnician: true });
+    setMove({ startsAt: '', keepTechnician: true });
     setTeam(null);
     setReassignTo('');
     if (item.status === 'CONFIRMED' && item.assignedTechnician)
@@ -620,14 +621,18 @@ export function AdminAppointments({
                   confirmación y sale de Cal.com hasta que un técnico la confirme. La duración la
                   pone el evento de Cal.com.
                 </p>
-                <label>
-                  Nueva fecha y hora
-                  <input
-                    type="datetime-local"
-                    value={move.startsAt}
-                    onChange={(e) => setMove({ ...move, startsAt: e.target.value })}
-                  />
-                </label>
+                <p className="small">Elige un horario libre en la agenda:</p>
+                <VisitSlotPicker
+                  appointmentId={item.id}
+                  purpose="move"
+                  technicianId={
+                    move.keepTechnician && item.status === 'CONFIRMED'
+                      ? item.assignedTechnician?.id
+                      : null
+                  }
+                  value={move.startsAt || null}
+                  onChange={(start) => setMove((m) => ({ ...m, startsAt: start ?? '' }))}
+                />
                 {item.status === 'CONFIRMED' && item.assignedTechnician && (
                   <label className="checkbox-label">
                     <input
@@ -641,7 +646,7 @@ export function AdminAppointments({
                 <BusyButton
                   type="button"
                   className="btn btn-secondary"
-                  disabled={busy || !move.startsAt || move.startsAt === localDate(item.startsAt)}
+                  disabled={busy || !move.startsAt}
                   busy={busyAction === 'reschedule'}
                   busyLabel="Cambiando…"
                   onClick={() => reschedule(item)}

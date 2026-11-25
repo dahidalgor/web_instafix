@@ -86,7 +86,13 @@ reservas de los horarios de Cal.com, y dos clientes no pueden tomar el mismo hor
 En una visita confirmada, el técnico a cargo puede pulsar **«Proponer otro horario al
 cliente»** (`POST /api/v1/staff/appointments/:id/proposal`, retirarla con `DELETE`). Al
 cliente le llega un WhatsApp con dos botones, «Sí, me sirve» y «No, mantener»
-(`appointment_reschedule_proposal`).
+(`appointment_reschedule_proposal_v2`).
+
+El horario se elige en el mismo calendario de la reserva, que solo muestra horarios que se
+aceptarán al guardar (`GET /api/v1/staff/appointments/:id/slots`, `staff/appointment-slots.ts`):
+libres en Cal.com, sin reserva provisional de otro cliente, libres para el técnico, con 2 h de
+anticipación y dentro de 60 días. Administración usa el mismo calendario en «Cambiar fecha y
+hora» (`purpose=move`): admite hoy y, si mantiene al técnico, también revisa que esté libre.
 
 - **Acepta**: la visita se mueve (también en Cal.com), sigue con el mismo técnico y el cliente
   recibe «confirmada» con la fecha nueva. Si el horario ya no está libre, no se mueve.
