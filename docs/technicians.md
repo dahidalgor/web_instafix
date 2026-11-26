@@ -80,6 +80,12 @@ reservas de los horarios de Cal.com, y dos clientes no pueden tomar el mismo hor
   antes de que venza.
 - **Único disponible**: si quien recibe la solicitud es la única persona del equipo libre a esa
   hora, el aviso y la tarjeta de Pendientes lo dicen («Eres el único técnico disponible»).
+- **Reactivar** (administración): en una cita cancelada, «Ver y editar» → **«Reactivar cita»**.
+  Se elige el horario en el calendario (vale el mismo si sigue libre) y la cita vuelve a
+  «pendiente de confirmación» con un plazo nuevo, sin técnico. El equipo recibe la solicitud y
+  el cliente un WhatsApp (si falta la ubicación, se le vuelve a pedir; si no, «tu visita es el …»).
+  `POST /api/v1/admin/appointments/:id/reactivate`; auditoría `REACTIVATED` y
+  `APPOINTMENT_REACTIVATED`.
 
 ### Proponer otro horario al cliente
 

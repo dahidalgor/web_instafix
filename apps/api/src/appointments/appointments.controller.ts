@@ -36,7 +36,7 @@ import { UNDELIVERABLE_ISSUE } from '../whatsapp/undeliverable';
 import { isConsentIssue } from '../whatsapp/consent';
 import { deliverNotification } from '../notifications/notification.service';
 import { restoreBookingFlow } from './whatsapp-consent';
-import { adminRescheduleBooking } from '../booking/booking.service';
+import { adminReactivateBooking, adminRescheduleBooking } from '../booking/booking.service';
 import {
   reassignAppointment,
   syncCalConfirmation,
@@ -318,6 +318,25 @@ export class AppointmentsController {
     // Técnico conservado: Cal.com recibe la confirmación de la reserva nueva (o se reintenta).
     const cal = result.kept ? await syncCalConfirmation(id) : 'NOT_APPLICABLE';
     return { ...result, cal };
+  }
+
+  /**
+   * Reactivar una cita cancelada (de la agenda): vuelve a «esperando técnico» en el horario
+   * elegido, con un plazo nuevo para que un técnico la confirme.
+   */
+  @Post('admin/appointments/:id/reactivate') async reactivateAppointment(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    checkOrigin(req);
+    const admin = await authenticated(req, true);
+    const parsed = z
+      .object({ startsAt: z.string().datetime({ offset: true }) })
+      .strict()
+      .safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Elige el nuevo horario');
+    return adminReactivateBooking(admin.id, id, parsed.data.startsAt);
   }
 
   @Patch('admin/appointments/:id') async editAppointment(

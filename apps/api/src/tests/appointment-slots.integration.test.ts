@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { randomInt, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import type { StaffUser } from '../auth/session';
+import { adminReactivateBooking } from '../booking/booking.service';
 import { db } from '../database/client';
+import { endpointHash } from '../notifications/staff/web-push.channel';
 import { appointmentSlots } from '../staff/appointment-slots';
 import { addBusyBlocks } from '../staff/availability';
 import { proposeReschedule } from '../staff/reschedule-proposal';
@@ -148,5 +150,99 @@ test(
     await proposeReschedule(tech, visit.id, later);
     const row = await db.appointment.findUniqueOrThrow({ where: { id: visit.id } });
     assert.equal(row.proposedStartsAt?.toISOString(), later);
+  },
+);
+
+test(
+  'administración reactiva una cita cancelada: vuelve a esperar técnico y se avisa',
+  { skip: !enabled },
+  async (t) => {
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      CAL_API_KEY: 'cal_test',
+      CAL_API_VERSION: '2026-02-25',
+      CAL_EVENT_TYPE_ID: '777000003',
+    });
+    const admin = await db.user.create({
+      data: {
+        name: 'Ada Reactiva',
+        phone: phone(),
+        passwordHash: 'x',
+        role: 'ADMIN',
+        phoneVerifiedAt: new Date(),
+      },
+    });
+    // Con un dispositivo registrado: los avisos del equipo solo van a quien puede recibirlos.
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${randomUUID()}`;
+    await db.pushSubscription.create({
+      data: {
+        userId: admin.id,
+        endpoint,
+        endpointHash: endpointHash(endpoint),
+        p256dh: 'p256dh-de-prueba',
+        auth: 'auth-de-prueba',
+        installationId: randomUUID(),
+      },
+    });
+    const cancelled = await db.appointment.create({
+      data: {
+        title: 'Joystick PS5',
+        device: 'PS5',
+        startsAt: at('13:00'),
+        endsAt: at('15:00'),
+        address: 'Cumbayá',
+        technician: '',
+        contactName: 'Clienta Cancelada',
+        contactPhone: phone(),
+        whatsappConsentAt: new Date(),
+        status: 'CANCELLED',
+        source: 'INSTAFIX_API',
+        autoCancelReason: 'Cancelada automáticamente: ningún técnico la confirmó a tiempo.',
+        locationReceivedAt: new Date(),
+        locationLatitude: -0.2,
+        locationLongitude: -78.4,
+      },
+    });
+    t.after(async () => {
+      await db.automationJob.deleteMany({ where: { appointmentId: cancelled.id } });
+      await db.appointmentActivity.deleteMany({ where: { appointmentId: cancelled.id } });
+      await db.notification.deleteMany({ where: { appointmentId: cancelled.id } });
+      await db.adminAction.deleteMany({ where: { actorId: admin.id } });
+      await db.appointment.deleteMany({ where: { id: cancelled.id } });
+      await db.pushSubscription.deleteMany({ where: { userId: admin.id } });
+      await db.user.deleteMany({ where: { id: admin.id } });
+      process.env = saved;
+    });
+    const ada = { ...admin, role: 'ADMIN' } as StaffUser;
+    // Para reactivar, su propio horario (13:00) sí se ofrece.
+    const slots = await appointmentSlots(ada, cancelled.id, {
+      from: day,
+      to: day,
+      purpose: 'reactivate',
+    });
+    assert.ok((slots.days[day] ?? []).includes(at('13:00').toISOString()));
+
+    const result = await adminReactivateBooking(admin.id, cancelled.id, at('13:00').toISOString());
+    assert.equal(result.status, 'PENDING_LOCATION');
+    const row = await db.appointment.findUniqueOrThrow({ where: { id: cancelled.id } });
+    assert.equal(row.autoCancelReason, null);
+    assert.ok(row.holdExpiresAt && row.holdExpiresAt > new Date(), 'plazo nuevo para confirmar');
+    assert.ok(row.locationReceivedAt, 'conserva la ubicación');
+    // Con ubicación: al cliente «tu visita es el …»; al equipo, la solicitud.
+    const jobs = await db.automationJob.findMany({ where: { appointmentId: row.id } });
+    assert.ok(jobs.some((j) => j.kind === 'RESCHEDULED' && j.status === 'PENDING'));
+    assert.ok(!jobs.some((j) => j.kind === 'INITIAL'));
+    assert.ok(
+      await db.notification.findFirst({
+        where: { appointmentId: row.id, kind: 'APPOINTMENT_REQUESTED' },
+      }),
+    );
+    assert.ok(
+      await db.appointmentActivity.findFirst({
+        where: { appointmentId: row.id, action: 'REACTIVATED' },
+      }),
+    );
+    // Una cita que no está cancelada no se «reactiva».
+    await assert.rejects(adminReactivateBooking(admin.id, row.id, at('17:00').toISOString()));
   },
 );

@@ -357,6 +357,37 @@ export function AdminAppointments({
       setBusyAction(null);
     }
   }
+  /** Cita cancelada que el cliente aún quiere: vuelve a esperar técnico en el horario elegido. */
+  async function reactivate(item: AdminAppointment) {
+    if (!move.startsAt) return;
+    const when = new Date(move.startsAt);
+    const label = when.toLocaleString('es-EC', { dateStyle: 'full', timeStyle: 'short' });
+    if (
+      !window.confirm(
+        `¿Reactivar la cita de ${item.contactName || 'este cliente'} para el ${label}? Vuelve a esperar que un técnico la confirme y se avisa al cliente y al equipo.`,
+      )
+    )
+      return;
+    setBusyAction('reactivate');
+    setMessage('');
+    try {
+      await api(`admin/appointments/${item.id}/reactivate`, {
+        method: 'POST',
+        body: JSON.stringify({ startsAt: when.toISOString() }),
+      });
+      await load();
+      setId(null);
+      setDraft({ ...empty });
+      setFormOpen(false);
+      setMessage(
+        `Cita reactivada para el ${label}. Espera que un técnico la confirme; el equipo recibió el aviso y el cliente, el WhatsApp (si lo autorizó).`,
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo reactivar la cita.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
   async function save(event: FormEvent) {
     event.preventDefault();
     setBusyAction('save');
@@ -606,6 +637,35 @@ export function AdminAppointments({
               onChange={(e) => setDraft({ ...draft, endsAt: e.target.value })}
             />
           </label>
+          {list
+            .filter((item) => item.id === id && inAgenda(item) && item.status === 'CANCELLED')
+            .map((item) => (
+              <fieldset key={`revive-${item.id}`} className="appt-move">
+                <legend>Reactivar cita</legend>
+                <p className="small">
+                  Vuelve a «pendiente de confirmación» en el horario que elijas (puede ser el mismo
+                  si sigue libre), con un plazo nuevo para que un técnico la confirme. El equipo
+                  recibe la solicitud y el cliente un WhatsApp: si falta su ubicación, se la
+                  volvemos a pedir.
+                </p>
+                <VisitSlotPicker
+                  appointmentId={item.id}
+                  purpose="reactivate"
+                  value={move.startsAt || null}
+                  onChange={(start) => setMove((m) => ({ ...m, startsAt: start ?? '' }))}
+                />
+                <BusyButton
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !move.startsAt}
+                  busy={busyAction === 'reactivate'}
+                  busyLabel="Reactivando…"
+                  onClick={() => reactivate(item)}
+                >
+                  Reactivar cita
+                </BusyButton>
+              </fieldset>
+            ))}
           {list
             .filter(
               (item) =>

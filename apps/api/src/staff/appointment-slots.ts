@@ -36,25 +36,34 @@ export async function appointmentSlots(
   if (rangeEnd <= rangeStart || rangeEnd.getTime() - rangeStart.getTime() > 35 * 86400000)
     throw new BadRequestException('El rango máximo es de 35 días');
   const purpose =
-    query.purpose === 'move' ? 'move' : query.purpose === 'handover' ? 'handover' : 'proposal';
+    query.purpose === 'move' || query.purpose === 'reactivate'
+      ? query.purpose
+      : query.purpose === 'handover'
+        ? 'handover'
+        : 'proposal';
+  const reactivate = purpose === 'reactivate';
   const a = await db.appointment.findUnique({ where: { id } });
   if (!a || a.deletedAt) throw new NotFoundException('Cita no encontrada');
-  if (purpose === 'move' && user.role !== 'ADMIN')
+  if ((purpose === 'move' || reactivate) && user.role !== 'ADMIN')
     throw new ForbiddenException('Solo administración cambia la fecha de una cita.');
   if (purpose === 'proposal' && a.assignedTechnicianId !== user.id)
     throw new ForbiddenException('Solo el técnico a cargo puede proponer otro horario.');
   if (purpose === 'handover' && !isOffered(a, user, now))
     throw new ForbiddenException('Este reemplazo ya no está disponible.');
   // De quién se revisa la disponibilidad: el técnico que propone, o el que se mantiene.
-  const proposing = purpose !== 'move';
+  const proposing = purpose === 'proposal' || purpose === 'handover';
   const technicianId = proposing
     ? user.id
-    : query.technicianId && query.technicianId === a.assignedTechnicianId
+    : !reactivate && query.technicianId && query.technicianId === a.assignedTechnicianId
       ? query.technicianId
       : null;
 
   // Con la reserva de esta visita descontada: sus propias horas cuentan como libres.
-  const offered = await getCalSlots(from, to, TIME_ZONE, { anyDay: true, rescheduleUid: a.calUid });
+  // (Una cita cancelada ya no tiene reserva en Cal.com.)
+  const offered = await getCalSlots(from, to, TIME_ZONE, {
+    anyDay: true,
+    rescheduleUid: reactivate ? null : a.calUid,
+  });
   const length = (await calEventLengthMinutes()) * 60000;
   const all = Object.values(offered).flat();
   if (!all.length) return { timeZone: TIME_ZONE, days: {} };
@@ -71,7 +80,8 @@ export async function appointmentSlots(
   const free = (slot: string) => {
     const start = new Date(slot);
     const end = new Date(start.getTime() + length);
-    if (start.getTime() === a.startsAt.getTime()) return false;
+    // Para reactivar sí vale su mismo horario (si sigue libre).
+    if (!reactivate && start.getTime() === a.startsAt.getTime()) return false;
     if (start.getTime() < minStart || start.getTime() > maxStart) return false;
     if (proposing && !proposalDeadline(now, a.startsAt, start)) return false;
     if (holds.some((h) => h.startsAt < end && h.endsAt > start)) return false;

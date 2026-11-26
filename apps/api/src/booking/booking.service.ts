@@ -25,7 +25,10 @@ import { logEvent } from '../common/log-event';
 import { ProviderError } from '../integrations/provider-error';
 import { publishAppointmentEvent } from '../notifications/appointment-events';
 import { deliverNotification } from '../notifications/notification.service';
-import { scheduleCompletionReminders } from '../notifications/staff/staff-notifications';
+import {
+  enqueueAppointmentRequested,
+  scheduleCompletionReminders,
+} from '../notifications/staff/staff-notifications';
 import { cancelPendingJobs, lockAppointment, queueJob, queueReminders } from '../whatsapp/queue';
 import { assertPhoneAllowed } from '../security/blocked-phones';
 import type { RequestOrigin } from '../security/client-identity';
@@ -585,12 +588,22 @@ async function moveToHold(
     adminId?: string;
     /** Clientes: máximo MAX_RESCHEDULES (comprobado en la misma actualización). */
     limited: boolean;
+    /** Administración reactiva una cita cancelada (su reserva de Cal.com ya no existe). */
+    reactivate?: boolean;
   },
 ) {
   const now = new Date();
+  const reactivate = Boolean(options.reactivate);
   const end = new Date(start.getTime() + (await calEventLengthMinutes()) * 60000);
-  await assertSlotFree(start, end, appointment.id, Boolean(options.adminId), appointment.calUid);
-  const previousUid = appointment.calUid;
+  await assertSlotFree(
+    start,
+    end,
+    appointment.id,
+    Boolean(options.adminId),
+    reactivate ? null : appointment.calUid,
+  );
+  // Una cita cancelada ya no tiene reserva en Cal.com que liberar.
+  const previousUid = reactivate ? null : appointment.calUid;
   const notifications = await db.$transaction(async (tx) => {
     await calLock(tx);
     await lockAppointment(tx, appointment.id);
@@ -600,7 +613,8 @@ async function moveToHold(
     const moved = await tx.appointment.updateMany({
       where: {
         id: appointment.id,
-        status: { in: ['PENDING_LOCATION', 'CONFIRMED'] },
+        deletedAt: null,
+        status: reactivate ? 'CANCELLED' : { in: ['PENDING_LOCATION', 'CONFIRMED'] },
         ...(options.limited ? { rescheduleCount: { lt: MAX_RESCHEDULES } } : {}),
       },
       data: {
@@ -609,7 +623,7 @@ async function moveToHold(
         calStatus: null,
         startsAt: start,
         endsAt: end,
-        rescheduleCount: { increment: 1 },
+        ...(reactivate ? { autoCancelReason: null } : { rescheduleCount: { increment: 1 } }),
         automationRevision: { increment: 1 },
         ...unassignedForReschedule,
         holdStartedAt: now,
@@ -630,7 +644,7 @@ async function moveToHold(
       await tx.adminAction.create({
         data: {
           actorId: options.adminId,
-          action: 'APPOINTMENT_RESCHEDULED',
+          action: reactivate ? 'APPOINTMENT_REACTIVATED' : 'APPOINTMENT_RESCHEDULED',
           target: appointment.id,
           detail: {
             from: appointment.startsAt.toISOString(),
@@ -648,6 +662,28 @@ async function moveToHold(
           detail: { previousTechnicianId: appointment.assignedTechnicianId },
         },
       });
+    if (reactivate) {
+      await tx.appointmentActivity.create({
+        data: {
+          appointmentId: appointment.id,
+          actorId: options.adminId ?? null,
+          action: 'REACTIVATED',
+          detail: { from: appointment.startsAt.toISOString(), to: start.toISOString() },
+        },
+      });
+      // Al cliente: si falta la ubicación, la solicitud que la pide; si no, «tu visita es el …,
+      // te avisamos cuando un técnico la confirme». Al equipo: la solicitud para confirmarla.
+      if (updated.whatsappConsentAt && updated.contactPhone)
+        await queueJob(
+          tx,
+          updated,
+          updated.locationReceivedAt ? 'RESCHEDULED' : 'INITIAL',
+          now,
+          updated.startsAt,
+        );
+      await enqueueAppointmentRequested(tx, updated, now);
+      return [] as string[];
+    }
     if (!updated.locationReceivedAt && updated.whatsappConsentAt)
       await queueJob(tx, updated, 'INITIAL', now, updated.startsAt, options.origin);
     return publishAppointmentEvent(
@@ -767,6 +803,38 @@ export async function adminRescheduleBooking(
     logEvent('booking.admin_rescheduled', { appointmentId: appointment.id, keptTechnician: true });
     const moved = await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
     return { ok: true, startsAt: moved.startsAt.toISOString(), unchanged: false, kept: true };
+  });
+}
+
+/**
+ * Administración reactiva una cita cancelada (por ejemplo, se canceló sola porque ningún técnico
+ * la confirmó a tiempo y el cliente sigue interesado). Vuelve a «esperando técnico» en el horario
+ * elegido, con un plazo nuevo para confirmarla, sin técnico y sin reserva en Cal.com hasta que
+ * uno la confirme. Conserva la ubicación del cliente si ya la había enviado.
+ */
+export async function adminReactivateBooking(adminId: string, id: string, startValue: string) {
+  const start = new Date(startValue);
+  if (!Number.isFinite(start.getTime())) throw new BadRequestException('Elige el horario.');
+  return exclusive(`appointment:${id}`, async () => {
+    const appointment = await db.appointment.findFirst({ where: { id, deletedAt: null } });
+    if (!appointment || appointment.status !== 'CANCELLED')
+      throw new BadRequestException('Solo se puede reactivar una cita cancelada.');
+    if (!usesHold(appointment))
+      throw new BadRequestException(
+        'Esta cita no está en la agenda: edítala en el formulario y cambia su estado.',
+      );
+    if (start.getTime() < Date.now() + 5 * 60000)
+      throw new BadRequestException('Elige una fecha y hora futuras.');
+    const notifications = await moveToHold(appointment, start, {
+      deadline: holdDeadlineForExisting(new Date(), start),
+      adminId,
+      limited: false,
+      reactivate: true,
+    });
+    await deliverNow(notifications);
+    logEvent('booking.admin_reactivated', { appointmentId: appointment.id });
+    const saved = await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    return { ok: true, startsAt: saved.startsAt.toISOString(), status: saved.status };
   });
 }
 
