@@ -38,6 +38,7 @@ import { deliverNotification } from '../notifications/notification.service';
 import { restoreBookingFlow } from './whatsapp-consent';
 import { adminReactivateBooking, adminRescheduleBooking } from '../booking/booking.service';
 import {
+  assignPendingAppointment,
   reassignAppointment,
   syncCalConfirmation,
   teamForAppointment,
@@ -272,6 +273,22 @@ export class AppointmentsController {
   ) {
     await authenticated(req, true);
     return teamForAppointment(id);
+  }
+
+  /**
+   * Asignar una cita que espera técnico a una persona del equipo, aunque tenga ese horario
+   * ocupado (clases, otro trabajo): queda confirmada con ella.
+   */
+  @Post('admin/appointments/:id/assign')
+  @HttpCode(200)
+  async assignAppointment(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const admin = await authenticated(req, true);
+    const parsed = reassignSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Elige a quién asignar la visita.');
+    const result = await assignPendingAppointment(admin, id, parsed.data.technicianId);
+    await auditAdmin(admin.id, 'APPOINTMENT_ASSIGNED', id, { to: parsed.data.technicianId });
+    return result;
   }
 
   /**

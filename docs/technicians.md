@@ -80,6 +80,11 @@ reservas de los horarios de Cal.com, y dos clientes no pueden tomar el mismo hor
   antes de que venza.
 - **Único disponible**: si quien recibe la solicitud es la única persona del equipo libre a esa
   hora, el aviso y la tarjeta de Pendientes lo dicen («Eres el único técnico disponible»).
+- **Asignar técnico** (administración): en una cita que espera técnico, «Ver y editar» →
+  **«Asignar técnico»** la confirma con la persona elegida **aunque tenga ese horario marcado
+  como ocupado** (clases, otro trabajo). Se reserva en Cal.com y el cliente recibe «confirmada».
+  También se puede elegir al reactivar una cita cancelada. `POST
+/api/v1/admin/appointments/:id/assign`; auditoría `ASSIGNED_BY_ADMIN` y `APPOINTMENT_ASSIGNED`.
 - **Reactivar** (administración): en una cita cancelada, «Ver y editar» → **«Reactivar cita»**.
   Se elige el horario en el calendario (vale el mismo si sigue libre) y la cita vuelve a
   «pendiente de confirmación» con un plazo nuevo, sin técnico. El equipo recibe la solicitud y

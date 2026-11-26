@@ -9,6 +9,7 @@ import { endpointHash } from '../notifications/staff/web-push.channel';
 import { appointmentSlots } from '../staff/appointment-slots';
 import { addBusyBlocks } from '../staff/availability';
 import { proposeReschedule } from '../staff/reschedule-proposal';
+import { assignPendingAppointment, confirmAppointment } from '../staff/staff-appointments.service';
 
 const enabled = process.env.INSTAFIX_INTEGRATION === '1';
 const HOUR = 3600000;
@@ -33,6 +34,22 @@ globalThis.fetch = (async (input: any, init?: RequestInit) => {
       data: { [day]: starts.map((start) => ({ start })) },
     });
   }
+  if (url.endsWith('/bookings') && init?.method === 'POST') {
+    const start = new Date(JSON.parse(String(init.body)).start);
+    return Response.json({
+      status: 'success',
+      data: {
+        uid: `assigned-${randomUUID()}`,
+        status: 'accepted',
+        start: start.toISOString(),
+        end: new Date(start.getTime() + 7200000).toISOString(),
+      },
+    });
+  }
+  if (/\/confirm$/.test(url)) return Response.json({ status: 'success' });
+  const booking = url.match(/\/bookings\/([^/?]+)$/);
+  if (booking)
+    return Response.json({ status: 'success', data: { status: 'accepted', uid: booking[1] } });
   if (url.includes('/event-types/'))
     return Response.json({ status: 'success', data: { lengthInMinutes: 120 } });
   return Response.json({}, { status: 404 });
@@ -244,5 +261,74 @@ test(
     );
     // Una cita que no está cancelada no se «reactiva».
     await assert.rejects(adminReactivateBooking(admin.id, row.id, at('17:00').toISOString()));
+  },
+);
+
+test(
+  'administración asigna una cita pendiente a un técnico aunque tenga clases a esa hora',
+  { skip: !enabled },
+  async (t) => {
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      CAL_API_KEY: 'cal_test',
+      CAL_API_VERSION: '2026-02-25',
+      CAL_EVENT_TYPE_ID: '777000003',
+    });
+    const make = (name: string, role: 'TECHNICIAN' | 'ADMIN') =>
+      db.user.create({
+        data: { name, phone: phone(), passwordHash: 'x', role, phoneVerifiedAt: new Date() },
+      });
+    const tech = await make('Tomás Clases', 'TECHNICIAN');
+    const admin = await make('Ada Asigna', 'ADMIN');
+    const pending = await db.appointment.create({
+      data: {
+        title: 'Limpieza PS5',
+        device: 'PS5',
+        startsAt: at('13:00'),
+        endsAt: at('15:00'),
+        address: '',
+        technician: '',
+        contactName: 'Cliente Forzada',
+        contactPhone: phone(),
+        whatsappConsentAt: new Date(),
+        status: 'PENDING_LOCATION',
+        source: 'INSTAFIX_API',
+        holdStartedAt: new Date(),
+        holdExpiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    t.after(async () => {
+      await db.automationJob.deleteMany({ where: { appointmentId: pending.id } });
+      await db.appointmentActivity.deleteMany({ where: { appointmentId: pending.id } });
+      await db.notification.deleteMany({ where: { appointmentId: pending.id } });
+      await db.appointment.deleteMany({ where: { id: pending.id } });
+      await db.user.deleteMany({ where: { id: { in: [tech.id, admin.id] } } });
+      process.env = saved;
+    });
+    await addBusyBlocks(tech.id, {
+      label: 'Clases',
+      repeat: 'ONCE',
+      date: day,
+      allDay: false,
+      start: '12:00',
+      end: '16:00',
+    });
+    // El técnico no puede confirmarla él mismo…
+    await assert.rejects(
+      confirmAppointment({ ...tech, role: 'TECHNICIAN' } as StaffUser, pending.id),
+      /ocupado/,
+    );
+    // …pero administración sí puede asignársela.
+    const result = await assignPendingAppointment(admin, pending.id, tech.id);
+    assert.equal(result.alreadyConfirmed, false);
+    const row = await db.appointment.findUniqueOrThrow({ where: { id: pending.id } });
+    assert.equal(row.status, 'CONFIRMED');
+    assert.equal(row.assignedTechnicianId, tech.id);
+    assert.equal(row.confirmedById, admin.id);
+    assert.ok(
+      await db.appointmentActivity.findFirst({
+        where: { appointmentId: row.id, action: 'ASSIGNED_BY_ADMIN', actorId: admin.id },
+      }),
+    );
   },
 );

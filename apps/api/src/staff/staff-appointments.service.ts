@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Appointment, AppointmentService, Prisma } from '@prisma/client';
 import type { StaffAppointment } from '@instafix/contracts';
-import type { StaffUser } from '../auth/session';
+import { safeUser, type StaffUser } from '../auth/session';
 import { db } from '../database/client';
 import {
   cancelCalBooking,
@@ -396,13 +396,20 @@ async function reserveInCal(a: Appointment) {
  * la obtenga y que solo se publique un evento (un correo, un WhatsApp). Si la cita era una
  * reserva provisional, la reserva de Cal.com se crea recién aquí.
  */
-export async function confirmAppointment(user: StaffUser, id: string, now = new Date()) {
+export async function confirmAppointment(
+  user: StaffUser,
+  id: string,
+  now = new Date(),
+  /** Administración asigna la cita a `user` (aunque tenga ese horario ocupado). */
+  byAdminId?: string,
+) {
   const outcome = await exclusiveWait(`appointment:${id}`, async () => {
     const before = await db.appointment.findUnique({ where: { id } });
     if (assertClaimable(before, user, now) === 'MINE')
       return { already: true, notifications: [] as string[] };
-    // Un técnico no puede tomar una cita en un horario en que no está libre (administración sí).
-    if (user.role === 'TECHNICIAN') {
+    // Un técnico no puede tomar una cita en un horario en que no está libre (administración sí,
+    // y también puede asignársela a un técnico ocupado).
+    if (user.role === 'TECHNICIAN' && !byAdminId) {
       const reason = await technicianBusyReason(db, user.id, before!);
       if (reason) throw new ConflictException(busyMessage(reason));
     }
@@ -433,7 +440,7 @@ export async function confirmAppointment(user: StaffUser, id: string, now = new 
             assignedTechnicianId: user.id,
             technician: user.name,
             confirmedAt: now,
-            confirmedById: user.id,
+            confirmedById: byAdminId ?? user.id,
             ...(created
               ? { calUid: created.uid, calStatus: created.status, endsAt: created.end }
               : {}),
@@ -442,7 +449,15 @@ export async function confirmAppointment(user: StaffUser, id: string, now = new 
         });
         if (!claimed.count) throw new ConflictException(takenMessage);
         const updated = await tx.appointment.findUniqueOrThrow({ where: { id } });
-        await activity(tx, id, user.id, 'CONFIRMED', { technicianId: user.id });
+        await activity(
+          tx,
+          id,
+          byAdminId ?? user.id,
+          byAdminId ? 'ASSIGNED_BY_ADMIN' : 'CONFIRMED',
+          {
+            technicianId: user.id,
+          },
+        );
         const notifications = await publishAppointmentEvent(
           tx,
           updated,
@@ -854,6 +869,31 @@ export async function teamForAppointment(id: string) {
       busyReason: t.id === a.assignedTechnicianId ? null : busyReason(t, a),
     }))
     .sort((x, y) => Number(Boolean(x.busyReason)) - Number(Boolean(y.busyReason)));
+}
+
+/**
+ * Administración asigna una cita que espera técnico a una persona del equipo, aunque tenga ese
+ * horario marcado como ocupado (p. ej. «Clases»): queda confirmada con ella, igual que si la
+ * hubiera confirmado (reserva en Cal.com, WhatsApp «confirmada» y recordatorios).
+ */
+export async function assignPendingAppointment(
+  admin: { id: string },
+  id: string,
+  technicianId: string,
+  now = new Date(),
+) {
+  const to = await db.user.findFirst({
+    where: {
+      id: technicianId,
+      role: { in: ['TECHNICIAN', 'ADMIN'] },
+      active: true,
+      deletedAt: null,
+    },
+    select: safeUser,
+  });
+  if (!to) throw new BadRequestException('Elige a un técnico o administrador activo.');
+  const result = await confirmAppointment(to as StaffUser, id, now, admin.id);
+  return { ok: true, alreadyConfirmed: result.alreadyConfirmed, cal: result.cal };
 }
 
 /** Administración asigna directamente la visita confirmada a otra persona del equipo. */

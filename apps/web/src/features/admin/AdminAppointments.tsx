@@ -235,7 +235,10 @@ export function AdminAppointments({
     setMove({ startsAt: '', keepTechnician: true });
     setTeam(null);
     setReassignTo('');
-    if (item.status === 'CONFIRMED' && item.assignedTechnician)
+    if (
+      (item.status === 'CONFIRMED' && item.assignedTechnician) ||
+      (inAgenda(item) && ['PENDING_LOCATION', 'CANCELLED'].includes(item.status))
+    )
       api<TeamOption[]>(`admin/appointments/${item.id}/team`)
         .then(setTeam)
         .catch(() => setTeam([]));
@@ -357,6 +360,37 @@ export function AdminAppointments({
       setBusyAction(null);
     }
   }
+  /** Cita que espera técnico: administración la asigna (aunque esa persona esté ocupada). */
+  async function assign(item: AdminAppointment) {
+    const to = team?.find((t) => t.id === reassignTo);
+    if (!to) return;
+    const busyNote = to.busyReason ? ` aunque tiene ese horario ocupado («${to.busyReason}»)` : '';
+    if (
+      !window.confirm(
+        `¿Asignar la visita de ${item.contactName || 'este cliente'} a ${to.name}${busyNote}?`,
+      )
+    )
+      return;
+    setBusyAction('assign');
+    setMessage('');
+    try {
+      await api(`admin/appointments/${item.id}/assign`, {
+        method: 'POST',
+        body: JSON.stringify({ technicianId: to.id }),
+      });
+      await load();
+      setId(null);
+      setDraft({ ...empty });
+      setFormOpen(false);
+      setMessage(
+        `Visita confirmada con ${to.name}. El cliente recibe «confirmada» por WhatsApp (si lo autorizó).`,
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo asignar la visita.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
   /** Cita cancelada que el cliente aún quiere: vuelve a esperar técnico en el horario elegido. */
   async function reactivate(item: AdminAppointment) {
     if (!move.startsAt) return;
@@ -375,6 +409,25 @@ export function AdminAppointments({
         method: 'POST',
         body: JSON.stringify({ startsAt: when.toISOString() }),
       });
+      const to = team?.find((t) => t.id === reassignTo);
+      if (to) {
+        await api(`admin/appointments/${item.id}/assign`, {
+          method: 'POST',
+          body: JSON.stringify({ technicianId: to.id }),
+        }).catch((e: unknown) => {
+          throw new Error(
+            `La cita se reactivó, pero no se pudo asignar a ${to.name}: ${e instanceof Error ? e.message : 'error inesperado'}. Asígnala desde «Asignar técnico».`,
+          );
+        });
+        await load();
+        setId(null);
+        setDraft({ ...empty });
+        setFormOpen(false);
+        setMessage(
+          `Cita reactivada para el ${label} y confirmada con ${to.name}. El cliente recibe «confirmada» por WhatsApp (si lo autorizó).`,
+        );
+        return;
+      }
       await load();
       setId(null);
       setDraft({ ...empty });
@@ -638,6 +691,40 @@ export function AdminAppointments({
             />
           </label>
           {list
+            .filter(
+              (item) =>
+                item.id === id &&
+                inAgenda(item) &&
+                item.status === 'PENDING_LOCATION' &&
+                !item.assignedTechnician,
+            )
+            .map((item) => (
+              <fieldset key={`assign-${item.id}`} className="appt-move">
+                <legend>Asignar técnico</legend>
+                <p className="small">
+                  Queda confirmada con esa persona aunque tenga ese horario marcado como ocupado
+                  (clases, otro trabajo). Se reserva en Cal.com y el cliente recibe «confirmada».
+                </p>
+                <TeamSelect
+                  label="Asignar la visita a"
+                  team={team}
+                  value={reassignTo}
+                  onChange={setReassignTo}
+                  empty="Elige a quién"
+                />
+                <BusyButton
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !reassignTo}
+                  busy={busyAction === 'assign'}
+                  busyLabel="Asignando…"
+                  onClick={() => assign(item)}
+                >
+                  Asignar y confirmar
+                </BusyButton>
+              </fieldset>
+            ))}
+          {list
             .filter((item) => item.id === id && inAgenda(item) && item.status === 'CANCELLED')
             .map((item) => (
               <fieldset key={`revive-${item.id}`} className="appt-move">
@@ -653,6 +740,13 @@ export function AdminAppointments({
                   purpose="reactivate"
                   value={move.startsAt || null}
                   onChange={(start) => setMove((m) => ({ ...m, startsAt: start ?? '' }))}
+                />
+                <TeamSelect
+                  label="Asignar directamente a (opcional)"
+                  team={team}
+                  value={reassignTo}
+                  onChange={setReassignTo}
+                  empty="Nadie: que la confirme un técnico"
                 />
                 <BusyButton
                   type="button"
@@ -1074,5 +1168,36 @@ export function AdminAppointments({
           })()}
       </div>
     </section>
+  );
+}
+
+/** Lista del equipo con su disponibilidad en el horario de la cita. */
+function TeamSelect({
+  label,
+  team,
+  value,
+  onChange,
+  empty,
+}: {
+  label: string;
+  team: TeamOption[] | null;
+  value: string;
+  onChange: (id: string) => void;
+  empty: string;
+}) {
+  return (
+    <label>
+      {label}
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{team ? empty : 'Cargando equipo…'}</option>
+        {(team ?? []).map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+            {t.role === 'ADMIN' ? ' (administración)' : ''} ·{' '}
+            {t.busyReason ? `ocupado: ${t.busyReason}` : 'libre'}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
