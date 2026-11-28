@@ -8,8 +8,9 @@ export const statusFilters: { id: StatusFilter; label: string }[] = [
   { id: 'PENDING_LOCATION', label: 'Pendientes' },
   { id: 'CONFIRMED', label: 'Confirmadas' },
   { id: 'COMPLETED', label: 'Completadas' },
+  // «Todas» deja fuera las canceladas: tienen su propio filtro, al final y más discreto.
+  { id: 'notCancelled', label: 'Todas' },
   { id: 'CANCELLED', label: 'Canceladas' },
-  { id: 'all', label: 'Todas' },
 ];
 export const dateFilters: { id: DateFilter; label: string }[] = [
   { id: 'all', label: 'Cualquier fecha' },

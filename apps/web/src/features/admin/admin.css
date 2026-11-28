@@ -832,3 +832,186 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/*
+ * Organizador de citas: filas compactas agrupadas por día. Cada día abre con una línea fina y
+ * su nombre al inicio («Hoy · jueves 28 nov»); al final, cuántas citas y cuánto suman.
+ */
+.admin-appt-days {
+  display: grid;
+  gap: 18px;
+}
+.appt-day-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.appt-day-name {
+  flex: none;
+  color: var(--text);
+  opacity: 0.75;
+}
+.appt-day-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.appt-day-sum {
+  flex: none;
+  font-weight: 500;
+}
+.appt-day-sum strong {
+  color: var(--text);
+  font-weight: 700;
+}
+.appt-rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.appt-row {
+  border: 1px solid var(--border);
+  border-left: 4px solid #d9a21b;
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.appt-row.appt-CONFIRMED,
+.appt-row.appt-IN_PROGRESS {
+  border-left-color: #1b7a4b;
+}
+.appt-row.appt-COMPLETED {
+  border-left-color: #2b4a99;
+}
+.appt-row.appt-CANCELLED {
+  border-left-color: #b3261e;
+  opacity: 0.7;
+}
+.appt-row.is-editing {
+  box-shadow: 0 0 0 2px var(--accent, #a00d68);
+}
+.appt-row-open {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.appt-row-open:hover {
+  background: var(--surface-soft);
+}
+.appt-row-time {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+.appt-row-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.appt-row-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.appt-row-tech,
+.appt-row-request {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.appt-row-request {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.appt-row-services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 0.9rem;
+}
+.appt-row-services em {
+  font-style: normal;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.appt-row-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.appt-row-note {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.appt-row-note.is-warn {
+  background: color-mix(in srgb, #f59e0b 18%, var(--surface));
+  color: var(--text);
+}
+.appt-row-side {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+.appt-row-side .status-pill {
+  padding: 3px 9px;
+  font-size: 0.7rem;
+}
+.appt-row-total {
+  font-size: 1.02rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.appt-row-total.is-empty {
+  color: var(--muted);
+  font-weight: 500;
+}
+.appt-row-editing {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent, #a00d68);
+}
+/* Canceladas: su propio filtro, al final y más discreto. */
+.filters button.filter-aside:not(.active) {
+  border-style: dashed;
+  opacity: 0.8;
+}
+@media (max-width: 560px) {
+  .appt-row-open {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 4px 10px;
+    padding: 10px 12px;
+  }
+  .appt-row-side {
+    grid-column: 2;
+    grid-template-columns: auto auto 1fr;
+    justify-items: start;
+    align-items: center;
+    gap: 8px;
+  }
+  .appt-row-total {
+    justify-self: end;
+  }
+}

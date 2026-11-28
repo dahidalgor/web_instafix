@@ -136,6 +136,26 @@ test(
     );
     assert.equal((await pageOf({ status: 'all', date: 'past' })).total, 25);
     assert.equal((await pageOf({ status: 'PENDING_LOCATION' })).total, 2);
+    // «Todas» del organizador deja fuera las canceladas (tienen su propio filtro).
+    const cancelled = await make(400, {
+      status: 'CANCELLED',
+      startsAt: new Date(Date.now() + 3 * DAY),
+      endsAt: new Date(Date.now() + 3 * DAY + 3600000),
+    });
+    const notCancelled = await pageOf({ status: 'notCancelled', pageSize: '50' });
+    assert.equal(notCancelled.total, 30);
+    assert.ok(!notCancelled.items.some((a) => a.id === cancelled.id));
+    assert.equal(notCancelled.counts.notCancelled, 30);
+    assert.equal(notCancelled.counts.CANCELLED, 1);
+    assert.equal(
+      (await pageOf({ status: 'all' })).total,
+      31,
+      '«all» (enlaces directos) sí las incluye',
+    );
+    // Resumen por día de lo que se ve en la página: cuántas citas tiene cada día.
+    const dayCounts = Object.values(notCancelled.dayTotals).reduce((sum, d) => sum + d.count, 0);
+    assert.equal(dayCounts, 30);
+    await db.appointment.delete({ where: { id: cancelled.id } });
     // «saul» encuentra a «Saúl»; el teléfono por sus dígitos.
     const saul = await admins.adminAppointments(admin.req, { status: 'all', q: `saul ${tag}` });
     assert.equal(saul.total, 1);

@@ -231,6 +231,8 @@ export const appointmentStatusFilters = [
   'CONFIRMED',
   'COMPLETED',
   'CANCELLED',
+  /** «Todas» del organizador: todas menos las canceladas (las canceladas tienen su filtro). */
+  'notCancelled',
   'all',
 ] as const;
 export type AppointmentStatusFilter = (typeof appointmentStatusFilters)[number];

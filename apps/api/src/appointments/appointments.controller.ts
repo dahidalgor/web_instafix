@@ -58,9 +58,44 @@ export function appointmentOrder(
   return [{ [field]: direction }, { id: 'asc' }];
 }
 
+/**
+ * Resumen de cada día que aparece en la página (con los mismos filtros, aunque el día siga en la
+ * página siguiente): cuántas citas tiene y cuánto suman sus servicios realizados (sin canceladas).
+ */
+async function dayTotals(where: Prisma.AppointmentWhereInput, rows: { startsAt: Date }[]) {
+  const days = [...new Set(rows.map((a) => dayIn(a.startsAt)))].sort();
+  if (!days.length) return {};
+  const startOf = (day: string) => new Date(`${day}T00:00:00-05:00`);
+  const inRange = await db.appointment.findMany({
+    where: {
+      AND: [
+        where,
+        {
+          startsAt: {
+            gte: startOf(days[0]),
+            lt: new Date(startOf(days[days.length - 1]).getTime() + 86400000),
+          },
+        },
+      ],
+    },
+    select: { startsAt: true, status: true, services: { select: { totalMinor: true } } },
+  });
+  const totals: Record<string, { count: number; totalMinor: number }> = {};
+  for (const a of inRange) {
+    const day = dayIn(a.startsAt);
+    if (!days.includes(day)) continue;
+    const entry = (totals[day] ??= { count: 0, totalMinor: 0 });
+    entry.count += 1;
+    if (a.status !== 'CANCELLED')
+      entry.totalMinor += a.services.reduce((sum, s) => sum + s.totalMinor, 0);
+  }
+  return totals;
+}
+
 /** Estado del organizador → condición (CONFIRMED incluye «en servicio»). */
 function statusWhere(filter: AppointmentStatusFilter): Prisma.AppointmentWhereInput {
   if (filter === 'all') return {};
+  if (filter === 'notCancelled') return { status: { not: 'CANCELLED' } };
   if (filter === 'active')
     return { status: { in: ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'] } };
   if (filter === 'CONFIRMED') return { status: { in: ['CONFIRMED', 'IN_PROGRESS'] } };
@@ -207,6 +242,7 @@ export class AppointmentsController {
       CONFIRMED: n('CONFIRMED', 'IN_PROGRESS'),
       COMPLETED: n('COMPLETED'),
       CANCELLED: n('CANCELLED'),
+      notCancelled: n('PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'),
       all: n('PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
     };
     // Pendientes por confirmar: qué técnicos están libres en su horario (null si no aplica).
@@ -226,6 +262,7 @@ export class AppointmentsController {
       page: f.page,
       pageSize: f.pageSize,
       counts,
+      dayTotals: await dayTotals(where, rows),
       items: rows.map((a) => ({
         ...a,
         availableTechnicians: waitingIds.has(a.id)

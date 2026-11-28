@@ -293,24 +293,22 @@ test(
     );
 
     // 6) Una solicitud nueva en un horario en que solo Ana está libre: su aviso lo dice.
-    await db.technicianBusyBlock.create({
-      data: {
-        userId: carlos.user.id,
-        label: 'Clases',
-        date: new Date(startsAt.getTime() - 5 * HOUR).toISOString().slice(0, 10),
-        startMinute: 0,
-        endMinute: 1440,
-      },
-    });
-    await db.technicianBusyBlock.create({
-      data: {
-        userId: david.user.id,
-        label: 'Reunión',
-        date: new Date(startsAt.getTime() - 5 * HOUR).toISOString().slice(0, 10),
-        startMinute: 0,
-        endMinute: 1440,
-      },
-    });
+    //    (Los días de Ecuador que toca la solicitud: puede cruzar la medianoche.)
+    const localDay = (at: number) => new Date(at - 5 * HOUR).toISOString().slice(0, 10);
+    const busyDays = [
+      ...new Set([
+        localDay(startsAt.getTime() + 2 * HOUR),
+        localDay(startsAt.getTime() + 4 * HOUR - 1),
+      ]),
+    ];
+    for (const date of busyDays)
+      for (const [userId, label] of [
+        [carlos.user.id, 'Clases'],
+        [david.user.id, 'Reunión'],
+      ])
+        await db.technicianBusyBlock.create({
+          data: { userId, label, date, startMinute: 0, endMinute: 1440 },
+        });
     const request = await visit({
       status: 'PENDING_LOCATION',
       assignedTechnicianId: null,

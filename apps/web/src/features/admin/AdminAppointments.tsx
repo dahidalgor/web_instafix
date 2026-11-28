@@ -8,7 +8,7 @@ import {
   type Offering,
   type PerformedService,
 } from '@instafix/contracts';
-import { AppointmentCard } from '../../components/appointments/AppointmentCard';
+import { StatusPill, visitDayKey, visitTime } from '../../components/appointments/AppointmentCard';
 import { money } from '../../lib/format';
 import {
   dateFilters,
@@ -85,6 +85,8 @@ type AppointmentPage = {
   page: number;
   pageSize: number;
   counts: Record<StatusFilter, number>;
+  /** Por día (AAAA-MM-DD de Ecuador): citas y suma de servicios realizados (sin canceladas). */
+  dayTotals: Record<string, { count: number; totalMinor: number }>;
 };
 type TeamOption = {
   id: string;
@@ -112,6 +114,7 @@ export function AdminAppointments({
   // null mientras carga: una lista vacía es un resultado real, no una carga en curso.
   const [items, setItems] = useState<AdminAppointment[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [dayTotals, setDayTotals] = useState<AppointmentPage['dayTotals'] | null>(null);
   const [counts, setCounts] = useState<Record<StatusFilter, number> | null>(null);
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -161,6 +164,7 @@ export function AdminAppointments({
     if (ticket !== request.current) return;
     setItems((current) => (append && current ? [...current, ...res.items] : res.items));
     setTotal(res.total);
+    setDayTotals((current) => (append ? { ...current, ...res.dayTotals } : res.dayTotals));
     setCounts(res.counts);
     setPage(nextPage);
     setLoadError('');
@@ -947,7 +951,12 @@ export function AdminAppointments({
                 key={option.id}
                 type="button"
                 aria-pressed={statusFilter === option.id}
-                className={statusFilter === option.id ? 'active' : ''}
+                className={[
+                  statusFilter === option.id ? 'active' : '',
+                  option.id === 'CANCELLED' ? 'filter-aside' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 onClick={() => setStatusFilter(option.id)}
               >
                 {option.label} <span className="filter-count">{counts?.[option.id] ?? '…'}</span>
@@ -1040,17 +1049,17 @@ export function AdminAppointments({
               <>
                 <p className="small" role="status">
                   {total === 1 ? '1 cita' : `${total} citas`}
-                  {(statusFilter !== 'all' || dateFilter !== 'all' || query) &&
+                  {(statusFilter !== 'notCancelled' || dateFilter !== 'all' || query) &&
                     counts &&
-                    total !== counts.all && (
+                    total !== counts.notCancelled && (
                       <>
                         {' '}
-                        de {counts.all} ·{' '}
+                        de {counts.notCancelled} ·{' '}
                         <button
                           type="button"
                           className="btn btn-ghost btn-small"
                           onClick={() => {
-                            setStatusFilter('all');
+                            setStatusFilter('notCancelled');
                             setDateFilter('all');
                             setQuery('');
                           }}
@@ -1061,99 +1070,37 @@ export function AdminAppointments({
                     )}
                 </p>
                 {!shown.length && <p className="tech-empty">No hay citas con estos filtros.</p>}
-                <div className="appt-list admin-appt-list">
-                  {shown.map((item) => (
-                    <AppointmentCard
-                      key={item.id}
-                      status={item.status}
-                      startsAt={item.startsAt}
-                      timeZone={item.timeZone}
-                      client={item.contactName || item.user?.name || 'Invitado'}
-                      request={item.title}
-                      technician={
-                        item.assignedTechnician
-                          ? item.assignedTechnician.name +
-                            (item.assignedTechnician.active === false
-                              ? ' (técnico desactivado)'
-                              : '')
-                          : item.technician || null
-                      }
-                      highlight={item.id === id ? 'Editando' : undefined}
-                      details={
-                        <>
-                          <AppointmentLocation
-                            appointment={item}
-                            pending="Pendiente por WhatsApp"
+                <div className="admin-appt-days">
+                  {groupByDay(shown).map(({ day, items: dayItems }) => (
+                    <section key={day} className="appt-day" aria-label={dayLabel(day)}>
+                      <h3 className="appt-day-head">
+                        <span className="appt-day-name">{dayLabel(day)}</span>
+                        <span className="appt-day-rule" aria-hidden="true" />
+                        {dayTotals?.[day] && (
+                          <span className="appt-day-sum">
+                            {dayTotals[day].count === 1
+                              ? '1 cita'
+                              : `${dayTotals[day].count} citas`}
+                            {dayTotals[day].totalMinor > 0 && (
+                              <>
+                                {' '}
+                                · <strong>{money(dayTotals[day].totalMinor)}</strong>
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </h3>
+                      <ul className="appt-rows">
+                        {dayItems.map((item) => (
+                          <AdminAppointmentRow
+                            key={item.id}
+                            item={item}
+                            editing={item.id === id}
+                            onOpen={() => edit(item)}
                           />
-                          {!!item.services?.length && (
-                            <div>
-                              <dt>Servicios realizados</dt>
-                              <dd>
-                                {item.services
-                                  .map(
-                                    (s) =>
-                                      s.nameSnapshot + (s.quantity > 1 ? ` ×${s.quantity}` : ''),
-                                  )
-                                  .join(', ')}
-                              </dd>
-                            </div>
-                          )}
-                          {item.automationIssue && (
-                            <div>
-                              <dt>Incidencia</dt>
-                              <dd>{item.automationIssue}</dd>
-                            </div>
-                          )}
-                          {item.handoverRequestedAt && item.status === 'CONFIRMED' && (
-                            <div>
-                              <dt>Busca reemplazo</dt>
-                              <dd>
-                                {item.assignedTechnician?.name ?? 'El técnico'} no puede ir
-                                {item.handoverReason ? ` («${item.handoverReason}»)` : ''}. Pásala a
-                                otra persona en «Ver y editar».
-                              </dd>
-                            </div>
-                          )}
-                          {item.availableTechnicians && (
-                            <div>
-                              <dt>Equipo libre</dt>
-                              <dd>
-                                {item.availableTechnicians.length
-                                  ? item.availableTechnicians.join(', ')
-                                  : 'Ninguno: todos tienen ese horario ocupado. Confírmala tú o cambia la hora.'}
-                              </dd>
-                            </div>
-                          )}
-                          {autoCancelAt(item) && (
-                            <div>
-                              <dt>Se cancela sola</dt>
-                              <dd>
-                                {shortMoment(autoCancelAt(item)!, item.timeZone)} si ningún técnico
-                                la confirma
-                                {!item.locationReceivedAt && item.responseDueAt
-                                  ? ' o si el cliente no responde por WhatsApp'
-                                  : ''}
-                                .
-                              </dd>
-                            </div>
-                          )}
-                          {item.status === 'CANCELLED' && item.autoCancelReason && (
-                            <div>
-                              <dt>Motivo</dt>
-                              <dd>{item.autoCancelReason}</dd>
-                            </div>
-                          )}
-                        </>
-                      }
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => edit(item)}
-                      >
-                        Ver y editar
-                      </button>
-                    </AppointmentCard>
+                        ))}
+                      </ul>
+                    </section>
                   ))}
                 </div>
                 <LoadMore
@@ -1199,5 +1146,123 @@ function TeamSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+/** Citas agrupadas por día de la visita (en el orden en que llegan). */
+function groupByDay(items: AdminAppointment[]) {
+  const groups: { day: string; items: AdminAppointment[] }[] = [];
+  for (const item of items) {
+    const day = visitDayKey(item.startsAt, item.timeZone);
+    const last = groups.at(-1);
+    if (last?.day === day) last.items.push(item);
+    else groups.push({ day, items: [item] });
+  }
+  return groups;
+}
+
+/** «Hoy · jueves 28 nov», «Mañana · …», «Ayer · …» o «Lunes 24 nov» (y el año si no es este). */
+function dayLabel(day: string) {
+  const date = new Date(`${day}T12:00:00Z`);
+  const today = visitDayKey(new Date());
+  const shift = (n: number) => visitDayKey(new Date(Date.now() + n * 86400000));
+  const sameYear = day.slice(0, 4) === today.slice(0, 4);
+  const text = new Intl.DateTimeFormat('es-EC', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+    .format(date)
+    .replace(/,/g, '')
+    .replace(/\./g, '');
+  const relative =
+    day === today ? 'Hoy' : day === shift(1) ? 'Mañana' : day === shift(-1) ? 'Ayer' : null;
+  return relative
+    ? `${relative} · ${text}`
+    : text.charAt(0).toLocaleUpperCase('es') + text.slice(1);
+}
+
+/**
+ * Fila compacta del organizador: de un vistazo la hora, el cliente, el técnico, el estado y lo
+ * que se hizo con su valor. El detalle completo (ubicación, contacto, acciones) está en «Ver y
+ * editar».
+ */
+function AdminAppointmentRow({
+  item,
+  editing,
+  onOpen,
+}: {
+  item: AdminAppointment;
+  editing: boolean;
+  onOpen: () => void;
+}) {
+  const services = item.services ?? [];
+  const total = services.reduce((sum, s) => sum + s.totalMinor, 0);
+  const technician = item.assignedTechnician
+    ? item.assignedTechnician.name +
+      (item.assignedTechnician.active === false ? ' (desactivado)' : '')
+    : item.technician || null;
+  const active = ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'].includes(item.status);
+  const cancelAt = autoCancelAt(item);
+  const notes: { text: string; tone: 'warn' | 'info' | 'muted' }[] = [];
+  if (active && !item.locationReceivedAt) notes.push({ text: '📍 Sin ubicación', tone: 'warn' });
+  if (item.handoverRequestedAt && item.status === 'CONFIRMED')
+    notes.push({ text: '⇄ Busca reemplazo', tone: 'warn' });
+  if (item.automationIssue) notes.push({ text: `⚠️ ${item.automationIssue}`, tone: 'warn' });
+  if (item.availableTechnicians)
+    notes.push({
+      text: item.availableTechnicians.length
+        ? `Libres: ${item.availableTechnicians.join(', ')}`
+        : 'Nadie del equipo libre a esa hora',
+      tone: item.availableTechnicians.length ? 'info' : 'warn',
+    });
+  if (cancelAt)
+    notes.push({ text: `Se cancela sola: ${shortMoment(cancelAt, item.timeZone)}`, tone: 'info' });
+  if (item.status === 'CANCELLED' && item.autoCancelReason)
+    notes.push({ text: item.autoCancelReason, tone: 'muted' });
+  return (
+    <li className={`appt-row appt-${item.status}${editing ? ' is-editing' : ''}`}>
+      <button type="button" className="appt-row-open" onClick={onOpen}>
+        <span className="appt-row-time">{visitTime(item.startsAt, item.timeZone)}</span>
+        <span className="appt-row-main">
+          <span className="appt-row-who">
+            <strong>{item.contactName || item.user?.name || 'Invitado'}</strong>
+            <span className="appt-row-tech">
+              {technician ? `con ${technician}` : 'Sin técnico'}
+            </span>
+          </span>
+          {services.length ? (
+            <span className="appt-row-services">
+              {services.map((s) => (
+                <span key={s.id}>
+                  {s.nameSnapshot}
+                  {s.quantity > 1 ? ` ×${s.quantity}` : ''} <em>{money(s.totalMinor)}</em>
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="appt-row-request">“{item.title}”</span>
+          )}
+          {!!notes.length && (
+            <span className="appt-row-notes">
+              {notes.map((n) => (
+                <span key={n.text} className={`appt-row-note is-${n.tone}`}>
+                  {n.text}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+        <span className="appt-row-side">
+          <StatusPill status={item.status} />
+          <span className={`appt-row-total${total ? '' : ' is-empty'}`}>
+            {total ? money(total) : '—'}
+          </span>
+          {editing && <span className="appt-row-editing">Editando</span>}
+        </span>
+      </button>
+    </li>
   );
 }
