@@ -19,6 +19,10 @@ export const messageKinds = [
   'RESCHEDULE_PROPOSAL',
   /** Presupuesto de un trabajo de taller; el cliente responde «Sí, continuar» / «No, devolver». */
   'REPAIR_QUOTE',
+  /** Comprobante: el técnico se llevó el equipo al taller (con su número de orden). */
+  'REPAIR_RECEIVED',
+  /** El equipo del taller está listo para entregar. */
+  'REPAIR_READY',
 ] as const;
 export type MessageKind = (typeof messageKinds)[number];
 export const isMessageKind = (kind: string): kind is MessageKind =>
@@ -36,6 +40,8 @@ const templates: Record<MessageKind, WhatsAppTemplate> = {
   TECHNICIAN_CHANGED: 'appointment_technician_changed',
   RESCHEDULE_PROPOSAL: 'appointment_reschedule_proposal',
   REPAIR_QUOTE: 'repair_quote',
+  REPAIR_RECEIVED: 'repair_received',
+  REPAIR_READY: 'repair_ready',
 };
 export const templateFor = (kind: MessageKind): WhatsAppTemplate => templates[kind];
 

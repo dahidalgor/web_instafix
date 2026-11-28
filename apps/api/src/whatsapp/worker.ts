@@ -89,7 +89,9 @@ export function kindStillValid(kind: string, appointment: Appointment) {
       // Retirado: decía «mañana» el día de la visita. Los ya encolados se cancelan sin enviar.
       return false;
     case 'REPAIR_QUOTE':
-      // Depende del trabajo de taller, no de la cita (se comprueba en processJob).
+    case 'REPAIR_RECEIVED':
+    case 'REPAIR_READY':
+      // Dependen del trabajo de taller, no de la cita (se comprueba en processJob).
       return true;
     default:
       // Avisos retirados (p. ej. «técnico en camino», sin plantilla): se cancelan sin enviar.
@@ -114,11 +116,20 @@ export async function processJob(id: string, providers: Providers, now = new Dat
         const isConfirm = job.kind === 'CAL_CONFIRM';
         // Presupuesto de taller: vale mientras el trabajo siga esperando la respuesta del cliente
         // (la visita ya pasó: no cuenta su fecha).
+        const repairJob = job.kind.startsWith('REPAIR_');
         const repair =
-          job.kind === 'REPAIR_QUOTE' && job.repairOrderId
+          repairJob && job.repairOrderId
             ? await tx.repairOrder.findUnique({ where: { id: job.repairOrderId } })
             : null;
-        const repairOpen = !!repair && repair.status === 'QUOTED' && !repair.quoteAnswer;
+        // Cada aviso de taller vale solo en su estado: presupuesto sin responder, equipo aún en
+        // el taller (comprobante) o listo para entregar.
+        const repairOpen =
+          !!repair &&
+          (job.kind === 'REPAIR_QUOTE'
+            ? repair.status === 'QUOTED' && !repair.quoteAnswer
+            : job.kind === 'REPAIR_READY'
+              ? repair.status === 'READY'
+              : !['DELIVERED', 'RETURNED'].includes(repair.status));
         const invalid =
           Boolean(appointment.bookingIdentityIssue) ||
           Boolean(appointment.deletedAt) ||
@@ -126,7 +137,7 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           !appointment.whatsappConsentAt ||
           !appointment.contactPhone ||
           job.expiresAt <= now ||
-          (job.kind === 'REPAIR_QUOTE' ? !repairOpen : appointment.startsAt <= now) ||
+          (repairJob ? !repairOpen : appointment.startsAt <= now) ||
           // El recordatorio «mañana» solo sale antes del día de la visita (hora de Ecuador),
           // aunque la fila antigua tuviera otra caducidad.
           (job.kind === 'DAY_BEFORE' && now >= reminderTimes(appointment.startsAt).dayStart) ||

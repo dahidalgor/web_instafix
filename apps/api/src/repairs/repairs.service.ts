@@ -76,6 +76,35 @@ async function activity(
   });
 }
 
+/**
+ * WhatsApp de un trabajo de taller al cliente de la visita (solo si autorizó WhatsApp). Cada
+ * aviso se identifica por el trabajo y el momento: un presupuesto nuevo es otro envío.
+ */
+async function queueRepairMessage(
+  tx: Prisma.TransactionClient,
+  order: RepairOrder,
+  kind: 'REPAIR_QUOTE' | 'REPAIR_RECEIVED' | 'REPAIR_READY',
+  now: Date,
+  validMs = 2 * DAY,
+) {
+  const a = await tx.appointment.findUniqueOrThrow({ where: { id: order.appointmentId } });
+  if (!a.whatsappConsentAt || !a.contactPhone || a.bookingIdentityIssue || a.deletedAt) return;
+  await tx.automationJob.create({
+    data: {
+      dedupeKey: `${a.id}:${a.automationRevision}:${kind}:${order.id}:${now.toISOString()}`,
+      appointmentId: a.id,
+      revision: a.automationRevision,
+      kind,
+      dueAt: now,
+      expiresAt: new Date(now.getTime() + validMs),
+      recipient: a.contactPhone,
+      originSessionKey: a.originSessionKey,
+      originIpHash: a.originIpHash,
+      repairOrderId: order.id,
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Técnico: registra los equipos que se lleva desde su visita (solo el técnico a cargo).
 // ---------------------------------------------------------------------------------------------
@@ -108,6 +137,8 @@ export async function createRepair(
       include,
     });
     await activity(tx, order, user.id, 'REPAIR_RECEIVED', { device: order.device });
+    // Comprobante al cliente: qué nos llevamos y su número de orden.
+    await queueRepairMessage(tx, order, 'REPAIR_RECEIVED', now);
     logEvent('repair.received', { repairOrderId: order.id });
     return serializeRepair(order);
   });
@@ -189,6 +220,8 @@ export async function setRepairStatus(adminId: string, id: string, status: Repai
       throw new BadRequestException('Ese cambio de estado no corresponde ahora.');
     const updated = await tx.repairOrder.update({ where: { id }, data: { status }, include });
     await activity(tx, order, adminId, 'REPAIR_STATUS', { from: order.status, to: status });
+    // «Tu equipo está listo»: el cliente coordina la entrega.
+    if (status === 'READY') await queueRepairMessage(tx, updated, 'REPAIR_READY', new Date());
     return serializeRepair(updated, true);
   });
 }
@@ -225,24 +258,7 @@ export async function quoteRepair(
       where: { repairOrderId: id, kind: 'REPAIR_QUOTE', status: { in: ['PENDING', 'RETRY'] } },
       data: { status: 'CANCELLED' },
     });
-    const a = await tx.appointment.findUniqueOrThrow({ where: { id: order.appointmentId } });
-    if (a.whatsappConsentAt && a.contactPhone && !a.bookingIdentityIssue && !a.deletedAt) {
-      const dedupeKey = `${a.id}:${a.automationRevision}:REPAIR_QUOTE:${id}:${now.toISOString()}`;
-      await tx.automationJob.create({
-        data: {
-          dedupeKey,
-          appointmentId: a.id,
-          revision: a.automationRevision,
-          kind: 'REPAIR_QUOTE',
-          dueAt: now,
-          expiresAt: new Date(now.getTime() + QUOTE_ANSWER_MS),
-          recipient: a.contactPhone,
-          originSessionKey: a.originSessionKey,
-          originIpHash: a.originIpHash,
-          repairOrderId: id,
-        },
-      });
-    }
+    await queueRepairMessage(tx, updated, 'REPAIR_QUOTE', now, QUOTE_ANSWER_MS);
     await activity(tx, order, adminId, 'REPAIR_QUOTED', { quoteMinor: input.quoteMinor });
     return serializeRepair(updated, true);
   });

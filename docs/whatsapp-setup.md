@@ -40,7 +40,9 @@ Permisos de la API key: lectura y envío de WhatsApp, números y plantillas. `wo
 | Falta la ubicación: se cancela a las {{limite}}                        | `appointment_location_reminder_v3`   | Utility        |
 | Cambió el técnico de la visita                                         | `appointment_technician_changed_v2`  | Utility        |
 | El técnico propone otro horario (botones de respuesta rápida)          | `appointment_reschedule_proposal_v2` | Utility        |
-| Presupuesto de un trabajo de taller («Sí, continuar» / «No, devolver») | `repair_quote` (pendiente de crear)  | Utility        |
+| Presupuesto de un trabajo de taller («Sí, continuar» / «No, devolver») | `repair_quote`                       | Utility        |
+| Comprobante: nos llevamos tu equipo al taller (número de orden)        | `repair_received`                    | Utility        |
+| Tu equipo del taller está listo para entregar                          | `repair_ready`                       | Utility        |
 | Código de verificación (registro, recuperación, cambio de número)      | `bird_otp` (gestionada por Bird)     | Authentication |
 
 - **Idioma**: se usa el idioma aprobado de cada plantilla (`es-EC`, `es`…), leído de Bird. No se configura.

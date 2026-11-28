@@ -73,6 +73,12 @@ test(
     const order = await createRepair(asTech(tech), visit.id, intake);
     assert.match(order.code, /^T-\d{4,}$/);
     assert.equal(order.status, 'RECEIVED');
+    assert.ok(
+      await db.automationJob.findFirst({
+        where: { repairOrderId: order.id, kind: 'REPAIR_RECEIVED', status: 'PENDING' },
+      }),
+      'comprobante «nos llevamos tu equipo» al cliente',
+    );
     assert.equal((await repairsForVisit(asTech(tech), visit.id)).length, 1);
     assert.ok((await adminRepairs('shop')).items.some((o) => o.id === order.id));
 
@@ -133,11 +139,23 @@ test(
       null,
     );
     await setRepairStatus(admin.id, order.id, 'READY');
+    const ready = await db.automationJob.findFirstOrThrow({
+      where: { repairOrderId: order.id, kind: 'REPAIR_READY', status: 'PENDING' },
+    });
     const delivered = await deliverRepair(admin.id, order.id, {
       returned: false,
       finalMinor: 3500,
     });
     assert.equal(delivered.status, 'DELIVERED');
+    // Ya entregado: el «está listo» que no alcanzó a salir ya no se envía.
+    await processJob(ready.id, {
+      send: async () => ({ providerMessageId: `wam_${randomUUID()}`, provider: 'BIRD' }),
+      confirm: async () => {},
+    });
+    assert.equal(
+      (await db.automationJob.findUniqueOrThrow({ where: { id: ready.id } })).status,
+      'CANCELLED',
+    );
     assert.ok(!(await adminRepairs('shop')).items.some((o) => o.id === order.id));
     assert.ok((await adminRepairs('done')).items.some((o) => o.id === order.id));
 

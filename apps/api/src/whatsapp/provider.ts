@@ -17,6 +17,8 @@ export const whatsappTemplates = [
   'appointment_technician_changed',
   'appointment_reschedule_proposal',
   'repair_quote',
+  'repair_received',
+  'repair_ready',
 ] as const;
 export type WhatsAppTemplate = (typeof whatsappTemplates)[number];
 
