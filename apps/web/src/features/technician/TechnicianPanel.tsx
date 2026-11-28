@@ -1,4 +1,9 @@
 import { AppointmentLocation } from '../../components/appointments/AppointmentLocation';
+import {
+  MissingLocationConfirm,
+  MissingLocationNote,
+  missingLocation,
+} from '../../components/appointments/MissingLocation';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { ListSkeleton } from '../../components/ui/Skeleton';
 import type { AccountUser, Offering, StaffAppointment } from '@instafix/contracts';
@@ -66,6 +71,8 @@ export function TechnicianPanel({
   const [notice, setNotice] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Aceptar una visita sin ubicación pide una confirmación adicional.
+  const [askNoLocation, setAskNoLocation] = useState<StaffAppointment | null>(null);
   const [now, setNow] = useState(Date.now());
 
   const load = useCallback(async () => {
@@ -263,6 +270,7 @@ export function TechnicianPanel({
                 }
                 details={
                   <>
+                    {missingLocation(a) && tab !== 'history' && <MissingLocationNote />}
                     <AppointmentLocation
                       appointment={a}
                       directions
@@ -283,7 +291,11 @@ export function TechnicianPanel({
                     className="btn btn-primary"
                     busy={busyId === a.id}
                     busyLabel={a.handover ? 'Tomando…' : 'Confirmando…'}
-                    onClick={() => void confirm(a.id, Boolean(a.handover))}
+                    onClick={() =>
+                      missingLocation(a)
+                        ? setAskNoLocation(a)
+                        : void confirm(a.id, Boolean(a.handover))
+                    }
                   >
                     {a.handover ? 'Tomar visita' : 'Confirmar cita'}
                   </BusyButton>
@@ -294,6 +306,18 @@ export function TechnicianPanel({
               </AppointmentCard>
             ))}
           </div>
+        )}
+        {askNoLocation && (
+          <MissingLocationConfirm
+            client={askNoLocation.contactName?.split(' ')[0] || 'Este cliente'}
+            take={Boolean(askNoLocation.handover)}
+            busy={busyId === askNoLocation.id}
+            onCancel={() => setAskNoLocation(null)}
+            onConfirm={async () => {
+              await confirm(askNoLocation.id, Boolean(askNoLocation.handover));
+              setAskNoLocation(null);
+            }}
+          />
         )}
         {tab === 'history' && history.items && (
           <LoadMore

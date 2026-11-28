@@ -1,3 +1,8 @@
+import {
+  MissingLocationConfirm,
+  MissingLocationNote,
+  missingLocation,
+} from '../../components/appointments/MissingLocation';
 import { VisitSlotPicker } from '../../components/staff/VisitSlotPicker';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { BusyLabel } from '../../components/ui/BusyLabel';
@@ -51,6 +56,8 @@ export function AppointmentSheet({
   // Propuesta de otro horario al cliente (fecha y hora de Ecuador, «YYYY-MM-DDTHH:mm»).
   const [proposing, setProposing] = useState(false);
   const [proposedAt, setProposedAt] = useState('');
+  // Aceptar o tomar una visita sin ubicación pide una confirmación adicional.
+  const [askNoLocation, setAskNoLocation] = useState<'confirm' | 'take' | null>(null);
   // Reemplazo en otro horario (quien ve el pedido de otro técnico).
   const [offerProposing, setOfferProposing] = useState(false);
   const [offerAt, setOfferAt] = useState('');
@@ -233,6 +240,7 @@ export function AppointmentSheet({
               <h3>Ubicación</h3>
               {/* Mismo componente que Mi cuenta y Administración; aquí con el mapa debajo. */}
               <dl className="appt-meta tech-location-meta">
+                {missingLocation(item) && <MissingLocationNote />}
                 <AppointmentLocation
                   appointment={item}
                   directions
@@ -503,7 +511,13 @@ export function AppointmentSheet({
                   disabled={busy || !!item.busyReason}
                   busyLabel="Confirmando…"
                   onClick={() =>
-                    act('/confirm', { method: 'POST' }, '✓ Cita confirmada. Ya está en tus citas.')
+                    missingLocation(item)
+                      ? setAskNoLocation('confirm')
+                      : act(
+                          '/confirm',
+                          { method: 'POST' },
+                          '✓ Cita confirmada. Ya está en tus citas.',
+                        )
                   }
                 >
                   Confirmar cita
@@ -736,7 +750,13 @@ export function AppointmentSheet({
                     disabled={busy || !!item.busyReason}
                     busyLabel="Tomando…"
                     onClick={() =>
-                      act('/take', { method: 'POST' }, '✓ Tomaste la visita. Ya está en tus citas.')
+                      missingLocation(item)
+                        ? setAskNoLocation('take')
+                        : act(
+                            '/take',
+                            { method: 'POST' },
+                            '✓ Tomaste la visita. Ya está en tus citas.',
+                          )
                     }
                   >
                     Tomar visita
@@ -838,6 +858,25 @@ export function AppointmentSheet({
           </>
         )}
 
+        {askNoLocation && item && (
+          <MissingLocationConfirm
+            client={item.contactName?.split(' ')[0] || 'Este cliente'}
+            take={askNoLocation === 'take'}
+            busy={busy}
+            onCancel={() => setAskNoLocation(null)}
+            onConfirm={async () => {
+              const take = askNoLocation === 'take';
+              setAskNoLocation(null);
+              await act(
+                take ? '/take' : '/confirm',
+                { method: 'POST' },
+                take
+                  ? '✓ Tomaste la visita. Ya está en tus citas.'
+                  : '✓ Cita confirmada. Ya está en tus citas.',
+              );
+            }}
+          />
+        )}
         {confirmComplete && item && (
           <div
             className="tech-confirm"
