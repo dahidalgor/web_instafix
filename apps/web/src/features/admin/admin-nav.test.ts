@@ -15,7 +15,8 @@ test('menú de administración: 4 secciones + cuenta, cada ventana una sola vez'
     ['Operación', 'Catálogo y web', 'Clientes y equipo', 'Sistema', 'Cuenta'],
   );
   const ids = adminItems.map((item) => item.id);
-  assert.equal(ids.length, 16);
+  assert.equal(ids.length, 17);
+  assert.ok(ids.includes('taller'), 'equipos en el taller');
   assert.ok(ids.includes('cuenta'));
   assert.ok(ids.includes('horarios'), 'administración también registra sus horarios');
   assert.equal(new Set(ids).size, ids.length, 'sin ventanas repetidas');

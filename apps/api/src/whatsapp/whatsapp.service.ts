@@ -10,6 +10,7 @@ import {
   WHATSAPP_PROVIDER,
   WhatsAppProviderError,
   type SentMessage,
+  type TemplateVariables,
   type WhatsAppProvider,
 } from './provider';
 
@@ -42,14 +43,21 @@ export class WhatsAppService {
     return this.provider.name;
   }
 
-  async sendAppointmentMessage(appointment: Appointment, kind: MessageKind): Promise<SentMessage> {
+  async sendAppointmentMessage(
+    appointment: Appointment,
+    kind: MessageKind,
+    extra: TemplateVariables = {},
+  ): Promise<SentMessage> {
     if (!whatsappConfiguration().enabled || !whatsappSendingEnabled())
       throw new ProviderError('Envíos de WhatsApp desactivados', 'FAILED');
     if (!appointment.whatsappConsentAt)
       throw new ProviderError('Falta autorización del cliente', 'FAILED');
     let template = templateFor(kind);
     try {
-      const variables = messageVariables(kind, await withProposer(kind, appointment));
+      const variables = {
+        ...messageVariables(kind, await withProposer(kind, appointment)),
+        ...extra,
+      };
       const sent = await this.provider
         .sendTemplate({ to: appointment.contactPhone, template, variables })
         .catch((error) => {

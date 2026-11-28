@@ -26,6 +26,8 @@ export const staffNotificationTypes = [
   'WHATSAPP_UNDELIVERABLE',
   /** A administración: un técnico completó una visita sin cobro (revisarla). */
   'NO_CHARGE_REVIEW',
+  /** A administración: el cliente respondió el presupuesto de un trabajo de taller. */
+  'REPAIR_ANSWERED',
   /** Al técnico: sus trabajos de mañana (19H00) y de hoy (08H00). */
   'DAILY_AGENDA',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */

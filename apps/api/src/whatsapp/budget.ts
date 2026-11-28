@@ -31,6 +31,8 @@ export const WHATSAPP_BUDGET = {
     LOCATION_RECEIVED: 1,
     TECHNICIAN_CHANGED: 3,
     RESCHEDULE_PROPOSAL: 3,
+    // Un presupuesto por equipo de taller (una visita puede dejar varios).
+    REPAIR_QUOTE: 5,
   } as Record<string, number>,
 } as const;
 
@@ -69,6 +71,8 @@ export function eventTypeOf(kind: string, reconfirmation = false) {
       return 'APPOINTMENT_REASSIGNED';
     case 'RESCHEDULE_PROPOSAL':
       return 'APPOINTMENT_RESCHEDULE_PROPOSED';
+    case 'REPAIR_QUOTE':
+      return 'REPAIR_QUOTED';
     default:
       return kind;
   }

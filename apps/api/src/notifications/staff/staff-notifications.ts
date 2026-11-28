@@ -64,6 +64,8 @@ export const staffRecipientRules: Record<StaffNotificationType, readonly Role[]>
   WHATSAPP_UNDELIVERABLE: ['ADMIN'],
   // Visita completada sin cobro: administración la revisa.
   NO_CHARGE_REVIEW: ['ADMIN'],
+  // El cliente aprobó o rechazó el presupuesto de un trabajo de taller.
+  REPAIR_ANSWERED: ['ADMIN'],
   // Resumen diario de sus propias visitas (mañana a las 19H00, hoy a las 08H00).
   DAILY_AGENDA: ['ADMIN', 'TECHNICIAN'],
   // Prueba enviada por el propio usuario a sus dispositivos (POST /staff/push/test).
@@ -81,6 +83,7 @@ export const producedStaffNotifications: readonly StaffNotificationType[] = [
   'RESCHEDULE_ANSWERED',
   'WHATSAPP_UNDELIVERABLE',
   'NO_CHARGE_REVIEW',
+  'REPAIR_ANSWERED',
   'DAILY_AGENDA',
 ];
 

@@ -4,6 +4,7 @@ import {
   missingLocation,
 } from '../../components/appointments/MissingLocation';
 import { VisitSlotPicker } from '../../components/staff/VisitSlotPicker';
+import { VisitRepairs } from './VisitRepairs';
 import { BusyButton } from '../../components/ui/BusyButton';
 import { BusyLabel } from '../../components/ui/BusyLabel';
 import { TextSkeleton } from '../../components/ui/Skeleton';
@@ -462,6 +463,21 @@ export function AppointmentSheet({
                     </button>
                   ))}
               </div>
+            )}
+
+            {/* Equipos que se lleva al taller (solo el técnico a cargo, desde el día de la visita). */}
+            {item.canManage && (
+              <VisitRepairs
+                appointmentId={item.id}
+                canAdd={
+                  mine &&
+                  !beforeVisitDay &&
+                  (['CONFIRMED', 'IN_PROGRESS'].includes(item.status) ||
+                    (item.status === 'COMPLETED' &&
+                      !!item.completedAt &&
+                      Date.now() - new Date(item.completedAt).getTime() < 86400000))
+                }
+              />
             )}
 
             {item.canManage && (

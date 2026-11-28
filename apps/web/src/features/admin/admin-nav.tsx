@@ -14,6 +14,7 @@ export type AdminTab =
   | 'citas'
   | 'tecnico'
   | 'trabajos'
+  | 'taller'
   | 'sorteo'
   | 'servicios'
   | 'categorias'
@@ -47,6 +48,12 @@ export const icons = {
     <>
       <rect x="5" y="4" width="14" height="17" rx="2" />
       <path d="M9 3h6v3H9zM9 13l2 2 4-4" />
+    </>,
+  ),
+  taller: svg(
+    <>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18M11 12v2h2v-2" />
     </>,
   ),
   horarios: svg(
@@ -128,6 +135,12 @@ export const adminGroups: AdminNavGroup[] = [
         short: 'Técnico',
         description: 'Las visitas tal como las ve el técnico: confirmar, registrar y completar.',
         icon: icons.tecnico,
+      },
+      {
+        id: 'taller',
+        label: 'Taller',
+        description: 'Equipos que los técnicos se llevaron: presupuesto, reparación y entrega.',
+        icon: icons.taller,
       },
       {
         id: 'trabajos',

@@ -209,6 +209,26 @@ pendientes; la fila muestra «⚑ Sin cobro · por revisar»). En «Ver y editar
 /api/v1/admin/appointments/:id/no-charge-review`; auditoría `NO_CHARGE_APPROVED` /
 `NO_CHARGE_FLAGGED`.
 
+## Taller (equipos que el técnico se lleva)
+
+Si en la visita la falla era otra o el cliente entrega **otro equipo**, el técnico a cargo pulsa
+en la cita **«+ Me llevo un equipo al taller»** (equipo, falla indicada, cómo lo recibe). Lo
+cobrado en la visita va aparte, en sus servicios. Cada equipo es un **trabajo de taller**
+(`RepairOrder`) con código **T-0042**. Solo el técnico lo crea (el cliente solo agenda).
+
+| Estado                       | Quién          | Qué pasa                                                                                                                                                                                        |
+| ---------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recibido → En diagnóstico    | Administración | Taller → «Pasar a diagnóstico»                                                                                                                                                                  |
+| Presupuesto enviado          | Administración | «Poner presupuesto» (valor y detalle). El cliente lo ve en **Mi cuenta → En taller** y, con autorización de WhatsApp, le llega la plantilla `repair_quote` con «Sí, continuar» / «No, devolver» |
+| En reparación / No se repara | Cliente        | Botón de WhatsApp o Mi cuenta (entonces el WhatsApp pendiente ya no sale). Si respondió por teléfono, administración lo registra. Administración recibe el aviso `REPAIR_ANSWERED`              |
+| Listo → Entregado            | Administración | «Marcar listo» y «Entregar» con lo cobrado                                                                                                                                                      |
+| Devuelto sin reparar         | Administración | «Devolver sin reparar» (con lo cobrado, p. ej. $0)                                                                                                                                              |
+
+API: `POST/GET /api/v1/staff/appointments/:id/repairs`; `GET /api/v1/admin/repairs?scope=shop|done`,
+`POST …/admin/repairs/:id/{status,quote,answer,deliver}`; `GET /api/v1/my/repairs`,
+`POST …/my/repairs/:id/answer`. Auditoría en el historial de la cita: `REPAIR_RECEIVED`,
+`REPAIR_QUOTED`, `REPAIR_QUOTE_APPROVED|DECLINED`, `REPAIR_DELIVERED|RETURNED`.
+
 ## Solicitud ≠ servicio realizado
 
 - `Appointment.title`: lo que escribió el cliente («Mi PS5 se apaga…»). Nunca se sobrescribe.

@@ -370,3 +370,130 @@
 :root[data-theme='dark'] .appt-location-source {
   color: #a7e9cb;
 }
+
+/* Trabajos de taller (cliente, técnico y administración). */
+.repair-list {
+  display: grid;
+  gap: 12px;
+}
+.repair-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-left: 5px solid #7c5cc4;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.repair-card.repair-READY {
+  border-left-color: #1b7a4b;
+}
+.repair-card.repair-DELIVERED,
+.repair-card.repair-RETURNED {
+  border-left-color: var(--border);
+}
+.repair-card.repair-DECLINED {
+  border-left-color: #b3261e;
+}
+.repair-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.repair-head h3 {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}
+.repair-code {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.repair-status {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.repair-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.repair-steps li {
+  display: grid;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+}
+.repair-steps li::before {
+  content: '';
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.repair-steps li.is-done::before,
+.repair-steps li.is-current::before {
+  background: #7c5cc4;
+}
+.repair-steps li.is-current {
+  color: var(--text);
+  font-weight: 700;
+}
+.repair-steps li.is-stopped::before {
+  background: #b3261e;
+}
+.repair-steps li.is-stopped {
+  color: #b3261e;
+  font-weight: 700;
+}
+.repair-meta {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.repair-meta div {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px;
+}
+.repair-meta dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.repair-meta dd {
+  margin: 0;
+}
+.repair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+.repair-actions .repair-form {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+@media (max-width: 560px) {
+  .repair-meta div {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .repair-steps li span {
+    display: none;
+  }
+  .repair-steps li.is-current span,
+  .repair-steps li.is-stopped span {
+    display: block;
+    white-space: nowrap;
+  }
+}

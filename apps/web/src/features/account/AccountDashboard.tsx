@@ -1,3 +1,4 @@
+import { CustomerRepairs } from './CustomerRepairs';
 import {
   AppointmentCardSkeleton,
   ListSkeleton,
@@ -50,7 +51,7 @@ export function AccountDashboard() {
   // realizados se cargan aparte, de 10 en 10, solo al abrir esa sección.
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [summary, setSummary] = useState<AccountSummary | null>(null);
-  const [section, setSection] = useState<'appointments' | 'jobs'>('appointments');
+  const [section, setSection] = useState<'appointments' | 'jobs' | 'repairs'>('appointments');
   const [resetToken] = useState(() => linkToken('restablecer'));
   const [appointmentFilter, setAppointmentFilter] = useState('upcoming');
   const [now, setNow] = useState(Date.now());
@@ -251,12 +252,17 @@ export function AccountDashboard() {
         <button aria-pressed={section === 'jobs'} onClick={() => setSection('jobs')}>
           Servicios y garantías
         </button>
+        <button aria-pressed={section === 'repairs'} onClick={() => setSection('repairs')}>
+          En taller
+        </button>
       </div>
       {/* Cambiar de sección o de filtro anima el contenido, como la navegación de la página. */}
       <div className="account-section" key={`${section}-${appointmentFilter}`}>
-        {loading ||
-        (section === 'appointments' && appointmentFilter === 'past' && past.items === null) ||
-        (section === 'jobs' && jobsPage.items === null) ? (
+        {section === 'repairs' ? (
+          <CustomerRepairs />
+        ) : loading ||
+          (section === 'appointments' && appointmentFilter === 'past' && past.items === null) ||
+          (section === 'jobs' && jobsPage.items === null) ? (
           section === 'appointments' ? (
             <div className="appt-list">
               <ListSkeleton label="Cargando tus citas…" count={2} variant="appointment" />

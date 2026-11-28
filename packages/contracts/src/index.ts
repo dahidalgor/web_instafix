@@ -7,6 +7,7 @@ export * from './catalog';
 export * from './giveaway';
 export * from './help';
 export * from './push';
+export * from './repairs';
 export * from './requests';
 export * from './site';
 export * from './visit-outcome';

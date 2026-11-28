@@ -1,3 +1,4 @@
+import { answerRepairFromWhatsApp, repairQuoteAnswer } from '../repairs/repairs.service';
 import {
   BadRequestException,
   ForbiddenException,
@@ -80,6 +81,21 @@ async function handleEvent(event: WhatsAppWebhookEvent, provider: string) {
   // receiveCustomerMessage). Así el recordatorio «envía la ubicación o se cancela» sigue en pie.
   // Botón de una propuesta de otro horario («Sí, me sirve» / «No, mantener»).
   if (event.type === 'interactive_reply') {
+    // Presupuesto de taller («Sí, continuar» / «No, devolver») o propuesta de horario.
+    if (repairQuoteAnswer(event.text)) {
+      await answerRepairFromWhatsApp({
+        phone: event.phone,
+        text: event.text,
+        inReplyTo: event.inReplyTo,
+      }).catch((error) =>
+        logEvent(
+          'repair.quote_answer_error',
+          { reason: error instanceof Error ? error.message.slice(0, 200) : 'Error inesperado' },
+          'warn',
+        ),
+      );
+      return;
+    }
     await answerProposal({
       phone: event.phone,
       text: event.text,

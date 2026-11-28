@@ -18,6 +18,7 @@ import { AdminJobs } from './AdminJobs';
 import { AdminServices } from './AdminServices';
 import { AdminWarranty } from './AdminWarranty';
 import { AdminWhatsApp } from './AdminWhatsApp';
+import { AdminRepairs } from './AdminRepairs';
 import { AdminTeam } from './AdminTeam';
 import { AdminUsers } from './AdminUsers';
 import { AdminBlockedPhones } from './AdminBlockedPhones';
@@ -327,6 +328,7 @@ export default function Admin() {
         />
       )}
       {tab === 'sorteo' && <AdminGiveaway />}
+      {tab === 'taller' && <AdminRepairs />}
       {tab === 'horarios' && <AdminSchedule />}
       {tab === 'tecnico' && <TechnicianPanel user={user} embedded />}
       {tab === 'equipo' && <AdminTeam />}

@@ -23,6 +23,7 @@ import { WarrantiesController } from './warranties/warranties.controller';
 import { WebhooksController } from './integrations/webhooks.controller';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { StaffController } from './staff/staff.controller';
+import { RepairsController } from './repairs/repairs.controller';
 import { TeamController } from './staff/team.controller';
 import { PeopleAdminController } from './admin/people-admin.controller';
 import { GiveawayAdminController } from './giveaways/giveaway-admin.controller';
@@ -48,6 +49,7 @@ import { PushController } from './notifications/staff/push.controller';
     HealthController,
     WebhooksController,
     StaffController,
+    RepairsController,
     TeamController,
     PeopleAdminController,
     GiveawayAdminController,

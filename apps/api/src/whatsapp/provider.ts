@@ -16,6 +16,7 @@ export const whatsappTemplates = [
   'appointment_location_received',
   'appointment_technician_changed',
   'appointment_reschedule_proposal',
+  'repair_quote',
 ] as const;
 export type WhatsAppTemplate = (typeof whatsappTemplates)[number];
 
@@ -35,6 +36,10 @@ export const templateVariableNames = [
   /** Horario que propone el técnico. */
   'fecha_nueva',
   'hora_nueva',
+  /** Trabajo de taller: equipo, número de orden (T-0042) y valor del presupuesto. */
+  'equipo',
+  'orden',
+  'valor',
 ] as const;
 export type TemplateVariables = Partial<Record<(typeof templateVariableNames)[number], string>>;
 

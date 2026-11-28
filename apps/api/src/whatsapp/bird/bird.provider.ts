@@ -48,6 +48,7 @@ const BIRD_TEMPLATES: Record<WhatsAppTemplate, string> = {
   appointment_location_received: 'appointment_location_received_v2',
   appointment_technician_changed: 'appointment_technician_changed_v2',
   appointment_reschedule_proposal: 'appointment_reschedule_proposal_v2',
+  repair_quote: 'repair_quote',
 };
 /**
  * Código de verificación: plantilla de autenticación gestionada por Bird (ya aprobada, sale desde

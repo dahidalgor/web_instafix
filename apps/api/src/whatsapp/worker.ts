@@ -6,7 +6,8 @@ import { whatsappConfiguration, calConfiguration } from './config';
 import { isMessageKind, reminderTimes, type MessageKind } from './messages';
 import { confirmCalBooking } from '../integrations/cal-client';
 import { ProviderError } from '../integrations/provider-error';
-import { WhatsAppProviderError } from './provider';
+import { WhatsAppProviderError, type TemplateVariables } from './provider';
+import { repairVariables } from '../repairs/repair-messages';
 import { WhatsAppService } from './whatsapp.service';
 import { lockAppointment, queueJob, queueReminders } from './queue';
 import { deliveryState } from './delivery';
@@ -17,6 +18,8 @@ type Providers = {
   send: (
     appointment: Appointment,
     kind: MessageKind,
+    /** Valores propios del aviso (p. ej. el presupuesto de un trabajo de taller). */
+    extra?: TemplateVariables,
   ) => Promise<{ providerMessageId: string; provider?: string }>;
   confirm: (uid: string) => Promise<void>;
 };
@@ -85,6 +88,9 @@ export function kindStillValid(kind: string, appointment: Appointment) {
     case 'SAME_DAY':
       // Retirado: decía «mañana» el día de la visita. Los ya encolados se cancelan sin enviar.
       return false;
+    case 'REPAIR_QUOTE':
+      // Depende del trabajo de taller, no de la cita (se comprueba en processJob).
+      return true;
     default:
       // Avisos retirados (p. ej. «técnico en camino», sin plantilla): se cancelan sin enviar.
       return false;
@@ -106,6 +112,13 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           where: { id: job.appointmentId },
         });
         const isConfirm = job.kind === 'CAL_CONFIRM';
+        // Presupuesto de taller: vale mientras el trabajo siga esperando la respuesta del cliente
+        // (la visita ya pasó: no cuenta su fecha).
+        const repair =
+          job.kind === 'REPAIR_QUOTE' && job.repairOrderId
+            ? await tx.repairOrder.findUnique({ where: { id: job.repairOrderId } })
+            : null;
+        const repairOpen = !!repair && repair.status === 'QUOTED' && !repair.quoteAnswer;
         const invalid =
           Boolean(appointment.bookingIdentityIssue) ||
           Boolean(appointment.deletedAt) ||
@@ -113,7 +126,7 @@ export async function processJob(id: string, providers: Providers, now = new Dat
           !appointment.whatsappConsentAt ||
           !appointment.contactPhone ||
           job.expiresAt <= now ||
-          appointment.startsAt <= now ||
+          (job.kind === 'REPAIR_QUOTE' ? !repairOpen : appointment.startsAt <= now) ||
           // El recordatorio «mañana» solo sale antes del día de la visita (hora de Ecuador),
           // aunque la fila antigua tuviera otra caducidad.
           (job.kind === 'DAY_BEFORE' && now >= reminderTimes(appointment.startsAt).dayStart) ||
@@ -159,7 +172,11 @@ export async function processJob(id: string, providers: Providers, now = new Dat
               logSuppressed(job, verdict.status, verdict.reason);
               return;
             }
-            const sent = await providers.send(appointment, job.kind);
+            const sent = await providers.send(
+              appointment,
+              job.kind,
+              repair ? repairVariables(repair) : undefined,
+            );
             const delivery = await deliveryState(tx, sent.providerMessageId);
             await tx.automationJob.update({
               where: { id },
@@ -290,8 +307,8 @@ export class WhatsAppWorker implements OnModuleInit, OnModuleDestroy {
       });
       for (const job of pending)
         await processJob(job.id, {
-          send: async (appointment, kind) => ({
-            ...(await this.whatsapp.sendAppointmentMessage(appointment, kind)),
+          send: async (appointment, kind, extra) => ({
+            ...(await this.whatsapp.sendAppointmentMessage(appointment, kind, extra)),
             provider: this.whatsapp.providerName,
           }),
           confirm: confirmCalBooking,
