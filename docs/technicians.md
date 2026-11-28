@@ -189,6 +189,26 @@ cambia.
 
 **Idempotencia**: un evento por confirmación; el correo tiene clave única `email:<cita>:APPOINTMENT_CONFIRMED:<confirmedAt>` y el WhatsApp `<cita>:<revisión>:CONFIRMED`. Completar dos veces no repite la transición. Un mismo servicio del catálogo no puede añadirse dos veces (se ajusta la cantidad).
 
+## Resultado de la visita y visitas sin cobro
+
+Al completar, el técnico **siempre** elige cómo terminó la visita (`outcome`):
+
+| Resultado                             | Cuándo                                                               | Qué se guarda                                                                               |
+| ------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Se cobró** (`CHARGED`)              | Hizo servicios del catálogo                                          | Sus servicios con valor (al menos uno)                                                      |
+| **Solo visita técnica** (`VISIT_FEE`) | No se hizo el trabajo: diagnóstico, falla distinta, equipo al taller | Se añade la línea «Visita técnica» de **$5** (`VISIT_FEE` en `contracts/visit-outcome.ts`)  |
+| **Sin cobro** (`NO_CHARGE`)           | No se cobró nada                                                     | Motivo de la lista y explicación (mín. 10 caracteres) obligatorios; sin servicios con valor |
+
+Motivos: repuesto no compatible, falla distinta (al taller), cliente no aceptó el presupuesto,
+cliente no estaba, garantía, otro.
+
+**Revisión de administración**: cada visita sin cobro avisa a administración (push
+`NO_CHARGE_REVIEW`) y queda en Citas → **«Sin cobro por revisar»** (botón destacado cuando hay
+pendientes; la fila muestra «⚑ Sin cobro · por revisar»). En «Ver y editar»: **Aprobar** o
+**Hablar con el técnico** (sigue en la lista hasta aprobarla). `POST
+/api/v1/admin/appointments/:id/no-charge-review`; auditoría `NO_CHARGE_APPROVED` /
+`NO_CHARGE_FLAGGED`.
+
 ## Solicitud ≠ servicio realizado
 
 - `Appointment.title`: lo que escribió el cliente («Mi PS5 se apaga…»). Nunca se sobrescribe.

@@ -24,6 +24,8 @@ export const staffNotificationTypes = [
   'RESCHEDULE_ANSWERED',
   /** A administración: WhatsApp no pudo entregar los mensajes al número del cliente. */
   'WHATSAPP_UNDELIVERABLE',
+  /** A administración: un técnico completó una visita sin cobro (revisarla). */
+  'NO_CHARGE_REVIEW',
   /** Al técnico: sus trabajos de mañana (19H00) y de hoy (08H00). */
   'DAILY_AGENDA',
   /** Prueba que el propio usuario envía a sus dispositivos desde el panel. */

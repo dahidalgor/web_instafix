@@ -7,6 +7,10 @@ import {
   type Appointment,
   type Offering,
   type PerformedService,
+  noChargeReasons,
+  visitOutcomeLabels,
+  type NoChargeReason,
+  type VisitOutcome,
 } from '@instafix/contracts';
 import { StatusPill, visitDayKey, visitTime } from '../../components/appointments/AppointmentCard';
 import { money } from '../../lib/format';
@@ -41,6 +45,12 @@ type AdminAppointment = Appointment & {
   assignedTechnician?: { id: string; name: string; active?: boolean } | null;
   services: PerformedService[];
   technicianNotes?: string;
+  /** Resultado al completarla y revisión de las visitas sin cobro. */
+  outcome?: VisitOutcome | null;
+  noChargeReason?: string | null;
+  noChargeNote?: string | null;
+  noChargeReviewedAt?: string | null;
+  noChargeFlagged?: boolean;
 };
 const empty = {
   userId: '',
@@ -364,6 +374,27 @@ export function AdminAppointments({
       setBusyAction(null);
     }
   }
+  /** Visita sin cobro: aprobar el motivo o marcarla para hablar con el técnico. */
+  async function reviewNoCharge(item: AdminAppointment, decision: 'APPROVED' | 'FLAGGED') {
+    setBusyAction(decision === 'APPROVED' ? 'review-ok' : 'review-flag');
+    setMessage('');
+    try {
+      await api(`admin/appointments/${item.id}/no-charge-review`, {
+        method: 'POST',
+        body: JSON.stringify({ decision }),
+      });
+      await load();
+      setMessage(
+        decision === 'APPROVED'
+          ? 'Visita sin cobro aprobada.'
+          : 'Marcada para hablar con el técnico: sigue en «Sin cobro por revisar».',
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'No se pudo guardar la revisión.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
   /** Cita que espera técnico: administración la asigna (aunque esa persona esté ocupada). */
   async function assign(item: AdminAppointment) {
     const to = team?.find((t) => t.id === reassignTo);
@@ -618,6 +649,54 @@ export function AdminAppointments({
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {item.outcome && (
+                    <p>
+                      <strong>Resultado:</strong> {visitOutcomeLabels[item.outcome]}
+                    </p>
+                  )}
+                  {item.outcome === 'NO_CHARGE' && (
+                    <div className="no-charge-review">
+                      <p>
+                        <strong>Motivo:</strong>{' '}
+                        {noChargeReasons[item.noChargeReason as NoChargeReason] ??
+                          item.noChargeReason}
+                      </p>
+                      {item.noChargeNote && <p>«{item.noChargeNote}»</p>}
+                      <p className="small">
+                        {!item.noChargeReviewedAt
+                          ? 'Pendiente de revisión.'
+                          : item.noChargeFlagged
+                            ? 'Marcada para hablar con el técnico.'
+                            : 'Revisada y aprobada.'}
+                      </p>
+                      {(!item.noChargeReviewedAt || item.noChargeFlagged) && (
+                        <div className="tech-actions-row">
+                          <BusyButton
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={busy}
+                            busy={busyAction === 'review-ok'}
+                            busyLabel="Guardando…"
+                            onClick={() => reviewNoCharge(item, 'APPROVED')}
+                          >
+                            Aprobar: motivo válido
+                          </BusyButton>
+                          {!item.noChargeFlagged && (
+                            <BusyButton
+                              type="button"
+                              className="btn btn-ghost"
+                              disabled={busy}
+                              busy={busyAction === 'review-flag'}
+                              busyLabel="Guardando…"
+                              onClick={() => reviewNoCharge(item, 'FLAGGED')}
+                            >
+                              Hablar con el técnico
+                            </BusyButton>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                   {item.technicianNotes && (
                     <p className="small">
@@ -954,6 +1033,7 @@ export function AdminAppointments({
                 className={[
                   statusFilter === option.id ? 'active' : '',
                   option.id === 'CANCELLED' ? 'filter-aside' : '',
+                  option.id === 'noChargeReview' && counts?.noChargeReview ? 'filter-alert' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -1220,6 +1300,14 @@ function AdminAppointmentRow({
     });
   if (cancelAt)
     notes.push({ text: `Se cancela sola: ${shortMoment(cancelAt, item.timeZone)}`, tone: 'info' });
+  if (item.outcome === 'NO_CHARGE')
+    notes.push(
+      !item.noChargeReviewedAt
+        ? { text: '⚑ Sin cobro · por revisar', tone: 'warn' }
+        : item.noChargeFlagged
+          ? { text: '⚑ Sin cobro · hablar con el técnico', tone: 'warn' }
+          : { text: 'Sin cobro · aprobada', tone: 'muted' },
+    );
   if (item.status === 'CANCELLED' && item.autoCancelReason)
     notes.push({ text: item.autoCancelReason, tone: 'muted' });
   return (

@@ -8,6 +8,11 @@ import { BusyButton } from '../../components/ui/BusyButton';
 import { BusyLabel } from '../../components/ui/BusyLabel';
 import { TextSkeleton } from '../../components/ui/Skeleton';
 import {
+  VISIT_FEE,
+  noChargeReasons,
+  visitOutcomeLabels,
+  type NoChargeReason,
+  type VisitOutcome,
   entriesLabel,
   suggestedGiveawayEntries,
   type Giveaway,
@@ -51,6 +56,10 @@ export function AppointmentSheet({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [confirmComplete, setConfirmComplete] = useState(false);
+  // Resultado de la visita al completarla (obligatorio).
+  const [outcome, setOutcome] = useState<VisitOutcome | null>(null);
+  const [noChargeReason, setNoChargeReason] = useState<NoChargeReason | ''>('');
+  const [noChargeNote, setNoChargeNote] = useState('');
   const [askingHandover, setAskingHandover] = useState(false);
   const [handoverReason, setHandoverReason] = useState('');
   // Propuesta de otro horario al cliente (fecha y hora de Ecuador, «YYYY-MM-DDTHH:mm»).
@@ -127,6 +136,15 @@ export function AppointmentSheet({
 
   const editable = Boolean(item?.canManage && ['CONFIRMED', 'IN_PROGRESS'].includes(item.status));
   const total = item?.services.reduce((sum, s) => sum + s.totalMinor, 0) ?? 0;
+  const paidTotal = total;
+  const outcomeReady =
+    outcome === 'CHARGED'
+      ? paidTotal > 0
+      : outcome === 'VISIT_FEE'
+        ? paidTotal === 0
+        : outcome === 'NO_CHARGE'
+          ? !!noChargeReason && noChargeNote.trim().length >= 10
+          : false;
   const notesDirty = notes !== (item?.technicianNotes ?? '');
   // Fecha de Ecuador: no se completa una visita antes de su día.
   const ecDay = (value: Date) =>
@@ -530,7 +548,13 @@ export function AppointmentSheet({
                     className="btn btn-success btn-block"
                     disabled={busy || notesDirty || beforeVisitDay}
                     title={notesDirty ? 'Guarda las notas antes de completar' : undefined}
-                    onClick={() => setConfirmComplete(true)}
+                    onClick={() => {
+                      // Con servicios cobrados, lo normal es «Se cobró»; si no, que elija.
+                      setOutcome(total > 0 ? 'CHARGED' : null);
+                      setNoChargeReason('');
+                      setNoChargeNote('');
+                      setConfirmComplete(true);
+                    }}
                   >
                     Marcar como completada
                   </button>
@@ -847,7 +871,19 @@ export function AppointmentSheet({
                   )}
                 </div>
               )}
-              {item.status === 'COMPLETED' && <p className="tech-done">✓ Visita completada</p>}
+              {item.status === 'COMPLETED' && (
+                <p className="tech-done">
+                  ✓ Visita completada
+                  {item.outcome ? ` · ${visitOutcomeLabels[item.outcome]}` : ''}
+                </p>
+              )}
+              {item.status === 'COMPLETED' && item.outcome === 'NO_CHARGE' && (
+                <p className="small">
+                  Motivo:{' '}
+                  {noChargeReasons[item.noChargeReason as NoChargeReason] ?? item.noChargeReason}
+                  {item.noChargeNote ? ` — ${item.noChargeNote}` : ''}
+                </p>
+              )}
               {item.status === 'COMPLETED' && item.giveawayEntries > 0 && (
                 <p className="tech-giveaway-done">
                   {item.giveawayPrize ? `Participa por ${item.giveawayPrize} · ` : 'Sorteo · '}
@@ -885,20 +921,96 @@ export function AppointmentSheet({
             aria-labelledby="complete-title"
           >
             <div>
-              <h3 id="complete-title">¿Marcar la visita como completada?</h3>
-              {item.services.length ? (
-                <ul className="performed-list">
-                  {item.services.map((s) => (
-                    <li key={s.id}>
-                      {s.nameSnapshot}
-                      {s.quantity > 1 ? ` ×${s.quantity}` : ''}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No registraste servicios del catálogo; quedará solo la nota técnica.</p>
+              <h3 id="complete-title">¿Cómo terminó la visita?</h3>
+              <fieldset className="tech-outcome">
+                <legend className="visually-hidden">Resultado de la visita</legend>
+                <label
+                  className={`tech-outcome-option${outcome === 'CHARGED' ? ' is-selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="outcome"
+                    checked={outcome === 'CHARGED'}
+                    disabled={paidTotal <= 0}
+                    onChange={() => setOutcome('CHARGED')}
+                  />
+                  <span>
+                    <strong>Se cobró {paidTotal > 0 ? money(paidTotal) : ''}</strong>
+                    {paidTotal > 0 ? (
+                      <ul className="performed-list">
+                        {item.services.map((s) => (
+                          <li key={s.id}>
+                            {s.nameSnapshot}
+                            {s.quantity > 1 ? ` ×${s.quantity}` : ''} · {money(s.totalMinor)}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <small>Registra primero los servicios que hiciste.</small>
+                    )}
+                  </span>
+                </label>
+                <label
+                  className={`tech-outcome-option${outcome === 'VISIT_FEE' ? ' is-selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="outcome"
+                    checked={outcome === 'VISIT_FEE'}
+                    disabled={paidTotal > 0}
+                    onChange={() => setOutcome('VISIT_FEE')}
+                  />
+                  <span>
+                    <strong>Solo visita técnica · {money(VISIT_FEE.priceMinor)}</strong>
+                    <small>
+                      No se hizo el trabajo (diagnóstico, falla distinta, equipo al taller): se
+                      cobra la visita.
+                    </small>
+                  </span>
+                </label>
+                <label
+                  className={`tech-outcome-option${outcome === 'NO_CHARGE' ? ' is-selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="outcome"
+                    checked={outcome === 'NO_CHARGE'}
+                    disabled={paidTotal > 0}
+                    onChange={() => setOutcome('NO_CHARGE')}
+                  />
+                  <span>
+                    <strong>No se cobró nada</strong>
+                    <small>Administración revisará el motivo.</small>
+                  </span>
+                </label>
+              </fieldset>
+              {outcome === 'NO_CHARGE' && (
+                <div className="tech-no-charge">
+                  <label>
+                    Motivo
+                    <select
+                      value={noChargeReason}
+                      onChange={(e) => setNoChargeReason(e.target.value as NoChargeReason | '')}
+                    >
+                      <option value="">Elige el motivo</option>
+                      {Object.entries(noChargeReasons).map(([id, label]) => (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    ¿Qué pasó?
+                    <textarea
+                      value={noChargeNote}
+                      maxLength={500}
+                      placeholder="Ej.: el joystick que llevé no era compatible con su modelo."
+                      onChange={(e) => setNoChargeNote(e.target.value)}
+                    />
+                  </label>
+                </div>
               )}
-              {!!item.services.length && <p>Total: {money(total)}</p>}
               {giveaway && <GiveawayPicker id="giveaway-confirm" {...giveawayProps} />}
               <p className="small">Después no podrás modificar los servicios ni las notas.</p>
               <div className="tech-actions-row">
@@ -912,13 +1024,22 @@ export function AppointmentSheet({
                 <BusyButton
                   type="button"
                   className="btn btn-success"
-                  disabled={busy}
+                  disabled={busy || !outcomeReady}
                   busyLabel="Completando…"
                   onClick={async () => {
                     const entries = joinGiveaway && giveaway ? giveawayEntries : 0;
                     await act(
                       '/complete',
-                      { method: 'POST', body: JSON.stringify({ giveawayEntries: entries }) },
+                      {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          giveawayEntries: entries,
+                          outcome,
+                          ...(outcome === 'NO_CHARGE'
+                            ? { noChargeReason, noChargeNote: noChargeNote.trim() }
+                            : {}),
+                        }),
+                      },
                       entries
                         ? `✓ Visita completada. Participa por ${giveaway!.prize}.`
                         : '✓ Visita completada.',

@@ -270,6 +270,15 @@ model Appointment {
   completedAt DateTime?
   completedById String?
   completedBy User? @relation("CompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  // Resultado al completar: CHARGED (servicios cobrados), VISIT_FEE (solo la visita técnica) o
+  // NO_CHARGE (sin cobro, con motivo obligatorio). Ver contracts/visit-outcome.ts.
+  outcome String?
+  noChargeReason String?
+  noChargeNote String?
+  // Revisión de administración de las visitas sin cobro (marcada = hablar con el técnico).
+  noChargeReviewedAt DateTime?
+  noChargeReviewedById String?
+  noChargeFlagged Boolean @default(false)
   // Notas internas del técnico: nunca se muestran al cliente.
   technicianNotes String @default("")
   services AppointmentService[]
@@ -283,6 +292,7 @@ model Appointment {
   @@index([status, startsAt])
   @@index([status, holdExpiresAt])
   @@index([giveawayId, status])
+  @@index([outcome, noChargeReviewedAt])
   @@index([originSessionKey, createdAt])
   @@index([originIpHash, createdAt])
   @@index([contactPhone, createdAt])

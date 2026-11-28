@@ -2,6 +2,7 @@ import {
   appointmentSchema,
   adminAppointmentQuerySchema,
   appointmentSortSchema,
+  noChargeReviewSchema,
   reassignSchema,
   type AppointmentDateFilter,
   type AppointmentSort,
@@ -92,10 +93,18 @@ async function dayTotals(where: Prisma.AppointmentWhereInput, rows: { startsAt: 
   return totals;
 }
 
+/** Visitas sin cobro pendientes de revisión o marcadas para hablar con el técnico. */
+const noChargeOpen: Prisma.AppointmentWhereInput = {
+  status: 'COMPLETED',
+  outcome: 'NO_CHARGE',
+  OR: [{ noChargeReviewedAt: null }, { noChargeFlagged: true }],
+};
+
 /** Estado del organizador → condición (CONFIRMED incluye «en servicio»). */
 function statusWhere(filter: AppointmentStatusFilter): Prisma.AppointmentWhereInput {
   if (filter === 'all') return {};
   if (filter === 'notCancelled') return { status: { not: 'CANCELLED' } };
+  if (filter === 'noChargeReview') return noChargeOpen;
   if (filter === 'active')
     return { status: { in: ['PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS'] } };
   if (filter === 'CONFIRMED') return { status: { in: ['CONFIRMED', 'IN_PROGRESS'] } };
@@ -219,7 +228,7 @@ export class AppointmentsController {
       f.sort === 'auto'
         ? [{ startsAt: ascending ? ('asc' as const) : ('desc' as const) }, { id: 'asc' as const }]
         : appointmentOrder(f.sort as AppointmentSort);
-    const [total, rows, byStatus] = await Promise.all([
+    const [total, rows, byStatus, noChargeReview] = await Promise.all([
       db.appointment.count({ where }),
       db.appointment.findMany({
         where,
@@ -233,6 +242,7 @@ export class AppointmentsController {
         },
       }),
       db.appointment.groupBy({ by: ['status'], where: base, _count: true }),
+      db.appointment.count({ where: { ...base, ...noChargeOpen } }),
     ]);
     const n = (...statuses: string[]) =>
       byStatus.filter((g) => statuses.includes(g.status)).reduce((sum, g) => sum + g._count, 0);
@@ -243,6 +253,7 @@ export class AppointmentsController {
       COMPLETED: n('COMPLETED'),
       CANCELLED: n('CANCELLED'),
       notCancelled: n('PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'),
+      noChargeReview,
       all: n('PENDING_LOCATION', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
     };
     // Pendientes por confirmar: qué técnicos están libres en su horario (null si no aplica).
@@ -310,6 +321,38 @@ export class AppointmentsController {
   ) {
     await authenticated(req, true);
     return teamForAppointment(id);
+  }
+
+  /**
+   * Revisión de una visita completada sin cobro: aprobada (motivo válido) o marcada para hablar
+   * con el técnico. Una marcada puede aprobarse después.
+   */
+  @Post('admin/appointments/:id/no-charge-review')
+  @HttpCode(200)
+  async reviewNoCharge(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
+    checkOrigin(req);
+    const admin = await authenticated(req, true);
+    const parsed = noChargeReviewSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Elige aprobar o marcar la visita.');
+    const updated = await db.appointment.updateMany({
+      where: { id, deletedAt: null, status: 'COMPLETED', outcome: 'NO_CHARGE' },
+      data: {
+        noChargeReviewedAt: new Date(),
+        noChargeReviewedById: admin.id,
+        noChargeFlagged: parsed.data.decision === 'FLAGGED',
+      },
+    });
+    if (!updated.count)
+      throw new BadRequestException('Esta visita no está marcada como sin cobro.');
+    await db.appointmentActivity.create({
+      data: {
+        appointmentId: id,
+        actorId: admin.id,
+        action: parsed.data.decision === 'FLAGGED' ? 'NO_CHARGE_FLAGGED' : 'NO_CHARGE_APPROVED',
+      },
+    });
+    await auditAdmin(admin.id, 'NO_CHARGE_REVIEWED', id, { decision: parsed.data.decision });
+    return { ok: true, decision: parsed.data.decision };
   }
 
   /**

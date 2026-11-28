@@ -1015,3 +1015,20 @@
     justify-self: end;
   }
 }
+
+/* Visitas sin cobro: filtro destacado cuando hay pendientes y bloque de revisión. */
+.filters button.filter-alert:not(.active) {
+  border-color: #d97706;
+  color: #b45309;
+  font-weight: 700;
+}
+.no-charge-review {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 4px solid #d97706;
+  background: color-mix(in srgb, #f59e0b 12%, var(--surface));
+}
+.no-charge-review p {
+  margin: 0 0 6px;
+}

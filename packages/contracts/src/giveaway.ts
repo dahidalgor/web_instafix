@@ -1,3 +1,4 @@
+import { noChargeReasons, visitOutcomes, type NoChargeReason } from './visit-outcome';
 import { z } from 'zod';
 
 /**
@@ -48,6 +49,12 @@ export function suggestedGiveawayEntries(
 export const completeAppointmentSchema = z
   .object({
     giveawayEntries: z.number().int().min(0).max(GIVEAWAY_ENTRIES_LIMIT).default(0),
+    /** Resultado de la visita (ver visit-outcome.ts). Sin él, solo si hay servicios cobrados. */
+    outcome: z.enum(visitOutcomes).optional(),
+    noChargeReason: z
+      .enum(Object.keys(noChargeReasons) as [NoChargeReason, ...NoChargeReason[]])
+      .optional(),
+    noChargeNote: z.string().trim().max(500).optional(),
   })
   .strict();
 

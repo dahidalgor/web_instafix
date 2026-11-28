@@ -140,6 +140,10 @@ export type StaffAppointment = {
   technicianNotes?: string;
   services: PerformedService[];
   /** Participaciones en el sorteo marcadas por el técnico al completar. */
+  /** Resultado al completarla y, si no se cobró, el motivo y la explicación del técnico. */
+  outcome?: 'CHARGED' | 'VISIT_FEE' | 'NO_CHARGE' | null;
+  noChargeReason?: string | null;
+  noChargeNote?: string | null;
   giveawayEntries: number;
   /** Premio del sorteo en que participa la visita (si participa). */
   giveawayPrize?: string | null;
@@ -233,6 +237,8 @@ export const appointmentStatusFilters = [
   'CANCELLED',
   /** «Todas» del organizador: todas menos las canceladas (las canceladas tienen su filtro). */
   'notCancelled',
+  /** Completadas sin cobro que administración aún no revisa (o marcó para hablar). */
+  'noChargeReview',
   'all',
 ] as const;
 export type AppointmentStatusFilter = (typeof appointmentStatusFilters)[number];

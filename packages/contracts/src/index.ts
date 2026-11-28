@@ -9,3 +9,4 @@ export * from './help';
 export * from './push';
 export * from './requests';
 export * from './site';
+export * from './visit-outcome';

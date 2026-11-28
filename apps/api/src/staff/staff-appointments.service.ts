@@ -10,7 +10,14 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Appointment, AppointmentService, Prisma } from '@prisma/client';
-import type { StaffAppointment } from '@instafix/contracts';
+import {
+  VISIT_FEE,
+  customerFirstName,
+  noChargeReasons,
+  type NoChargeReason,
+  type StaffAppointment,
+  type VisitOutcome,
+} from '@instafix/contracts';
 import { safeUser, type StaffUser } from '../auth/session';
 import { db } from '../database/client';
 import {
@@ -28,6 +35,7 @@ import { openGiveaway } from '../giveaways/giveaways';
 import {
   enqueueHandoverRequested,
   enqueueHandoverTaken,
+  enqueueStaffMessage,
   scheduleCompletionReminders,
 } from '../notifications/staff/staff-notifications';
 import { busyReason, OTHER_VISIT, technicianAgenda, technicianBusyReason } from './availability';
@@ -51,6 +59,9 @@ const include = {
 } satisfies Prisma.AppointmentInclude;
 
 const isAdmin = (user: StaffUser) => user.role === 'ADMIN';
+/** Línea del cargo fijo de visita técnica (no viene del catálogo). */
+const isVisitFee = (s: { offeringId: string | null; nameSnapshot: string }) =>
+  !s.offeringId && s.nameSnapshot === VISIT_FEE.name;
 /** Solo el técnico asignado (o un administrador) gestiona la visita. */
 const canManage = (user: StaffUser, appointment: Appointment) =>
   isAdmin(user) || appointment.assignedTechnicianId === user.id;
@@ -91,6 +102,9 @@ export function serializeStaff(user: StaffUser, a: Loaded): StaffAppointment {
     completedAt: a.completedAt?.toISOString() ?? null,
     ...(manage ? { technicianNotes: a.technicianNotes } : {}),
     giveawayEntries: a.giveawayEntries,
+    outcome: (a.outcome as StaffAppointment['outcome']) ?? null,
+    noChargeReason: a.noChargeReason,
+    noChargeNote: manage ? a.noChargeNote : null,
     giveawayPrize: a.giveawayEntries > 0 ? (a.giveaway?.prize ?? null) : null,
     confirmBy: confirmDeadline(a)?.toISOString() ?? null,
     handover:
@@ -627,7 +641,17 @@ export async function completeAppointment(
   user: StaffUser,
   id: string,
   now = new Date(),
-  { giveawayEntries = 0 }: { giveawayEntries?: number } = {},
+  {
+    giveawayEntries = 0,
+    outcome: requested,
+    noChargeReason,
+    noChargeNote,
+  }: {
+    giveawayEntries?: number;
+    outcome?: VisitOutcome;
+    noChargeReason?: NoChargeReason;
+    noChargeNote?: string;
+  } = {},
 ) {
   // Las participaciones van al sorteo abierto; sin sorteo abierto no se aceptan.
   const giveaway = giveawayEntries > 0 ? await openGiveaway(db, now) : null;
@@ -649,10 +673,44 @@ export async function completeAppointment(
     // No se completa antes del día de la visita (fecha de Ecuador).
     if (dayIn(now) < dayIn(a.startsAt))
       throw new BadRequestException('Solo puedes completar la visita a partir del día de la cita.');
-    if (!a.services.length && !a.technicianNotes.trim())
+    // Resultado de la visita: siempre explícito. Sin él, solo si ya hay servicios cobrados.
+    const charged = a.services.reduce((sum, s) => sum + s.totalMinor, 0);
+    const outcome: VisitOutcome | null = requested ?? (charged > 0 ? 'CHARGED' : null);
+    if (!outcome)
       throw new BadRequestException(
-        'Registra al menos un servicio realizado o una nota técnica antes de completar.',
+        'Indica el resultado de la visita: servicios cobrados, solo visita técnica o sin cobro.',
       );
+    if (outcome === 'CHARGED' && charged <= 0)
+      throw new BadRequestException(
+        'No registraste servicios cobrados: elige «Solo visita técnica» o «No se cobró».',
+      );
+    if (outcome === 'VISIT_FEE' && a.services.some((s) => s.totalMinor > 0 && !isVisitFee(s)))
+      throw new BadRequestException(
+        'Ya registraste servicios cobrados: elige «Se cobró» (puedes añadir la visita técnica).',
+      );
+    if (outcome === 'NO_CHARGE') {
+      if (charged > 0)
+        throw new BadRequestException(
+          'Registraste servicios con valor: quítalos o elige «Se cobró».',
+        );
+      if (!noChargeReason) throw new BadRequestException('Elige por qué no se cobró.');
+      if ((noChargeNote ?? '').trim().length < 10)
+        throw new BadRequestException('Explica qué pasó en la visita (al menos 10 caracteres).');
+    }
+    // Solo visita técnica: se registra su cargo fijo (una vez).
+    if (outcome === 'VISIT_FEE' && !a.services.some(isVisitFee))
+      await tx.appointmentService.create({
+        data: {
+          appointmentId: id,
+          offeringId: null,
+          nameSnapshot: VISIT_FEE.name,
+          deviceSnapshot: a.device,
+          unitPriceMinor: VISIT_FEE.priceMinor,
+          quantity: 1,
+          totalMinor: VISIT_FEE.priceMinor,
+          addedById: user.id,
+        },
+      });
     const done = await tx.appointment.updateMany({
       where: { id, status: { in: ['CONFIRMED', 'IN_PROGRESS'] } },
       data: {
@@ -661,11 +719,41 @@ export async function completeAppointment(
         completedById: user.id,
         giveawayId: giveaway?.id ?? null,
         giveawayEntries,
+        outcome,
+        noChargeReason: outcome === 'NO_CHARGE' ? noChargeReason : null,
+        noChargeNote: outcome === 'NO_CHARGE' ? noChargeNote!.trim() : null,
       },
     });
     if (!done.count) return true;
     await cancelPendingJobs(tx, id);
+    // Sin cobro: administración lo revisa (aviso a su panel).
+    if (outcome === 'NO_CHARGE') {
+      const completed = await tx.appointment.findUniqueOrThrow({ where: { id } });
+      const admins = await tx.user.findMany({
+        where: { role: 'ADMIN', active: true, deletedAt: null, id: { not: user.id } },
+        select: { id: true },
+      });
+      const reason = noChargeReasons[noChargeReason!];
+      for (const admin of admins)
+        await enqueueStaffMessage(
+          tx,
+          'NO_CHARGE_REVIEW',
+          completed,
+          admin.id,
+          {
+            title: 'Visita sin cobro: revísala',
+            body: `${user.name} completó la visita de ${customerFirstName(a.contactName) ?? 'un cliente'} sin cobro. Motivo: ${reason}.`.slice(
+              0,
+              300,
+            ),
+          },
+          'completed',
+          now,
+        );
+    }
     await activity(tx, id, user.id, 'COMPLETED', {
+      outcome,
+      ...(outcome === 'NO_CHARGE' ? { noChargeReason } : {}),
       services: a.services.length,
       ...(giveaway ? { giveawayId: giveaway.id, giveawayEntries } : {}),
     });
